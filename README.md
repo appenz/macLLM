@@ -6,15 +6,23 @@ This is a super simple python script that does the following:
 
 ## How do you use this?
 
-Say you want to tell someon in German that ControlNet is underrated, you would write:
+For example, let's assume you forgot the capital of France. You write:
 
-> @@ Translate to German: ControlNet is an AI technology that is really underrated
+> @@capital of france?
 
-You mark this text, copy (i.e. Apple-C), wait 1-2 seconds, and paste (Apple-P). The result is:
+You mark this text, copy (i.e. Apple-C), wait 1-2 seconds, and paste (Apple-P). 
 
-> ControlNet ist eine KI-Technologie, die wirklich unterbewertet wird.
+> Paris
 
-And of course you can also use this to summarize text, expand text to bullet points, check if something is factually correct etc.
+Or you want to tell someon in German that ControlNet is underrated, you would write:
+
+> @@translate german: ControlNet is an AI technology that is really underrated
+
+Copy, paste:
+
+> ControlNet ist eine AI-Technologie, die wirklich unterschätzt wird.
+
+And of course you can also use this to summarize text, expand text to bullet points or anything else ChatGPT can do.
 
 ## License
 
