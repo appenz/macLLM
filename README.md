@@ -1,4 +1,4 @@
-# macLLM - Use Large Language Models (e.g. ChatGPT) with your Clipboard on macOS
+# macLLM - Use ChatGPT with your Clipboard
 
 This is a super simple python script that does the following:
 - It watches your clipboard for a trigger (default is the double at symbol, i.e. "@@")
