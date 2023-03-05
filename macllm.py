@@ -11,6 +11,8 @@ import subprocess
 import openai
 import time
 
+from shortcuts import ShortCut
+
 class Clipboard:
 
     def get(self):
@@ -59,10 +61,15 @@ while True:
 
     if txt.startswith("@@"):
         req = req+1
-        txt = txt[4:]
+        if ShortCut.checkShortcuts(txt):
+            txt = ShortCut.checkShortcuts(txt).generate(txt)
+        else:
+            txt = txt[4:]
         out = llm.generate(txt)
         print(f'--- Request: {req} ----------------------------')
         print(llm.generate(txt))
         clipboard.set(out.encode())
     # wait 1 second
     time.sleep(1)
+
+# @@Capital of Paris?
