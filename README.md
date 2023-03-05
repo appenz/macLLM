@@ -33,7 +33,7 @@ Apache 2.0
 Install openapi python stubs:
 > pip3 install openapi
 
-Get an API key from OpenAPI and either store it in the environment variable OPENAI_API_KEY or alternatively set it in a file apikey.py (i.e. apikey="...").
+Get an API key from OpenAI and either store it in the environment variable OPENAI_API_KEY or alternatively set it in a file apikey.py (i.e. apikey="...").
 
 Run it:
 > python3 macLLM.py
