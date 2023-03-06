@@ -24,6 +24,22 @@ Copy, paste:
 
 And of course you can also use this to summarize text, expand text to bullet points or anything else ChatGPT can do.
 
+## Shortcuts
+
+Shortcuts are shorthand for specifc prompts. So for example "@@fix" is a prompt that corrects spelling or "@@tr-es" is short for translate to Spanish. You use them in text like this:
+
+>@@fix My Canaidian Mooose is Braun.
+
+This gets internally expanded to:
+
+>@@Correct any spelling or grammar mistakes in the following text: My Canaidian Mooose is Braun.
+
+Which GPT will correct to:
+
+> My Canadian Moose is Brown.
+
+You can add your own shortcuts for prompts in the shortcuts.py file.
+
 ## License
 
 Apache 2.0
