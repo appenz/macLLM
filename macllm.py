@@ -64,10 +64,14 @@ while True:
         if ShortCut.checkShortcuts(txt):
             txt = ShortCut.checkShortcuts(txt).generate(txt)
         else:
-            txt = txt[4:]
+            txt = txt[2:].strip()
         out = llm.generate(txt)
+        print()
         print(f'--- Request: {req} ----------------------------')
-        print(llm.generate(txt))
+        print(txt)
+        print('-->')
+        print(out)
+        print()
         clipboard.set(out.encode())
     # wait 1 second
     time.sleep(1)
