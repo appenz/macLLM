@@ -43,6 +43,7 @@ class LLM:
         return c.choices[0].message.content
 
 # Get API Key from environment variable or from file
+# e.g. export OPENAI_API_KEY="copy pasted from https://platform.openai.com/account/api-keys"
 openai.api_key = os.getenv("OPENAI_API_KEY")
 if not openai.api_key:
     import apikey
@@ -53,8 +54,12 @@ clipboard = Clipboard()
 llm = LLM()
 req = 0
 
-# Watch the clipboard for the trigger string "@@" and if you find it run through GPT 
+# Watch the clipboard for the trigger string "@@" and if you find it run through GPT
 # and write the result back to the clipboard
+
+print()
+print('To get an answer from the ChatGPT API, copy text that starts with "@@" (no quotes!) to the clipboard, wait a bit, then paste the answer.')
+print()
 
 while True:
     txt = clipboard.get().decode()
@@ -65,7 +70,7 @@ while True:
             txt = ShortCut.checkShortcuts(txt).generate(txt)
         else:
             txt = txt[2:].strip()
-        out = llm.generate(txt)
+        out = llm.generate(txt).strip()
         print()
         print(f'--- Request: {req} ----------------------------')
         print(txt)
