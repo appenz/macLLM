@@ -13,6 +13,12 @@ import time
 
 from shortcuts import ShortCut
 
+class color:
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
+
 class Clipboard:
 
     def get(self):
@@ -29,16 +35,20 @@ class Clipboard:
 
 class LLM:
 
-    def __init__(self, model="gpt-3.5-turbo", temperature=0.0):
+    client = None
+
+    def __init__(self, model="gpt-4-1106-preview", temperature=0.0):
         self.model = model
         self.temperature = temperature
+        self.client = openai.OpenAI(api_key=openai.api_key)
 
     def generate(self, text):
-        c = openai.ChatCompletion.create(
+        c = self.client.chat.completions.create(
           model=self.model,
           messages = [
             {"role": "user", "content": str(text)},
-        ],
+          ],
+          temperature = self.temperature,
         )
         return c.choices[0].message.content
 
@@ -58,7 +68,10 @@ req = 0
 # and write the result back to the clipboard
 
 print()
-print('To get an answer from the ChatGPT API, copy text that starts with "@@" (no quotes!) to the clipboard, wait a bit, then paste the answer.')
+print('To use this tool:')
+print('1. Copy text that starts with "@@" (no quotes!) to the clipboard')
+print('2. Wait a second while this text is being sent to GPT-3 and the result is written back to the clipboard.')
+print('3. Paste.')
 print()
 
 while True:
@@ -66,19 +79,16 @@ while True:
 
     if txt.startswith("@@"):
         req = req+1
+        print(color.RED + f'Request #{req} : ', txt, color.END)
         if ShortCut.checkShortcuts(txt):
             txt = ShortCut.checkShortcuts(txt).generate(txt)
         else:
             txt = txt[2:].strip()
         out = llm.generate(txt).strip()
-        print()
-        print(f'--- Request: {req} ----------------------------')
-        print(txt)
-        print('-->')
         print(out)
         print()
         clipboard.set(out.encode())
     # wait 1 second
     time.sleep(1)
 
-# @@Capital of Paris?
+# @@Capital of France?
