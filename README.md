@@ -4,6 +4,23 @@ This is a super simple python script that does the following:
 - It watches your clipboard for a trigger (default is the double at symbol, i.e. "@@")
 - If your clipboard starts with this trigger, it sends the clipboard to a model (e.g. ChatGPT) and pastes the result back into the clipboard
 
+## Installation
+
+macLLM now uses the Poetry package manager, make sure you have it installed first (https://python-poetry.org/).
+Then, install macLLM with:
+
+> poetry install
+
+Your OpenAI API key should be configured in the environment variable OPENAI_API_KEY. Poetry will also automatically read it if it is specified in a .env file. Format is:
+
+> OPENAI_API_KEY="your_api_key"
+
+Now you can run macllm it with:
+
+> poetry run macllm
+
+Poetry should take care of all the dependencies, you don't need to install anything else.
+
 ## How do you use this?
 
 For example, let's assume you forgot the capital of France. You write:
@@ -44,14 +61,3 @@ You can add your own shortcuts for prompts in the shortcuts.py file.
 
 Apache 2.0
 
-## Running
-
-Install openapi python stubs:
-> pip3 install openapi
-
-Get an API key from OpenAI and either store it in the environment variable OPENAI_API_KEY or alternatively set it in a file apikey.py (i.e. apikey="...").
-
-Run it:
-> python3 macLLM.py
-
-If you run it in a terminal, it will show the results of your query which can be useful.

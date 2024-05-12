@@ -7,6 +7,6 @@ __pycache__/
 .DS_Store
 .vscode/settings.json
 
-# project specific
-apikey.py
+# API keys etc.
+.evn
 
