@@ -37,7 +37,7 @@ class LLM:
 
     client = None
 
-    def __init__(self, model="gpt-4-1106-preview", temperature=0.0):
+    def __init__(self, model="gpt-4o", temperature=0.0):
         self.model = model
         self.temperature = temperature
         self.client = openai.OpenAI(api_key=openai.api_key)

@@ -55,7 +55,20 @@ Which GPT will correct to:
 
 > My Canadian Moose is Brown.
 
-You can add your own shortcuts for prompts in the shortcuts.py file.
+You can add your own shortcuts for prompts in the shortcuts.py file. Currently supported shortcuts are:
+
+### Supported Shortcuts
+- `@@exp-email`: Write an extremely concise and friendly email based on bullet points.
+- `@@exp`: Expand the text using sophisticated and concise language.
+- `@@fix-de`: Correct spelling and grammar mistakes in the following German text.
+- `@@fix-fr`: Correct spelling and grammar mistakes in the following French text.
+- `@@fix`: Correct spelling and grammar mistakes in the following text.
+- `@@rewrite`: Rewrite the text to be extremely concise while keeping the same meaning.
+- `@@tr-de`: Translate the text from English to German.
+- `@@tr-fr`: Translate the text from English to French.
+- `@@tr-es`: Translate the text from English to Spanish.
+- `@@emoji`: Pick a relevant emoji for the text and reply with only that emoji.
+
 
 ## License
 
