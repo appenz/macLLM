@@ -13,6 +13,7 @@ promptShortcuts = [
     ["@@tr-de", "Translate the following text from English to German.\n---\n"],
     ["@@tr-fr", "Translate the following text from English to French.\n---\n"],
     ["@@tr-es", "Translate the following text from English to Spanish.\n---\n"],
+    ["@@emojis", "Pick a sequence of up to 5 emojis that are relevant to the following text. Reply only with the emojis, i.e. up to five characters. Do not exmplain your choice or write any other text.\n---\n"],
     ["@@emoji", "Pick an emoji that is relevant to the following text. Reply only with that emoji, i.e. a single character. Do not exmplain your choice or write any other text.\n---\n"],
 ]
 
