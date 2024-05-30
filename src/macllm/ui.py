@@ -4,76 +4,126 @@
 
 from Cocoa import NSApplication, NSStatusBar, NSStatusItem, NSVariableStatusItemLength, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
+from Cocoa import NSPasteboard, NSStringPboardType
+
+from Foundation import NSThread 
 
 from Cocoa import NSImageNameStatusAvailable, NSImageNameStatusNone, NSImageNameStatusPartiallyAvailable, NSImageNameStatusUnavailable
 from PyObjCTools import AppHelper
+from Foundation import NSBundle
 
 import signal
-        
+import traceback
+from time import sleep
+
 class AppDelegate(NSObject):
 
+    # Actions for various events
+
+    def __init__(self):
+        self.pasteboard = NSPasteboard.generalPasteboard()
+        self.last_change_count = self.pasteboard.changeCount()
+
     def timerFired_(self, timer):
-        self.MacLLMUI.main_loop
+        if self.checkClipboard():
+            self.status_item.setTitle_(MacLLMUI.status_working)
+            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                0.1, self, 'doClipboardCallback:', None, False)
+
+    def doClipboardCallback_(self, timer):
+        print("doClipboardCallback_")
+        self.macllm_ui.clipboardCallback()
+        self.last_change_count = self.pasteboard.changeCount()
+        self.status_item.setTitle_(MacLLMUI.status_ready)
 
     def terminate_(self, sender):
         NSApp().terminate_(self)
+
+    # Check if the Clipboard has changed
+
+    def checkClipboard(self):
+        current_change_count = self.pasteboard.changeCount()
+        if current_change_count != self.last_change_count:
+            self.last_change_count = current_change_count
+            return True
+        else:
+            return False
+        
+    # Create the menu items under the menu bar icon
+
+    def menu(self):
+        menu = NSMenu.alloc().init()
+        menu.addItem_(NSMenuItem.separatorItem())
+        options_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Options", "options:", "")
+        menu.addItem_(options_item)
+        quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "terminate:", "")
+        menu.addItem_(quit_item)
+        return menu
 
     def options_(self, sender):
         print("Options clicked!")
     
     def applicationDidFinishLaunching_(self, notification):
-        self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
-        
-        # Set an icon for the status item
-        iconStatus(self, MacLLMUI.green)
-        
-        # Create a menu
-        self.menu = NSMenu.alloc().init()
-        
-        # Add items to the menu
-        options_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Options", "options:", "")
-        self.menu.addItem_(options_item)
+        try:
+            # Set an icon for the status item
+            self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)
+            self.status_item.setMenu_(self.menu())
+            self.status_item.setTitle_(MacLLMUI.status_ready)
+            self.status_item.setHighlightMode_(True)
 
-        quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "terminate:", "")
-        self.menu.addItem_(quit_item)
-        
-        # Set the menu to the status item
-        self.status_item.setMenu_(self.menu)
+            # Register a timer to check for new events
+            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                0.1, self, 'timerFired:', None, True)
+            
+            # Start tracking the clipboard
+            self.pasteboard = NSPasteboard.generalPasteboard()
+            self.last_change_count = self.pasteboard.changeCount()
 
-        self.timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            1.0, self, 'timerFired:', None, True)    
+            print("Initialization complete")
+        except Exception as e:
+            # If we fail to initialize the status item, terminate the application and show stack trace
+            print(f"Initialization failure: {e}")
+            traceback.print_exc()
+            NSApp().terminate_(self)
+
 
 class MacLLMUI:
 
-    green = NSImageNameStatusAvailable
-    red = NSImageNameStatusUnavailable
-    yellow = NSImageNameStatusPartiallyAvailable
-    grey = NSImageNameStatusNone
+    # Define colors for the status icon
+    status_ready   = "🟢 LLM"
+    status_working = "🟠 LLM"
 
     def __init__(self):
         self.app = None
         self.delegate = None
-        self.icon_color = "green"
         self.macllm = None
-    
+        self.clipboardCallback = self.dummy
+   
+    def dummy(self):
+        return
+
     @staticmethod
     def handle_interrupt(signal, frame):
         NSApp().terminate_(None)
 
-    def iconStatus(d, color):
-        d.status_item.button().setImage_(icon)
+    def iconStatus(self, color):
+        self.delegate.status_item.button().setImage_(color)
+        return
 
-    def start(self, macllm):
+    def start(self):
         # Pointer to main class, we need this for callback
-        self.macllm = macllm
         signal.signal(signal.SIGINT, self.handle_interrupt)
 
         self.app = NSApplication.sharedApplication()
         self.delegate = AppDelegate.alloc().init()
-        self.delegate.MacLLMUI = self
+        self.delegate.macllm_ui = self
         self.app.setDelegate_(self.delegate)
         self.app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
         
+        # Change the App icon
+        self.dock_image = NSImage.alloc().initByReferencingFile_("/Users/gappenzeller/dev/macLLM/assets/icon.png")
+        self.app.setApplicationIconImage_(self.dock_image)
+
         # Start the application event loop
         self.app.run()
 

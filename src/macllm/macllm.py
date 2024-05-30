@@ -14,6 +14,8 @@ import time
 from macllm.shortcuts import ShortCut
 from macllm.ui import MacLLMUI
 
+import asyncio
+
 class color:
    RED = '\033[91m'
    BOLD = '\033[1m'
@@ -40,7 +42,7 @@ class LLM:
     model = "gpt-4o"
     temperature = 0.0
 
-    def __init__(self, model=LLM.model, temperature=0.0):
+    def __init__(self, model=model, temperature=0.0):
         self.model = model
         self.temperature = temperature
         self.client = openai.OpenAI(api_key=openai.api_key)
@@ -63,7 +65,7 @@ class MacLLM:
 
     def show_instructions(self):
         print()
-        print(f'To use this tool:')
+        print(f'Welcome to macLLM. To use this tool:')
         print(f'1. Copy text that starts with "@@" (no quotes!) to the clipboard')
         print(f'2. Wait a second while this text is being sent to {LLM.model} and the result is written back to the clipboard.')
         print(f'3. Paste.')
@@ -76,8 +78,12 @@ class MacLLM:
         self.llm = LLM()
         self.req = 0
 
-    def main_loop(self):
+        self.ui.clipboardCallback = self.clipboard_changed
+
+    def clipboard_changed(self):
+        print("Clipboard_changed")
         txt = self.clipboard.get().decode()
+        print(txt)
         if txt.startswith("@@"):
             self.req = self.req+1
             print(color.RED + f'Request #{self.req} : ', txt, color.END)
@@ -90,11 +96,13 @@ class MacLLM:
             print()
             self.clipboard.set(out.encode())
 
+
 def main():
     m = MacLLM()
     m.show_instructions()
-    # Create a clipboard object
-    
+    m.ui.start()
+
+# @@Capital of France?
 
 if __name__ == "__main__":
     main()

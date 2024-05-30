@@ -8,5 +8,5 @@ __pycache__/
 .vscode/settings.json
 
 # API keys etc.
-.evn
+.env
 
