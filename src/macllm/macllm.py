@@ -22,20 +22,6 @@ class color:
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
-class Clipboard:
-
-    def get(self):
-        p = subprocess.Popen(['pbpaste'], stdout=subprocess.PIPE)
-        r = p.wait()
-        data = p.stdout.read()
-        return data
-
-    def set(self,data):
-        p = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
-        p.stdin.write(data)
-        p.stdin.close()
-        r = p.wait()
-
 class LLM:
 
     client = None
@@ -74,7 +60,6 @@ class MacLLM:
     def __init__(self):
         self.ui = MacLLMUI()
         self.ui.macllm = self
-        self.clipboard = Clipboard()
         self.llm = LLM()
         self.req = 0
 
@@ -82,8 +67,8 @@ class MacLLM:
 
     def clipboard_changed(self):
         print("Clipboard_changed")
-        txt = self.clipboard.get().decode()
-        print(txt)
+        txt = self.ui.read_clipboard()
+        print(f'pb = {txt}')
         if txt.startswith("@@"):
             self.req = self.req+1
             print(color.RED + f'Request #{self.req} : ', txt, color.END)
@@ -94,7 +79,7 @@ class MacLLM:
             out = self.llm.generate(txt).strip()
             print(out)
             print()
-            self.clipboard.set(out.encode())
+            self.ui.write_clipboard(out)
 
 
 def main():
