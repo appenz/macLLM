@@ -11,6 +11,7 @@ packages = [{include = "macllm", from = "src"}]
 python = "^3.12"
 openai = "^1.28.1"
 pyobjc = "^10.2"
+requests = "^2.32.3"
 
 [tool.poetry.scripts]
 macllm = "macllm.macllm:main"
