@@ -3330,6 +3330,20 @@ pyobjc-core = ">=10.3.1"
 pyobjc-framework-Cocoa = ">=10.3.1"
 
 [[package]]
+name = "quickmachotkey"
+version = "2023.11.17"
+description = "Bind a global hotkey, on macOS, in Python"
+optional = false
+python-versions = "*"
+files = [
+    {file = "quickmachotkey-2023.11.17-py3-none-any.whl", hash = "sha256:d206c558ed3087841c9ab318b099d5c1e1a61f4601ad6b3c1327691b2749d81f"},
+    {file = "quickmachotkey-2023.11.17.tar.gz", hash = "sha256:b29c8a6606400bd3afbbb26b1d2f3e791e9ccab2727530c8df38c14225298de5"},
+]
+
+[package.dependencies]
+pyobjc-core = "*"
+
+[[package]]
 name = "requests"
 version = "2.32.3"
 description = "Python HTTP for Humans."
@@ -3412,4 +3426,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "4b0fffb4448acce8b23272ef796c5d3912e723bb4808a978a9f3837e15a3135f"
+content-hash = "daec7d9ce5bc6546036e257c27b2129bda3d39f6afe101e715f5bdc02f0c4fc6"

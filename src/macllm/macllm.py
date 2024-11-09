@@ -13,7 +13,12 @@ import os
 from macllm.shortcuts import ShortCut
 from macllm.ui import MacLLMUI
 
+from quickmachotkey import quickHotKey, mask
+from quickmachotkey.constants import kVK_ANSI_A, cmdKey, controlKey
+
 import openai
+
+macLLM = None
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -21,6 +26,12 @@ class color:
    BOLD = '\033[1m'
    UNDERLINE = '\033[4m'
    END = '\033[0m'
+
+@quickHotKey(virtualKey=kVK_ANSI_A, modifierMask=mask(cmdKey, controlKey))
+def handler():
+    global macLLM
+    print("Hotkey pressed ⌘⌃A")
+    macLLM.ui.hotkey_pressed()
 
 def load_env():
     try:
@@ -43,10 +54,10 @@ class LLM:
     def __init__(self, model=model, temperature=0.0):
         self.model = model
         self.temperature = temperature
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if openai_api_key is None:
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        if self.openai_api_key is None:
             raise Exception("OPENAI_API_KEY not found in environment variables")
-        self.client = openai.OpenAI(api_key=openai_api_key)
+        self.client = openai.OpenAI(api_key=self.openai_api_key)
 
     def generate(self, text):
         c = self.client.chat.completions.create(
@@ -71,8 +82,8 @@ class LLM:
             print(f'Image encoding failed.')
 
         headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {openai.api_key}"
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.openai_api_key}"
         }
 
         payload = {
@@ -98,6 +109,7 @@ class LLM:
         }
 
         print(f'Sending to gpt-4o')
+        print(headers)
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
 
         # Extract the content from the response
@@ -112,6 +124,7 @@ class LLM:
                 return None
         else:
             print(f'Failed to generate content. Status Code: {response.status_code}')
+            print(response.json())
             return None
 
 
@@ -159,7 +172,7 @@ class MacLLM:
 
             # Check if this is a prompt that requires screen capture
 
-            if txt.startswith("capture"):
+            if txt.startswith("#"):
                 self.capture_screen()
                 txt = txt[9:].strip()
                 out = self.llm.generate_with_image(txt, self.tmp_image)
@@ -171,10 +184,11 @@ class MacLLM:
 
 
 def main():
+    global macLLM
     load_env()
-    m = MacLLM()
-    m.show_instructions()
-    m.ui.start()
+    macLLM = MacLLM()
+    macLLM.show_instructions()
+    macLLM.ui.start()
 
 # @@Capital of France?
 # @@capture Transcribe the text in this image.

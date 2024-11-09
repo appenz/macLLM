@@ -15,8 +15,9 @@ promptShortcuts = [
     ["@@tr-es", "Translate the following text from English to Spanish.\n---\n"],
     ["@@emojis", "Pick a sequence of up to 5 emojis that are relevant to the following text. Reply only with the emojis, i.e. up to five characters. Do not exmplain your choice or write any other text.\n---\n"],
     ["@@emoji", "Pick an emoji that is relevant to the following text. Reply only with that emoji, i.e. a single character. Do not exmplain your choice or write any other text.\n---\n"],
-    ["@@c-li", "capture List the job experience of this person, use one bullet point per job."],
-    ["@@c-slide", "capture Summarize the contents of this slide in a few bullet points. Each bullet point should fit on a single line."],
+    ["@@#linkedin", "#List the job experience of this person, use one bullet point per job."],
+    ["@@#slide", "#Summarize the contents of this slide in a few bullet points. Each bullet point should fit on a single line."],
+    ["@@#transcribe", "#Precisely transcribe this image. Do not exmplain it, just reply with the transcription."],
 ]
 
 # Class that handles shortcuts and the actions to be taken

@@ -2,15 +2,21 @@
 # Simple program that creates a menu bar icon with PyObjC
 #
 
+from Foundation import NSThread 
+
+
 from Cocoa import NSApplication, NSStatusBar, NSStatusItem, NSVariableStatusItemLength, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
 from Cocoa import NSPasteboard, NSStringPboardType
 
-from Foundation import NSThread 
-
 from Cocoa import NSImageNameStatusAvailable, NSImageNameStatusNone, NSImageNameStatusPartiallyAvailable, NSImageNameStatusUnavailable
+
+from Cocoa import NSWindow, NSButton, NSScreen, NSTextField
+
 from PyObjCTools import AppHelper
 from Foundation import NSBundle
+
+import objc
 
 import signal
 import traceback
@@ -61,7 +67,7 @@ class AppDelegate(NSObject):
 
     def options_(self, sender):
         print("Options clicked!")
-    
+
     def applicationDidFinishLaunching_(self, notification):
         try:
             # Set an icon for the status item
@@ -85,11 +91,43 @@ class AppDelegate(NSObject):
             NSApp().terminate_(self)
 
 
+class WindowDelegate(NSObject):
+
+    macllm_ui = None
+
+    def initWithTextField_(self, text_field):
+        self = objc.super(WindowDelegate, self).init()
+        self.text_field = text_field
+        self.text_field.setDelegate_(self)
+        return self
+    
+    def textDidChange_(self, notification):
+        print("textDidChange_")
+
+    def textDidEndEditing_(self, notification):
+        print("textDidEndEditing_")
+
+    def controlTextDidEndEditing_(self, notification):
+        # This gets called when Return is pressed
+        text_field = notification.object()
+        input_text = text_field.stringValue()
+        self.macllm_ui.handle_user_input(input_text)
+
 class MacLLMUI:
 
     # Define colors for the status icon
     status_ready   = "🟢 LLM"
     status_working = "🟠 LLM"
+
+    # Layout of the window
+    top_padding = 4
+    text_area_height = 40
+    input_field_height = 60
+    window_width = 600
+    window_height = input_field_height + text_area_height
+
+    # Text messages and error messages
+    text_prompt = "How can I help you?"
 
     def __init__(self):
         self.app = None
@@ -98,6 +136,8 @@ class MacLLMUI:
         
         self.pb_change_count = 0
         self.clipboardCallback = self.dummy
+
+        self.quick_window = None
 
     def dummy(self):
         return
@@ -120,6 +160,61 @@ class MacLLMUI:
 
     def read_change_count(self):
         return self.delegate.pasteboard.changeCount()
+    
+    def handle_user_input(self, text):
+        print(f"User input: {text}")
+        self.update_text_area(text)
+
+    def update_text_area(self, text):
+        self.text_area.setStringValue_(text)
+
+    def open_quick_window(self):
+
+        # Find the width and height of the screen
+        screen_width = NSScreen.mainScreen().frame().size.width
+        screen_height = NSScreen.mainScreen().frame().size.height
+
+        win = NSWindow.alloc()
+        self.quick_window = win
+
+        frame = ( ( (screen_width-MacLLMUI.window_width) / 2, screen_height *0.7 - MacLLMUI.window_height/2), (MacLLMUI.window_width, MacLLMUI.window_height) ) 
+        win.initWithContentRect_styleMask_backing_defer_(frame, 15, 2, 0)
+        win.setTitle_("🦙 macLLM")
+        win.setLevel_(3)  # floating window
+
+        # Rename label to text_area
+        text_area = NSTextField.alloc().initWithFrame_(((10.0, MacLLMUI.window_height - MacLLMUI.text_area_height - MacLLMUI.top_padding), (MacLLMUI.window_width-20, MacLLMUI.text_area_height)))
+        text_area.setStringValue_(MacLLMUI.text_prompt)
+        text_area.setEditable_(False)
+        text_area.setBezeled_(False)
+        text_area.setDrawsBackground_(False)
+        self.text_area = text_area
+        win.contentView().addSubview_(text_area)
+
+        # Add the text input field
+        input_field = NSTextField.alloc().initWithFrame_(((10.0, 10.0), (MacLLMUI.window_width-20, MacLLMUI.input_field_height)))
+        input_field.setStringValue_("")
+        self.window_delegate = WindowDelegate.alloc().initWithTextField_(input_field)
+        self.window_delegate.macllm_ui = self
+        input_field.setDelegate_(self.window_delegate)
+        win.contentView().addSubview_(input_field)
+
+        win.display()
+        win.orderFrontRegardless()
+        self.app.activateIgnoringOtherApps_(True) 
+
+        
+    def close_quick_window(self):
+        self.quick_window.orderOut_(None)
+        self.quick_window = None
+    
+    # Handle the hotkey press
+    def hotkey_pressed(self):
+        print("Hotkey pressed ⌘⌃A")
+        if self.quick_window is None:
+            self.open_quick_window()
+        else:
+            self.close_quick_window()
 
     def start(self):
         # Pointer to main class, we need this for callback
