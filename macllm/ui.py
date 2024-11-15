@@ -5,13 +5,11 @@
 from Foundation import NSThread 
 
 
-from Cocoa import NSApplication, NSStatusBar, NSStatusItem, NSVariableStatusItemLength, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
+from Cocoa import NSApplication, NSStatusBar, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
 from Cocoa import NSPasteboard, NSStringPboardType
 
-from Cocoa import NSImageNameStatusAvailable, NSImageNameStatusNone, NSImageNameStatusPartiallyAvailable, NSImageNameStatusUnavailable
-
-from Cocoa import NSWindow, NSButton, NSScreen, NSTextField
+from Cocoa import NSPanel, NSScreen, NSTextField, NSPanel
 
 from PyObjCTools import AppHelper
 from Foundation import NSBundle
@@ -104,7 +102,9 @@ class WindowDelegate(NSObject):
     # React to special keys like escape, copy etc.  
 
     def control_textView_doCommandBySelector_(self, control, textView, commandSelector):
-        if commandSelector == 'cancelOperation:':  # This handles Escape key
+        if commandSelector == 'cancelOperation:':  
+            # This handles Escape key. NSPanel does this automatically, but we need to do cleanup and
+            # thus have to implement it here.
             self.macllm_ui.close_quick_window()
             return True
         elif commandSelector == 'noop:':  # Handle Command-C
@@ -194,7 +194,7 @@ class MacLLMUI:
         screen_width = NSScreen.mainScreen().frame().size.width
         screen_height = NSScreen.mainScreen().frame().size.height
 
-        win = NSWindow.alloc()
+        win = NSPanel.alloc()
         self.quick_window = win
 
         frame = ( ( (screen_width-MacLLMUI.window_width) / 2, screen_height *0.7 - MacLLMUI.window_height/2), (MacLLMUI.window_width, MacLLMUI.window_height) ) 
@@ -231,6 +231,8 @@ class MacLLMUI:
     def close_quick_window(self):
         self.quick_window.orderOut_(None)
         self.quick_window = None
+        # Deactivate our app to return focus to the previous application
+        self.app.hide_(None)
     
     # Handle the hotkey press
     def hotkey_pressed(self):

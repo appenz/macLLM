@@ -33,7 +33,6 @@ class color:
 @quickHotKey(virtualKey=kVK_ANSI_A, modifierMask=mask(cmdKey, controlKey))
 def handler():
     global macLLM
-    print("Hotkey pressed ⌘⌃A")
     macLLM.ui.hotkey_pressed()
 
 def load_env():
