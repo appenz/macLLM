@@ -10,8 +10,8 @@ import base64
 import requests
 import os
 
-from macllm.shortcuts import ShortCut
-from macllm.ui import MacLLMUI
+from shortcuts import ShortCut
+from ui import MacLLMUI
 
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, cmdKey, controlKey
