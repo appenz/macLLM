@@ -20,6 +20,9 @@ import openai
 
 macLLM = None
 
+start_token = "!!"
+alias_token = "@"
+
 # Class defining ANSI color codes for terminal output
 class color:
    RED = '\033[91m'
@@ -150,6 +153,13 @@ class MacLLM:
         os.system("screencapture -x -i /tmp/macllm.png")
         return "/tmp/macllm.png"
 
+    def capture_window(self):
+        # Delete the temp image if it exists
+        if os.path.exists(self.tmp_image):
+            os.remove(self.tmp_image)
+        os.system("screencapture -x -i -Jwindow /tmp/macllm.png")
+        return "/tmp/macllm.png"
+
     def __init__(self):
         self.ui = MacLLMUI()
         self.ui.macllm = self
@@ -158,29 +168,32 @@ class MacLLM:
 
         self.ui.clipboardCallback = self.clipboard_changed
 
+    def handle_instructions(self, text):
+        self.req = self.req+1
+        print(color.RED + f'Request #{self.req} : ', text, color.END)
+        txt = ShortCut.expandAll(text)
+
+        # Check if we have a @screen tag that requires screen capture
+        if "@selection" in txt:
+            self.capture_screen()
+            txt = txt.replace("@selection", " the image ").strip()
+            out = self.llm.generate_with_image(txt, self.tmp_image)
+        elif "@window" in txt:
+            self.capture_window()
+            txt = txt.replace("@window", " the image ").strip()
+            out = self.llm.generate_with_image(txt, self.tmp_image)
+        else:                        
+            out = self.llm.generate(txt).strip()
+        print(out)
+        print()
+        self.ui.write_clipboard(out)    
+        return out
+        
     def clipboard_changed(self):
         txt = self.ui.read_clipboard()
 
-        if txt.startswith("@@"):
-            self.req = self.req+1
-            print(color.RED + f'Request #{self.req} : ', txt, color.END)
-
-            if ShortCut.checkShortcuts(txt):
-                txt = ShortCut.checkShortcuts(txt).generate(txt)
-            else:
-                txt = txt[2:].strip()
-
-            # Check if this is a prompt that requires screen capture
-
-            if txt.startswith("#"):
-                self.capture_screen()
-                txt = txt[9:].strip()
-                out = self.llm.generate_with_image(txt, self.tmp_image)
-            else:                        
-                out = self.llm.generate(txt).strip()
-            print(out)
-            print()
-            self.ui.write_clipboard(out)
+        if txt.startswith(start_token):
+            self.handle_instructions(txt[len(start_token):])
 
 
 def main():

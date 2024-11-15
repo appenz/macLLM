@@ -100,12 +100,25 @@ class WindowDelegate(NSObject):
         self.text_field = text_field
         self.text_field.setDelegate_(self)
         return self
-    
+
+    # React to special keys like escape, copy etc.  
+
+    def control_textView_doCommandBySelector_(self, control, textView, commandSelector):
+        if commandSelector == 'cancelOperation:':  # This handles Escape key
+            self.macllm_ui.close_quick_window()
+            return True
+        elif commandSelector == 'noop:':  # Handle Command-C
+            current_event = NSApp().currentEvent()
+            # Check for Command key (1 << 20) and 'c' key (0x63)
+            if (current_event.modifierFlags() & (1 << 20) and 
+                current_event.charactersIgnoringModifiers().lower() == 'c'):
+                self.macllm_ui.write_clipboard(self.text_field.stringValue())
+                self.macllm_ui.close_quick_window()
+                return True
+        return False
+
     def textDidChange_(self, notification):
         print("textDidChange_")
-
-    def textDidEndEditing_(self, notification):
-        print("textDidEndEditing_")
 
     def controlTextDidEndEditing_(self, notification):
         # This gets called when Return is pressed
@@ -161,9 +174,16 @@ class MacLLMUI:
     def read_change_count(self):
         return self.delegate.pasteboard.changeCount()
     
+    # This is called when the user presses Return in the pop-up window
+
     def handle_user_input(self, text):
+        if text == "":
+            return
+        # Send the text to the LLM
         print(f"User input: {text}")
+        result = self.macllm.handle_instructions(text)
         self.update_text_area(text)
+        self.input_field.setStringValue_(result)
 
     def update_text_area(self, text):
         self.text_area.setStringValue_(text)
@@ -198,10 +218,14 @@ class MacLLMUI:
         self.window_delegate.macllm_ui = self
         input_field.setDelegate_(self.window_delegate)
         win.contentView().addSubview_(input_field)
+        self.input_field = input_field
 
+        # Move the window to the front and activate it
         win.display()
         win.orderFrontRegardless()
-        self.app.activateIgnoringOtherApps_(True) 
+        win.makeKeyWindow()  # Make it the key window
+        self.app.activateIgnoringOtherApps_(True)
+        self.input_field.becomeFirstResponder()  # Set focus to the input field
 
         
     def close_quick_window(self):
