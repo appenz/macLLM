@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "certifi>=2024.12.14",
     "openai>=1.54.4",
     "pyobjc>=10.3.1",
     "quickmachotkey>=2023.11.17",
