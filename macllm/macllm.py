@@ -14,14 +14,14 @@ from shortcuts import ShortCut
 from ui import MacLLMUI
 
 from quickmachotkey import quickHotKey, mask
-from quickmachotkey.constants import kVK_ANSI_A, cmdKey, controlKey
+from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
 
 import openai
 
 macLLM = None
 
-start_token = "!!"
-alias_token = "@"
+start_token = "@@"
+alias_token = "#"
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -30,7 +30,11 @@ class color:
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
-@quickHotKey(virtualKey=kVK_ANSI_A, modifierMask=mask(cmdKey, controlKey))
+# Define the hotkey: option-space
+@quickHotKey(virtualKey=kVK_Space, modifierMask=mask(optionKey))
+# Ctrl-command-a instead
+#@quickHotKey(virtualKey=kVK_ANSI_A, modifierMask=mask(cmdKey, controlKey))
+
 def handler():
     global macLLM
     macLLM.ui.hotkey_pressed()
@@ -46,7 +50,7 @@ def load_env():
         pass
     except Exception as e:
         print(f"Error while parsing .env file: {str(e)}")
-
+        
 class LLM:
 
     client = None

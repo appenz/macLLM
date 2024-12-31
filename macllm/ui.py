@@ -256,7 +256,7 @@ class MacLLMUI:
         self.pb_change_count = self.read_change_count()
         
         # Change the App icon
-        self.dock_image = NSImage.alloc().initByReferencingFile_("/Users/gappenzeller/dev/macLLM/assets/icon.png")
+        self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
         self.app.setApplicationIconImage_(self.dock_image)
 
         # Start the application event loop
