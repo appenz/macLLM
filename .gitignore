@@ -2,11 +2,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.python-version
 
 #macos
 .DS_Store
 .vscode/settings.json
 
 # API keys etc.
-.evn
+.env
 

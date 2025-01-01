@@ -1,19 +1,13 @@
-[tool.poetry]
+[project]
 name = "macllm"
 version = "0.1.0"
-description = "A simple tool to use LLMs in macOS via the Clipboard"
-authors = ["Guido Appenzeller <guido@appenzeller.net>"]
-license = "Apache 2.0"
+description = "Add your description here"
 readme = "README.md"
-packages = [{include = "macllm", from = "src"}]
-
-[tool.poetry.dependencies]
-python = "^3.12"
-openai = "^1.28.1"
-
-[tool.poetry.scripts]
-macllm = "macllm.macllm:main"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.13"
+dependencies = [
+    "certifi>=2024.12.14",
+    "openai>=1.54.4",
+    "pyobjc>=10.3.1",
+    "quickmachotkey>=2023.11.17",
+    "requests>=2.32.3",
+]
