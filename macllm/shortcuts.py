@@ -10,14 +10,14 @@ promptShortcuts = [
     ["@fix-fr", "Corrigez toutes les fautes d'orthographe et de grammaire dans le texte en langue française suivant:"],
     ["@fix", "Correct any spelling or grammar mistakes in the following text:"],
     ["@rewrite", "Rewrite the following text but keep the same meaning and be extremely concise.\n---\n"],
-    ["@tr-de", "Translate the following text from English to German.\n---\n"],
-    ["@tr-fr", "Translate the following text from English to French.\n---\n"],
-    ["@tr-es", "Translate the following text from English to Spanish.\n---\n"],
+    ["@tr-de", "Translate the following text into the German language. Reply only with the translation and nothing else.\n---\n"],
+    ["@tr-fr", "Translate the following text into the French language. Reply only with the translation and nothing else.\n---\n"],
+    ["@tr-es", "Translate the following text into the Spanish language. Reply only with the translation and nothing else.\n---\n"],
     ["@emojis", "Pick a sequence of up to 5 emojis that are relevant to the following text. Reply only with the emojis, i.e. up to five characters. Do not exmplain your choice or write any other text.\n---\n"],
     ["@emoji", "Pick an emoji that is relevant to the following text. Reply only with that emoji, i.e. a single character. Do not exmplain your choice or write any other text.\n---\n"],
     ["@linkedin", "List the job experience of this person, use one bullet point per job."],
     ["@slide", "Summarize the contents of this slide in a few bullet points. Each bullet point should fit on a single line."],
-    ["@transcribe", "Precisely transcribe this image. Do not explain it. Reply only with the transcript and nothing else."],
+    ["@transcribe", "Precisely transcribe this image. Do not explain it. Reply only with the transcript of any text in the image and nothing else."],
 ]
 
 # Class that handles shortcuts and the actions to be taken

@@ -21,7 +21,7 @@ import openai
 macLLM = None
 
 start_token = "@@"
-alias_token = "#"
+alias_token = "@"
 
 # Class defining ANSI color codes for terminal output
 class color:
