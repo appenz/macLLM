@@ -9,6 +9,7 @@
 import base64
 import requests
 import os
+import argparse
 
 from shortcuts import ShortCut
 from ui import MacLLMUI
@@ -38,18 +39,6 @@ class color:
 def handler():
     global macLLM
     macLLM.ui.hotkey_pressed()
-
-def load_env():
-    try:
-        with open('.env', 'r') as env_file:
-            for line in env_file:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    os.environ[key] = value.strip('"').strip("'")
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        print(f"Error while parsing .env file: {str(e)}")
         
 class LLM:
 
@@ -140,14 +129,11 @@ class MacLLM:
     # and write the result back to the clipboard
 
     tmp_image = "/tmp/macllm.png"
+    version = "0.1.0"
 
     def show_instructions(self):
-        print()
-        print(f'Welcome to macLLM. To use this tool:')
-        print(f'1. Copy text that starts with "@@" (no quotes!) to the clipboard')
-        print(f'2. Wait a second while this text is being sent to {LLM.model} and the result is written back to the clipboard.')
-        print(f'3. Paste.')
-        print()
+        print(f'Hotkey for quick entry window is ⌥-space (option-space)')
+        print(f'To use via the clipboard, copy text starting with "@@"')
 
     def capture_screen(self):
         # Delete the temp image if it exists
@@ -163,51 +149,76 @@ class MacLLM:
         os.system("screencapture -x -i -Jwindow /tmp/macllm.png")
         return "/tmp/macllm.png"
 
-    def __init__(self):
+    def __init__(self, model="gpt-4o", debug=False):
+        self.debug = debug
         self.ui = MacLLMUI()
         self.ui.macllm = self
-        self.llm = LLM()
+        self.llm = LLM(model=model)
         self.req = 0
 
         self.ui.clipboardCallback = self.clipboard_changed
 
     def handle_instructions(self, text):
         self.req = self.req+1
-        print(color.RED + f'Request #{self.req} : ', text, color.END)
+        if self.debug:
+            print(color.RED + f'Request #{self.req} : ', text, color.END)
         txt = ShortCut.expandAll(text)
+        context = ""
+        
+        # Expand text tags (clipboard, file, URL, etc.)
+        context = ""
+        if "@clipboard" in txt:
+            txt = txt.replace("@clipboard", " CLIPBOARD_CONTENTS ")
+            context += "\n--- CLIPBOARD_CONTENTS START ---\n"
+            context += self.ui.read_clipboard()
+            context += "\n--- CLIPBOARD_CONTENTS END ---\n\n"
 
-        # Check if we have a @screen tag that requires screen capture
-        if "@selection" in txt:
-            self.capture_screen()
-            txt = txt.replace("@selection", " the image ").strip()
-            out = self.llm.generate_with_image(txt, self.tmp_image)
-        elif "@window" in txt:
-            self.capture_window()
-            txt = txt.replace("@window", " the image ").strip()
-            out = self.llm.generate_with_image(txt, self.tmp_image)
+        # Handle cases where we have to send an image to the LLM
+        if "@selection" in txt or "@window" in txt:
+            if "@selection" in txt:
+                self.capture_screen()
+                txt = txt.replace("@selection", " the image ").strip()
+            elif "@window" in txt:
+                self.capture_window()
+                txt = txt.replace("@window", " the image ").strip()
+            if self.debug:
+                print(color.RED + f'Sending image size {os.path.getsize(self.tmp_image)} to LLM. ', txt, color.END)
+            out = self.llm.generate_with_image(txt+context, self.tmp_image)
         else:                        
-            out = self.llm.generate(txt).strip()
-        print(out)
-        print()
-        self.ui.write_clipboard(out)    
+            # No image, just send the text to the LLM
+            if self.debug:
+                print(color.RED + f'Sending text length {len(txt)} to LLM. ', color.END)
+            out = self.llm.generate(txt+context).strip()
+            
+        if self.debug:
+            print(f'Output: ', out)
+            print()
+
         return out
         
     def clipboard_changed(self):
         txt = self.ui.read_clipboard()
 
         if txt.startswith(start_token):
-            self.handle_instructions(txt[len(start_token):])
+            out = self.handle_instructions(txt[len(start_token):])
+            self.ui.write_clipboard(out)    
 
 
 def main():
     global macLLM
-    load_env()
-    macLLM = MacLLM()
+
+    parser = argparse.ArgumentParser(description="macLLM - a simple LLM tool for the macOS clipboard")
+    parser.add_argument("--model", type=str, default="gpt-4o", help="The LLM model to use")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    args = parser.parse_args()
+
+    if args.debug:
+        debug_str = color.RED + "Debug mode enabled" + color.END + f" (version {MacLLM.version})"
+        print(f"Welcome to macLLM. {debug_str}")
+
+    macLLM = MacLLM(model=args.model, debug=args.debug)
     macLLM.show_instructions()
     macLLM.ui.start()
-
-# @@Capital of France?
-# @@capture Transcribe the text in this image.
 
 if __name__ == "__main__":
     main()

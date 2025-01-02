@@ -69,7 +69,6 @@ class AppDelegate(NSObject):
         menu.addItem_(options_item)
         quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "terminate:", "")
         menu.addItem_(quit_item)
-        print("Menu created")
         return menu
 
     def options_(self, sender):
@@ -219,7 +218,6 @@ class MacLLMUI:
         if text == "":
             return
         # Send the text to the LLM
-        print(f"User input: {text}")
         result = self.macllm.handle_instructions(text)
         self.update_text_area(text)
         self.input_field.setStringValue_(result)
