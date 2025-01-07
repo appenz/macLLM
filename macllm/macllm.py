@@ -11,13 +11,16 @@ import requests
 import os
 import argparse
 
+import openai
+
 from shortcuts import ShortCut
 from ui import MacLLMUI
+from webtools import retrieve_url
 
+# Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
 
-import openai
 
 macLLM = None
 
@@ -27,7 +30,11 @@ alias_token = "@"
 # Class defining ANSI color codes for terminal output
 class color:
    RED = '\033[91m'
+   GREEN = '\033[92m'
+   YELLOW = '\033[93m'
+   BLUE = '\033[94m'
    BOLD = '\033[1m'
+   GREY = '\033[90m'
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
@@ -45,6 +52,7 @@ class LLM:
     client = None
     model = "gpt-4o"
     temperature = 0.0
+    context_limit = 10000
 
     def __init__(self, model=model, temperature=0.0):
         self.model = model
@@ -103,8 +111,6 @@ class LLM:
         "max_tokens": 1000
         }
 
-        print(f'Sending to gpt-4o')
-        print(headers)
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
 
         # Extract the content from the response
@@ -160,10 +166,12 @@ class MacLLM:
 
     def handle_instructions(self, text):
         self.req = self.req+1
+        text = text.strip()
         if self.debug:
-            print(color.RED + f'Request #{self.req} : ', text, color.END)
+            print(color.BOLD + f'Request #{self.req} : ', color.END, text, )
         txt = ShortCut.expandAll(text)
         context = ""
+        error = None
         
         # Expand text tags (clipboard, file, URL, etc.)
         context = ""
@@ -172,6 +180,24 @@ class MacLLM:
             context += "\n--- CLIPBOARD_CONTENTS START ---\n"
             context += self.ui.read_clipboard()
             context += "\n--- CLIPBOARD_CONTENTS END ---\n\n"
+
+        # Expand URLs
+        if "@http://" in txt or "@https://" in txt:
+            words = txt.split()
+            for word in words:
+                if word.startswith("@http://") or word.startswith("@https://"):
+                    try:
+                        actual_url = word[1:]  # Remove the @ prefix
+                        content = retrieve_url(actual_url)
+                        if len(content) > self.llm.context_limit:
+                            content = content[:self.llm.context_limit] + "\n[Content truncated...]"
+                        txt = txt.replace(word, f" URL_CONTENTS ")
+                        context += f"\n--- URL_CONTENTS START ---\n"
+                        context += content
+                        context += "\n--- URL_CONTENTS END ---\n\n"
+                    except Exception as e:
+                        error = txt.replace(word, f"\n[Error retrieving {actual_url}: {str(e)}]\n")
+                        txt = ""
 
         # Handle cases where we have to send an image to the LLM
         if "@selection" in txt or "@window" in txt:
@@ -182,17 +208,19 @@ class MacLLM:
                 self.capture_window()
                 txt = txt.replace("@window", " the image ").strip()
             if self.debug:
-                print(color.RED + f'Sending image size {os.path.getsize(self.tmp_image)} to LLM. ', txt, color.END)
+                print(color.GREY + f'Sending image size {os.path.getsize(self.tmp_image)} to LLM. ', txt, color.END)
             out = self.llm.generate_with_image(txt+context, self.tmp_image)
         else:                        
             # No image, just send the text to the LLM
             if self.debug:
-                print(color.RED + f'Sending text length {len(txt)} to LLM. ', color.END)
+                print(color.GREY + f'Sending text length {len(txt)} to {self.llm.model}. ', color.END)
             out = self.llm.generate(txt+context).strip()
             
         if self.debug:
-            print(f'Output: ', out)
-            print()
+            if error:
+                print(color.RED + error + color.END)
+            print(f'Output: ', out.strip())
+            print("\n")
 
         return out
         
@@ -213,7 +241,7 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        debug_str = color.RED + "Debug mode enabled" + color.END + f" (version {MacLLM.version})"
+        debug_str = color.RED + "Debug mode is enabled" + f" (v {MacLLM.version})" + color.END
         print(f"Welcome to macLLM. {debug_str}")
 
     macLLM = MacLLM(model=args.model, debug=args.debug)

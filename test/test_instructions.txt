@@ -1,0 +1,6 @@
+Basic LLM:
+
+@@Capital of France?
+The capital of France is Paris.
+
+@@Summarize @https://guido.appenzeller.net/speaker-biography/
