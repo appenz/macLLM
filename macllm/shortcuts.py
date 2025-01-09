@@ -33,6 +33,31 @@ class ShortCut:
             text = s.expand(text)
         return text
 
+    @classmethod
+    def init_shortcuts(cls, macllm):
+
+        # Initialize the shortcuts
+        for p in promptShortcuts:
+            ShortCut(p[0], p[1])
+
+        # Read shortcuts from file myshortcuts.txt if it exists
+        import os
+
+        line_count = 0  # Initialize counter
+        if os.path.exists("myshortcuts.txt"):
+            with open("myshortcuts.txt", "r") as f:
+                for line in f:
+                    line_count += 1
+                    line = line.strip()
+                    if line.startswith('"@'):
+                        # Split on '", "' to handle quoted format
+                        trigger, prompt = line.strip('"').split('", "')
+                        ShortCut(trigger, prompt)
+
+            if macllm.debug:
+                print(f"Read {line_count} lines from myshortcuts.txt")
+
+
     def __init__(self, trigger, prompt):
         self.trigger = trigger
         self.prompt = prompt
@@ -42,7 +67,3 @@ class ShortCut:
     def expand(self, text):
         return text.replace(self.trigger, self.prompt)
 
-# Initialize the shortcuts
-for p in promptShortcuts:
-    ShortCut(p[0], p[1])
-    

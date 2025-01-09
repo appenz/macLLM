@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+import os
 
 def retrieve_url(url: str) -> str:
 
@@ -35,3 +36,23 @@ def retrieve_url(url: str) -> str:
     text = '\n'.join(chunk for chunk in chunks if chunk)
     
     return text 
+
+def read_file(filepath: str) -> str:
+
+    MAX_SIZE = 10 * 1024  # 10KB in bytes
+    
+    try:
+        # Try to read file as text
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read(MAX_SIZE)  # Only read up to MAX_SIZE bytes
+            
+            # Check for null bytes which indicate binary content
+            if '\0' in content:
+                raise ValueError("File appears to be binary")
+                
+            return content
+            
+    except UnicodeDecodeError:
+        raise ValueError("File appears to be binary")
+    except IOError as e:
+        raise IOError(f"Failed to read file: {str(e)}") 

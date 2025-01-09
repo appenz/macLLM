@@ -15,7 +15,7 @@ import openai
 
 from shortcuts import ShortCut
 from ui import MacLLMUI
-from webtools import retrieve_url
+from webtools import retrieve_url, read_file
 
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
 from quickmachotkey import quickHotKey, mask
@@ -199,6 +199,21 @@ class MacLLM:
                         error = txt.replace(word, f"\n[Error retrieving {actual_url}: {str(e)}]\n")
                         txt = ""
 
+        # Expand files (now checking for paths starting with "/" or "~")
+        words = txt.split()
+        for word in words:
+            if word.startswith("@/") or word.startswith("@~"):
+                filepath = word[1:]  # Remove the @ prefix
+                try:
+                    content = read_file(filepath)
+                    txt = txt.replace(word, f" FILE_CONTENTS ")
+                    context += f"\n--- FILE_CONTENTS START ---\n"
+                    context += content
+                    context += "\n--- FILE_CONTENTS END ---\n\n"
+                except Exception as e:
+                    error = txt.replace(word, f"\n[Error reading file {filepath}: {str(e)}]\n")
+                    txt = ""
+
         # Handle cases where we have to send an image to the LLM
         if "@selection" in txt or "@window" in txt:
             if "@selection" in txt:
@@ -213,7 +228,7 @@ class MacLLM:
         else:                        
             # No image, just send the text to the LLM
             if self.debug:
-                print(color.GREY + f'Sending text length {len(txt)} to {self.llm.model}. ', color.END)
+                print(color.GREY + f'Sending text length {len(txt+context)} to {self.llm.model}. ', color.END)
             out = self.llm.generate(txt+context).strip()
             
         if self.debug:
@@ -245,9 +260,9 @@ def main():
         print(f"Welcome to macLLM. {debug_str}")
 
     macLLM = MacLLM(model=args.model, debug=args.debug)
+    ShortCut.init_shortcuts(macLLM)
     macLLM.show_instructions()
     macLLM.ui.start()
-
 if __name__ == "__main__":
     main()
 
