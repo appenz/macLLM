@@ -116,14 +116,20 @@ class WindowDelegate(NSObject):
             # thus have to implement it here.
             self.macllm_ui.close_quick_window()
             return True
-        elif commandSelector == 'noop:':  # Handle Command-C
+        elif commandSelector == 'noop:':  # Handle Command-C and Command-V
             current_event = NSApp().currentEvent()
-            # Check for Command key (1 << 20) and 'c' key (0x63)
-            if (current_event.modifierFlags() & (1 << 20) and 
-                current_event.charactersIgnoringModifiers().lower() == 'c'):
-                self.macllm_ui.write_clipboard(self.text_field.stringValue())
-                self.macllm_ui.close_quick_window()
-                return True
+            # Check for Command key (1 << 20)
+            if current_event.modifierFlags() & (1 << 20):
+                key = current_event.charactersIgnoringModifiers().lower()
+                if key == 'c':  # Handle Command-C
+                    self.macllm_ui.write_clipboard(self.text_field.stringValue())
+                    self.macllm_ui.close_quick_window()
+                    return True
+                elif key == 'v':  # Handle Command-V
+                    clipboard_content = self.macllm_ui.read_clipboard()
+                    if clipboard_content:
+                        self.text_field.setStringValue_(clipboard_content)
+                    return True
         return False
 
     def textDidChange_(self, notification):
