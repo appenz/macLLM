@@ -11,4 +11,5 @@ dependencies = [
     "pyobjc>=10.3.1",
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
+    "toml>=0.10.2",
 ]
