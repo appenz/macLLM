@@ -75,19 +75,28 @@ class ShortCut:
             # If run from a Python interpreter
             app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        # Define config file locations
-        config_locations = [
-            os.path.join(app_dir, "config", "default_shortcuts.txt"),  # App config dir
-            os.path.expanduser("~/.config/macllm/shortcuts.txt")       # User config dir
+        # Define config directories
+        config_dirs = [
+            os.path.join(app_dir, "config"),                # App config dir
+            os.path.expanduser("~/.config/macllm")          # User config dir
         ]
 
-        # Create ~/.config/macllm if it doesn't exist
-        user_config_dir = os.path.expanduser("~/.config/macllm")
-        os.makedirs(user_config_dir, exist_ok=True)
-
-        # Read from all possible locations
-        for config_file in config_locations:
-            read_shortcuts_file(config_file, macllm.debug)
+        # Read all files from both config directories
+        for config_dir in config_dirs:
+            if not os.path.exists(config_dir):
+                continue
+                
+            # List all files in the directory
+            try:
+                files = [f for f in os.listdir(config_dir) if os.path.isfile(os.path.join(config_dir, f))]
+                for file in files:
+                    config_file = os.path.join(config_dir, file)
+                    if macllm.debug:
+                        print(f"Processing config file: {config_file}")
+                    read_shortcuts_file(config_file, macllm.debug)
+            except OSError:
+                if macllm.debug:
+                    print(f"Error accessing directory: {config_dir}")
 
 
     def __init__(self, trigger, prompt):
@@ -98,4 +107,3 @@ class ShortCut:
     # Find all occurrences of the trigger in the text and expand them
     def expand(self, text):
         return text.replace(self.trigger, self.prompt)
-
