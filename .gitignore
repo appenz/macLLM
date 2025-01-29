@@ -11,5 +11,4 @@ __pycache__/
 # API, local only tests keys etc.
 .env
 config/myshortcuts.toml
-test/certtest.py
-test/test_instructions.txt
+
