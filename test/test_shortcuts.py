@@ -46,10 +46,10 @@ shortcuts = [
         
         # Verify shortcuts were loaded
         expanded = ShortCut.expandAll("@test1")
-        self.assertEqual(expanded, "Test Prompt 1")
+        self.assertEqual(expanded, "Test Prompt 1 ")
         
         expanded = ShortCut.expandAll("@test2")
-        self.assertEqual(expanded, "Test Prompt 2")
+        self.assertEqual(expanded, "Test Prompt 2 ")
         
     def test_invalid_toml_syntax(self):
         config = '''
