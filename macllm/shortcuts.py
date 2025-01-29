@@ -78,8 +78,7 @@ class ShortCut:
         # Define config file locations
         config_locations = [
             os.path.join(app_dir, "config", "default_shortcuts.txt"),  # App config dir
-            os.path.expanduser("~/.config/macllm/shortcuts.txt"),      # User config dir
-            "myshortcuts.txt"                                          # Legacy location
+            os.path.expanduser("~/.config/macllm/shortcuts.txt")       # User config dir
         ]
 
         # Create ~/.config/macllm if it doesn't exist
