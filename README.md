@@ -66,7 +66,19 @@ Which GPT will correct to:
 
 > My Canadian Moose is Brown.
 
-You can add your own shortcuts in the shortcuts.py file. 
+You can add your own shortcuts in two ways:
+1. In the shortcuts.py file for built-in shortcuts
+2. In TOML config files in either:
+   - App config directory: ./config/
+   - User config directory: ~/.config/macllm/
+
+Config files should use TOML format with a shortcuts table. Example:
+```toml
+shortcuts = [
+  ["@exampleshortcut", "This is the expanded version of the exampleshortcut."],
+  ["@hosts", "@/etc/hosts"],
+]
+```
 
 ## Example Shortcuts
 - `#exp`: Expand the text using sophisticated and concise language.
