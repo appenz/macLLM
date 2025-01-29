@@ -54,9 +54,13 @@ class ShortCut:
                     line_count += 1
                     line = line.strip()
                     if line.startswith('"@'):
-                        # Split on '", "' to handle quoted format
+                        # Split on ',' to handle quoted format and remove quotes
                         try:
-                            trigger, prompt = line.strip('"').split('", "')
+                            trigger, prompt = line.split(',')
+                            trigger = trigger.strip('" ')
+                            prompt = prompt.strip('" ')
+                            if debug:
+                                print(f"    {trigger}  ->  {prompt}")
                             ShortCut(trigger, prompt)
                         except ValueError:
                             if debug:
@@ -64,7 +68,7 @@ class ShortCut:
                             continue
             
             if debug:
-                print(f"Read {line_count} lines from {file_path}")
+                print(f"Read {line_count} shortcuts")
             return line_count
 
         # Get the application directory
@@ -106,4 +110,4 @@ class ShortCut:
 
     # Find all occurrences of the trigger in the text and expand them
     def expand(self, text):
-        return text.replace(self.trigger, self.prompt)
+        return text.replace(self.trigger, self.prompt+" ")
