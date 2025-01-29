@@ -1,0 +1,2 @@
+"@exampleshortcut", "This is the expanded version of the exampleshortcut."
+"@hosts", "@/etc/hosts"

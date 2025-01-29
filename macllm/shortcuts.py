@@ -35,27 +35,59 @@ class ShortCut:
 
     @classmethod
     def init_shortcuts(cls, macllm):
-
         # Initialize the shortcuts
         for p in promptShortcuts:
             ShortCut(p[0], p[1])
 
-        # Read shortcuts from file myshortcuts.txt if it exists
         import os
+        import sys
+        from pathlib import Path
 
-        line_count = 0  # Initialize counter
-        if os.path.exists("myshortcuts.txt"):
-            with open("myshortcuts.txt", "r") as f:
+        def read_shortcuts_file(file_path, debug=False):
+            """Read shortcuts from a file and return the number of lines processed."""
+            if not os.path.exists(file_path):
+                return 0
+                
+            line_count = 0
+            with open(file_path, "r") as f:
                 for line in f:
                     line_count += 1
                     line = line.strip()
                     if line.startswith('"@'):
                         # Split on '", "' to handle quoted format
-                        trigger, prompt = line.strip('"').split('", "')
-                        ShortCut(trigger, prompt)
+                        try:
+                            trigger, prompt = line.strip('"').split('", "')
+                            ShortCut(trigger, prompt)
+                        except ValueError:
+                            if debug:
+                                print(f"Warning: Invalid format in line {line_count} of {file_path}")
+                            continue
+            
+            if debug:
+                print(f"Read {line_count} lines from {file_path}")
+            return line_count
 
-            if macllm.debug:
-                print(f"Read {line_count} lines from myshortcuts.txt")
+        # Get the application directory
+        if getattr(sys, 'frozen', False):
+            # If the application is run as a bundle
+            app_dir = os.path.dirname(sys.executable)
+        else:
+            # If run from a Python interpreter
+            app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        # Define config file locations
+        config_locations = [
+            os.path.join(app_dir, "config", "default_shortcuts.txt"),  # App config dir
+            os.path.expanduser("~/.config/macllm/shortcuts.txt")       # User config dir
+        ]
+
+        # Create ~/.config/macllm if it doesn't exist
+        user_config_dir = os.path.expanduser("~/.config/macllm")
+        os.makedirs(user_config_dir, exist_ok=True)
+
+        # Read from all possible locations
+        for config_file in config_locations:
+            read_shortcuts_file(config_file, macllm.debug)
 
 
     def __init__(self, trigger, prompt):
