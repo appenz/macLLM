@@ -74,5 +74,28 @@ class TestShortcuts(unittest.TestCase):
         finally:
             os.path.dirname = original_dirname
 
+    def test_no_directory_creation(self):
+        # Remove the config directory created in setUp
+        import shutil
+        shutil.rmtree(self.config_dir)
+        
+        # Mock the app directory
+        original_dirname = os.path.dirname
+        try:
+            os.path.dirname = lambda x: self.temp_dir
+
+            # Initialize shortcuts
+            mock_macllm = MockMacLLM(debug=True)
+            ShortCut.init_shortcuts(mock_macllm)
+
+            # Verify that config directory was not created
+            self.assertFalse(os.path.exists(self.config_dir))
+            
+            # Verify that ~/.config/macllm was not created
+            user_config_dir = os.path.expanduser("~/.config/macllm")
+            self.assertFalse(os.path.exists(user_config_dir))
+        finally:
+            os.path.dirname = original_dirname
+
 if __name__ == '__main__':
     unittest.main()

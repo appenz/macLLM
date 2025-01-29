@@ -81,9 +81,6 @@ class ShortCut:
             os.path.expanduser("~/.config/macllm")          # User config dir
         ]
 
-        # Create ~/.config/macllm if it doesn't exist
-        os.makedirs(config_dirs[1], exist_ok=True)
-
         # Read all files from both config directories
         for config_dir in config_dirs:
             if not os.path.exists(config_dir):
@@ -110,4 +107,3 @@ class ShortCut:
     # Find all occurrences of the trigger in the text and expand them
     def expand(self, text):
         return text.replace(self.trigger, self.prompt)
-
