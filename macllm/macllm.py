@@ -2,20 +2,21 @@
 # Ultra-simple LLM tool for the macOS clipboard
 # (c) in 2024 Guido Appenzeller
 #
-# OpenAI API Key is taken fromthe environment variable OPENAI_API_KEY
-# or imported from the file apikey.py
+# OpenAI API Key is taken from the environment variable OPENAI_API_KEY
 #
 
-import base64
-import requests
 import os
 import argparse
 
-import openai
-
-from shortcuts import ShortCut
+from core.shortcuts import ShortCut
 from ui import MacLLMUI
-from webtools import retrieve_url, read_file
+from core.user_request import UserRequest
+from plugins.base import MacLLMPlugin
+from plugins.url_plugin import URLPlugin
+from plugins.file_plugin import FilePlugin
+from plugins.clipboard_plugin import ClipboardPlugin
+from plugins.image_plugin import ImagePlugin
+from models.openai_connector import OpenAIConnector
 
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
 from quickmachotkey import quickHotKey, mask
@@ -46,197 +47,81 @@ class color:
 def handler():
     global macLLM
     macLLM.ui.hotkey_pressed()
-        
-class LLM:
-
-    client = None
-    model = "gpt-4o"
-    temperature = 0.0
-    context_limit = 10000
-
-    def __init__(self, model=model, temperature=0.0):
-        self.model = model
-        self.temperature = temperature
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        if self.openai_api_key is None:
-            raise Exception("OPENAI_API_KEY not found in environment variables")
-        self.client = openai.OpenAI(api_key=self.openai_api_key)
-
-    def generate(self, text):
-        c = self.client.chat.completions.create(
-          model=self.model,
-          messages = [
-            {"role": "user", "content": str(text)},
-          ],
-          temperature = self.temperature,
-        )
-        return c.choices[0].message.content
-    
-    # Function to encode the image
-    def encode_image(self,image_path):
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
-
-    def generate_with_image(self, text, image_path):
-
-        # Getting the base64 string
-        base64_image = self.encode_image(image_path)
-        if base64_image is None:
-            print(f'Image encoding failed.')
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.openai_api_key}"
-        }
-
-        payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-            "role": "user",
-            "content": [
-                {
-                "type": "text",
-                "text": f"{text}"
-                },
-                {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}"
-                }
-                }
-            ]
-            }
-        ],
-        "max_tokens": 1000
-        }
-
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-        # Extract the content from the response
-        if response.status_code == 200:
-            response_data = response.json()
-            if 'choices' in response_data and len(response_data['choices']) > 0:
-                generated_text = response_data['choices'][0]['message']['content']
-                print(f'Generated Text: {generated_text}')
-                return generated_text
-            else:
-                print('No generated content found.')
-                return None
-        else:
-            print(f'Failed to generate content. Status Code: {response.status_code}')
-            print(response.json())
-            return None
-
 
 class MacLLM:
 
     # Watch the clipboard for the trigger string "@@" and if you find it run through GPT
     # and write the result back to the clipboard
 
-    tmp_image = "/tmp/macllm.png"
     version = "0.1.0"
+
+    def debug_log(self, message: str, level: int = 0):
+        """Structured debug logging with color-coded levels."""
+        if not self.debug:
+            return
+            
+        colors = {
+            0: color.GREY,    # Grey for general info
+            1: color.BOLD,    # Black/bold for important info
+            2: color.RED      # Red for errors/warnings
+        }
+        
+        color_code = colors.get(level, color.GREY)
+        print(f"{color_code}{message}{color.END}")
+    
+    def debug_exception(self, exception):
+        """Log exceptions with structured formatting."""
+        if not self.debug:
+            return
+            
+        print(f"{color.RED}--- Error ----------------------------{color.END}")
+        print(f"{exception}")
 
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
         print(f'To use via the clipboard, copy text starting with "@@"')
 
-    def capture_screen(self):
-        # Delete the temp image if it exists
-        if os.path.exists(self.tmp_image):
-            os.remove(self.tmp_image)
-        os.system("screencapture -x -i /tmp/macllm.png")
-        return "/tmp/macllm.png"
-
-    def capture_window(self):
-        # Delete the temp image if it exists
-        if os.path.exists(self.tmp_image):
-            os.remove(self.tmp_image)
-        os.system("screencapture -x -i -Jwindow /tmp/macllm.png")
-        return "/tmp/macllm.png"
-
-    def __init__(self, model="gpt-4o", debug=False):
+    def __init__(self, model, debug=False):
         self.debug = debug
         self.ui = MacLLMUI()
         self.ui.macllm = self
-        self.llm = LLM(model=model)
         self.req = 0
 
         self.ui.clipboardCallback = self.clipboard_changed
+        
+        # Initialize plugins
+        self.plugins = [
+            URLPlugin(),
+            FilePlugin(),
+            ClipboardPlugin(self.ui),
+            ImagePlugin(self)
+        ]
+        
+        # Initialize LLM after debug_log method is available
+        self.llm = OpenAIConnector(model=model, debug_logger=self.debug_log if debug else None)
 
     def handle_instructions(self, text):
         self.req = self.req+1
         text = text.strip()
-        if self.debug:
-            print(color.BOLD + f'Request #{self.req} : ', color.END, text, )
         txt = ShortCut.expandAll(text)
-        context = ""
-        error = None
+        self.debug_log(f'Request #{self.req}: {txt}', 1)
         
-        # Expand text tags (clipboard, file, URL, etc.)
-        context = ""
-        if "@clipboard" in txt:
-            txt = txt.replace("@clipboard", " CLIPBOARD_CONTENTS ")
-            context += "\n--- CLIPBOARD_CONTENTS START ---\n"
-            context += self.ui.read_clipboard()
-            context += "\n--- CLIPBOARD_CONTENTS END ---\n\n"
+        # Create request object and process plugins
+        request = UserRequest(txt)
+        if not request.process_plugins(self.plugins, self.debug_log, self.debug_exception):
+            return None  # Abort the entire operation
 
-        # Expand URLs
-        if "@http://" in txt or "@https://" in txt:
-            words = txt.split()
-            for word in words:
-                if word.startswith("@http://") or word.startswith("@https://"):
-                    try:
-                        actual_url = word[1:]  # Remove the @ prefix
-                        content = retrieve_url(actual_url)
-                        if len(content) > self.llm.context_limit:
-                            content = content[:self.llm.context_limit] + "\n[Content truncated...]"
-                        txt = txt.replace(word, f" URL_CONTENTS ")
-                        context += f"\n--- URL_CONTENTS START ---\n"
-                        context += content
-                        context += "\n--- URL_CONTENTS END ---\n\n"
-                    except Exception as e:
-                        error = txt.replace(word, f"\n[Error retrieving {actual_url}: {str(e)}]\n")
-                        txt = ""
-
-        # Expand files (now checking for paths starting with "/" or "~")
-        words = txt.split()
-        for word in words:
-            if word.startswith("@/") or word.startswith("@~"):
-                filepath = word[1:]  # Remove the @ prefix
-                try:
-                    content = read_file(filepath)
-                    txt = txt.replace(word, f" FILE_CONTENTS ")
-                    context += f"\n--- FILE_CONTENTS START ---\n"
-                    context += content
-                    context += "\n--- FILE_CONTENTS END ---\n\n"
-                except Exception as e:
-                    error = txt.replace(word, f"\n[Error reading file {filepath}: {str(e)}]\n")
-                    txt = ""
-
-        # Handle cases where we have to send an image to the LLM
-        if "@selection" in txt or "@window" in txt:
-            if "@selection" in txt:
-                self.capture_screen()
-                txt = txt.replace("@selection", " the image ").strip()
-            elif "@window" in txt:
-                self.capture_window()
-                txt = txt.replace("@window", " the image ").strip()
-            if self.debug:
-                print(color.GREY + f'Sending image size {os.path.getsize(self.tmp_image)} to LLM. ', txt, color.END)
-            out = self.llm.generate_with_image(txt+context, self.tmp_image)
+        # Use image generation if needed
+        if request.needs_image:
+            # Find the ImagePlugin to get the image path
+            image_plugin = next((p for p in self.plugins if isinstance(p, ImagePlugin)), None)
+            image_path = image_plugin.tmp_image if image_plugin else "/tmp/macllm.png"
+            out = self.llm.generate_with_image(request.expanded_prompt + request.context, image_path)
         else:                        
-            # No image, just send the text to the LLM
-            if self.debug:
-                print(color.GREY + f'Sending text length {len(txt+context)} to {self.llm.model}. ', color.END)
-            out = self.llm.generate(txt+context).strip()
+            self.debug_log(f'Sending text length {len(request.expanded_prompt + request.context)} to {self.llm.model}.')
+            out = self.llm.generate(request.expanded_prompt + request.context).strip()
             
-        if self.debug:
-            if error:
-                print(color.RED + error + color.END)
-            print(f'Output: ', out.strip())
-            print("\n")
-
+        self.debug_log(f'Output: {out.strip()}\n')
         return out
         
     def clipboard_changed(self):
@@ -244,8 +129,8 @@ class MacLLM:
 
         if txt.startswith(start_token):
             out = self.handle_instructions(txt[len(start_token):])
-            self.ui.write_clipboard(out)    
-
+            if out is not None:  # Only update clipboard if operation succeeded
+                self.ui.write_clipboard(out)    
 
 def main():
     global macLLM
@@ -255,14 +140,14 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
-    if args.debug:
-        debug_str = color.RED + "Debug mode is enabled" + f" (v {MacLLM.version})" + color.END
-        print(f"Welcome to macLLM. {debug_str}")
-
     macLLM = MacLLM(model=args.model, debug=args.debug)
+    
+    if args.debug:
+        macLLM.debug_log(f"Debug mode is enabled (v {MacLLM.version})", 2)
     ShortCut.init_shortcuts(macLLM)
     macLLM.show_instructions()
     macLLM.ui.start()
+
 if __name__ == "__main__":
     main()
 

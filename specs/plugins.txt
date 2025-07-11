@@ -1,0 +1,64 @@
+# macLLM Plugin Architecture Specification
+
+## UserRequest Class
+```python
+class UserRequest:
+    def __init__(self, original_prompt: str):
+        self.original_prompt = original_prompt
+        self.expanded_prompt = original_prompt  # Current working text
+        self.context = ""                       # Additional context to append
+        self.needs_image = False               # Whether image generation is needed
+```
+
+## Base Plugin Class
+```python
+class MacLLMPlugin:
+    def get_prefixes(self) -> list[str]:  # e.g. ["@http://", "@https://", "@~"]
+        pass
+    
+    def expand(self, word: str, request: UserRequest) -> None:
+        """Modify the request object directly instead of returning tuples"""
+        pass
+```
+
+## Plugin Examples
+- **URLPlugin**: handles "@http://", "@https://" → fetches web content, adds to context
+- **FilePlugin**: handles "@/", "@~" → reads local files, adds to context  
+- **ClipboardPlugin**: handles "@clipboard" → gets clipboard content, adds to context
+- **ImagePlugin**: handles "@selection", "@window" → captures screenshots, sets needs_image=True
+
+## Model Architecture
+
+### Base Model Connector
+```python
+class ModelConnector:
+    def __init__(self, model: str, temperature: float = 0.0):
+        self.model = model  # Required parameter - no default
+        self.temperature = temperature
+        self.context_limit = 10000
+    
+    def generate(self, text: str) -> str:
+        pass
+    
+    def generate_with_image(self, text: str, image_path: str) -> str:
+        pass
+```
+
+### Model Connectors
+- **OpenAIConnector**: implements OpenAI API for GPT models
+- **Future connectors**: Anthropic, local models, etc.
+
+## Integration
+- Main MacLLM class maintains list of registered plugins
+- Main MacLLM class uses ModelConnector for LLM interactions
+- handle_instructions() creates UserRequest object, passes to plugins
+- Plugins modify the request object directly (no return values)
+- Each plugin is self-contained and can be tested independently
+- Easy to add new expansion types without modifying core logic
+
+## Benefits
+- No more tuple returns - cleaner interface
+- Centralized state management in UserRequest
+- Plugins can modify multiple aspects of the request
+- Model abstraction allows easy switching between LLM providers
+- More object-oriented and maintainable

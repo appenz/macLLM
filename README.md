@@ -97,5 +97,3 @@ This can be useful if you want to use macLLM from withint an editor. Just type "
 ## License
 
 Apache 2.0
-
-

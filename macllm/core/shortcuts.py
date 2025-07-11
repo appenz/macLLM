@@ -33,10 +33,10 @@ class ShortCut:
                     print(f"Skipping non-TOML file: {file_path}")
                 return 0
                 
-            import toml
+            import tomllib
             try:
-                with open(file_path, "r") as f:
-                    config = toml.load(f)
+                with open(file_path, "rb") as f:
+                    config = tomllib.load(f)
                 
                 if 'shortcuts' not in config:
                     if debug:
@@ -62,13 +62,14 @@ class ShortCut:
                         continue
                         
                     ShortCut(trigger, prompt)
+                    # print(f"Added shortcut: {trigger} -> {prompt}")
                     shortcuts_count += 1
                 
                 if debug:
                     print(f"Read {shortcuts_count} shortcuts from {file_path}")
                 return shortcuts_count
                 
-            except toml.TomlDecodeError as e:
+            except tomllib.TOMLDecodeError as e:
                 if debug:
                     print(f"Error parsing TOML file {file_path}: {str(e)}")
                 return 0
