@@ -16,6 +16,8 @@ from Cocoa import NSScrollView, NSTextView
 from Cocoa import NSFont
 from Cocoa import NSBox, NSBoxCustom, NSNoBorder
 from Cocoa import NSBezierPath
+from Cocoa import NSString
+from Cocoa import NSFontAttributeName
 
 import objc
 
@@ -215,11 +217,53 @@ class MacLLMUI:
             return
         # Send the text to the LLM
         result = self.macllm.handle_instructions(text)
+        # Update the text area with the full conversation after both user and assistant messages are added
         self.update_text_area(text)
         self.input_field.setStringValue_(result)
 
     def update_text_area(self, text):
-        self.text_area.setStringValue_(text)
+        # Update with the full chat history
+        formatted_history = self._format_chat_history()
+        self.text_area.setStringValue_(formatted_history)
+        # Force the text view to update
+        self.text_area.needsDisplay = True
+    
+    def _format_chat_history(self):
+        if hasattr(self.macllm, 'chat_history'):
+            history = self.macllm.chat_history.get_history()
+            formatted_history = []
+            for role, text in history:
+                if role == "user":
+                    formatted_history.append(f"User: {text}")
+                else:
+                    formatted_history.append(f"Assistant: {text}")
+            return "\n\n".join(formatted_history)
+        else:
+            return MacLLMUI.text_prompt
+
+    def _calculate_minimum_text_height(self):
+        """Calculate the minimum height needed to display the initial text content."""
+        # Create a temporary NSTextView with the same width as our intended text area
+        temp_text_view = NSTextView.alloc().initWithFrame_(((0, 0), (MacLLMUI.text_area_width - 2*MacLLMUI.text_corner_radius, 1000)))
+        
+        # Set the same font and text content
+        temp_text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+        temp_text_view.setString_(MacLLMUI.text_prompt)
+        
+        # Get the layout manager to calculate the actual height with width constraints
+        layout_manager = temp_text_view.layoutManager()
+        text_container = temp_text_view.textContainer()
+        
+        if layout_manager and text_container:
+            # Get the glyph range for the entire text
+            glyph_range = layout_manager.glyphRangeForTextContainer_(text_container)
+            
+            # Calculate the bounding rect for the glyphs with width constraints
+            bounding_rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
+            return bounding_rect.size.height
+        
+        # Fallback to a reasonable minimum height
+        return 200.0
 
     def open_quick_window(self):
 
@@ -227,12 +271,13 @@ class MacLLMUI:
         screen_width = NSScreen.mainScreen().frame().size.width
         screen_height = NSScreen.mainScreen().frame().size.height
         
+        # Calculate minimum text height using a temporary NSTextView
+        minimum_text_height = self._calculate_minimum_text_height()
+        
         # Calculate window dimensions according to specification
         # 90% of screen height, width for 80 characters
         max_window_height = int(screen_height * 0.9)
         window_width = MacLLMUI.window_width
-
-        # Guess ideal size of 
 
         # --- PADDING & CORNERS ---
         padding = MacLLMUI.padding
@@ -241,13 +286,24 @@ class MacLLMUI:
 
         # --- HEIGHTS ---
         padding_internal_fudge = 5 # no idea why this is needed, but it is
+        textbox_x_fudge = 3
+        textbox_y_fudge = 3
         top_bar_height = MacLLMUI.top_bar_height
         icon_height = MacLLMUI.icon_width
         entry_height = MacLLMUI.input_field_height
         # There are 4 paddings: top, between top bar and main, between main and entry, bottom
         total_padding = padding * 4
-        # Main area height fills the rest
-        window_height = max_window_height
+        
+        # Calculate optimal main area height based on minimum text height
+        # Add some padding for the text container and scroll view
+        text_container_padding = text_corner_radius * 2  # Padding inside the container
+        optimal_main_area_height = minimum_text_height + text_container_padding
+        
+        # Calculate total window height needed
+        total_ui_height = top_bar_height + optimal_main_area_height + entry_height + total_padding + padding_internal_fudge*2
+        
+        # Use the smaller of: optimal height or max window height
+        window_height = min(total_ui_height, max_window_height)
         main_area_height = window_height - (top_bar_height + entry_height + total_padding + padding_internal_fudge*2)
 
         # --- Y COORDINATES ---
@@ -308,17 +364,20 @@ class MacLLMUI:
 
         # Create scroll view inside the container
         scroll_view = NSScrollView.alloc().initWithFrame_(
-            ((text_corner_radius, text_corner_radius), 
+            ((0, 3), 
              (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius))
         )
         scroll_view.setHasVerticalScroller_(True)
         scroll_view.setHasHorizontalScroller_(False)
         scroll_view.setAutohidesScrollers_(True)
 
-        text_view = NSTextView.alloc().initWithFrame_(((0, 0), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
+        text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
         text_view.setEditable_(False)
         text_view.setDrawsBackground_(False)  # Let the container handle the background
-        text_view.setString_(MacLLMUI.text_prompt)
+        
+        # Initialize with chat history
+        initial_text = self._format_chat_history()
+        text_view.setString_(initial_text)
         self.text_area = text_view
         scroll_view.setDocumentView_(text_view)
         text_container.addSubview_(scroll_view)
@@ -345,7 +404,7 @@ class MacLLMUI:
 
         # Create input field inside the container
         input_field = NSTextField.alloc().initWithFrame_(
-            ((text_corner_radius, text_corner_radius), 
+            ((textbox_x_fudge, textbox_y_fudge), 
              (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius))
         )
         input_field.setStringValue_("")

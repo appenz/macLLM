@@ -11,6 +11,7 @@ import argparse
 from core.shortcuts import ShortCut
 from ui import MacLLMUI
 from core.user_request import UserRequest
+from core.chat_history import ChatHistory
 from shortcuts.base import ShortcutPlugin
 from shortcuts.url_plugin import URLPlugin
 from shortcuts.file_plugin import FilePlugin
@@ -21,7 +22,6 @@ from models.openai_connector import OpenAIConnector
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
-
 
 macLLM = None
 
@@ -89,6 +89,9 @@ class MacLLM:
 
         self.ui.clipboardCallback = self.clipboard_changed
         
+        # Initialize chat history
+        self.chat_history = ChatHistory()
+        
         # Initialize plugins
         self.plugins = [
             URLPlugin(),
@@ -106,6 +109,9 @@ class MacLLM:
         txt = ShortCut.expandAll(text)
         self.debug_log(f'Request #{self.req}: {txt}', 1)
         
+        # Add user message to chat history
+        self.chat_history.add_entry("user", txt)
+        
         # Create request object and process plugins
         request = UserRequest(txt)
         if not request.process_plugins(self.plugins, self.debug_log, self.debug_exception):
@@ -120,6 +126,10 @@ class MacLLM:
         else:                        
             self.debug_log(f'Sending text length {len(request.expanded_prompt + request.context)} to {self.llm.model}.')
             out = self.llm.generate(request.expanded_prompt + request.context).strip()
+            
+        # Add assistant response to chat history
+        if out is not None:
+            self.chat_history.add_entry("assistant", out)
             
         self.debug_log(f'Output: {out.strip()}\n')
         return out
