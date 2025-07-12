@@ -1,0 +1,35 @@
+The layout of the main macLLM window is as follows.
+
+The window is borderless and doesn't have the normal bar with icons at the top.
+
+We have three main areas on top of each other
+- The top bar with logo
+- The main conversation area
+- The entry box at the bottom
+
+Window height is 90% of the screen height (calculated from the screen height)
+Total width should allow for 80 characters in the main conversation box.
+Padding for all parts by default is 8 pixels
+
+The vertical stack is:
+
+1. The Top Bar
+Height: 64 pixels (plus padding)
+Three horizonal sections
+- The macLLM icon in assets/icon64x64 flush left
+- Next to it a status area. Right now only shows the LLM in use
+- Flush right a gear icon to configure preferences
+
+2. Padding
+
+3. Main Conversation area
+Below the top bar. Large text box that shows conversation history.
+Expands to show the entire conversation if possible. Maximum height
+is limited by the fixed size of the top and bottom bar and the 
+fixed width of the overall macLLM window.
+
+4. Padding
+
+5.  Bottom entry bar
+Entry box that has the focus and allows the user to enter prompts. 
+Scrollable, 5 lines of text visible.
