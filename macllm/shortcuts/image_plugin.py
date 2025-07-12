@@ -1,7 +1,7 @@
 import os
-from .base import MacLLMPlugin
+from .base import ShortcutPlugin
 
-class ImagePlugin(MacLLMPlugin):
+class ImagePlugin(ShortcutPlugin):
     def __init__(self, macllm):
         self.macllm = macllm
         self.tmp_image = "/tmp/macllm.png"

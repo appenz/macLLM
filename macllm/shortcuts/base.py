@@ -1,7 +1,7 @@
 from core.user_request import UserRequest
 
-class MacLLMPlugin:
-    """Base class for macLLM plugins that handle @ tag expansions."""
+class ShortcutPlugin:
+    """Base class for macLLM shortcuts that handle @ tag expansions."""
     
     def get_prefixes(self) -> list[str]:
         """Return list of prefixes this plugin handles."""

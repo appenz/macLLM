@@ -1,9 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from .base import MacLLMPlugin
+from .base import ShortcutPlugin
 
-class URLPlugin(MacLLMPlugin):
+class URLPlugin(ShortcutPlugin):
     def get_prefixes(self) -> list[str]:
         return ["@http://", "@https://"]
     

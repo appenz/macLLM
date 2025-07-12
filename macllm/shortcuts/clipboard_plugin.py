@@ -1,6 +1,6 @@
-from .base import MacLLMPlugin
+from .base import ShortcutPlugin
 
-class ClipboardPlugin(MacLLMPlugin):
+class ClipboardPlugin(ShortcutPlugin):
     def __init__(self, ui):
         self.ui = ui
     

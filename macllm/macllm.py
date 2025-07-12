@@ -11,11 +11,11 @@ import argparse
 from core.shortcuts import ShortCut
 from ui import MacLLMUI
 from core.user_request import UserRequest
-from plugins.base import MacLLMPlugin
-from plugins.url_plugin import URLPlugin
-from plugins.file_plugin import FilePlugin
-from plugins.clipboard_plugin import ClipboardPlugin
-from plugins.image_plugin import ImagePlugin
+from shortcuts.base import ShortcutPlugin
+from shortcuts.url_plugin import URLPlugin
+from shortcuts.file_plugin import FilePlugin
+from shortcuts.clipboard_plugin import ClipboardPlugin
+from shortcuts.image_plugin import ImagePlugin
 from models.openai_connector import OpenAIConnector
 
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
@@ -53,7 +53,7 @@ class MacLLM:
     # Watch the clipboard for the trigger string "@@" and if you find it run through GPT
     # and write the result back to the clipboard
 
-    version = "0.1.0"
+    version = "0.2.0"
 
     def debug_log(self, message: str, level: int = 0):
         """Structured debug logging with color-coded levels."""
@@ -138,7 +138,12 @@ def main():
     parser = argparse.ArgumentParser(description="macLLM - a simple LLM tool for the macOS clipboard")
     parser.add_argument("--model", type=str, default="gpt-4o", help="The LLM model to use")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--version", action="store_true", help="Print version and exit")
     args = parser.parse_args()
+
+    if args.version:
+        print(MacLLM.version)
+        return
 
     macLLM = MacLLM(model=args.model, debug=args.debug)
     

@@ -1,8 +1,8 @@
-from .base import MacLLMPlugin
+from .base import ShortcutPlugin
 
-class FilePlugin(MacLLMPlugin):
+class FilePlugin(ShortcutPlugin):
     def get_prefixes(self) -> list[str]:
-        return ["@/", "@~"]
+        return ["@/", "@~","@\"/", "@\"~"]
     
     def _read_file(self, filepath: str) -> str:
         """Read and validate a text file."""

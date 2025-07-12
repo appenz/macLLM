@@ -1,0 +1,10 @@
+# Shortcut Rules
+
+macLLM can use shortcuts. They start with the @ symbol. The rules are as follows:
+
+1. A shortcut is parsed until the first whitespace character is encountered
+2. If a shortcut contains a space with a backslash in front of it, it is included as a shortcut as a space
+    example: @~/My\ Home/foo -> "@~/My Home/foo"
+    example: @~/My Home/foo -> "@~/My"
+3. If a shortcut starts with an @" it includes all text until either a closing " or a newline is encountered (quotes are stripped)
+    example: @"~/My Home/foo" -> "@~/My Home/foo"
