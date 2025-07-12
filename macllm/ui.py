@@ -217,16 +217,10 @@ class MacLLMUI:
             return
         # Send the text to the LLM
         result = self.macllm.handle_instructions(text)
-        # Update the text area with the full conversation after both user and assistant messages are added
-        self.update_text_area(text)
-        self.input_field.setStringValue_(result)
-
-    def update_text_area(self, text):
-        # Update with the full chat history
-        formatted_history = self._format_chat_history()
-        self.text_area.setStringValue_(formatted_history)
-        # Force the text view to update
-        self.text_area.needsDisplay = True
+        # Resize window to fit new content (this also updates the text area)
+        self.update_window()
+        # Clear the input field for the next message
+        self.input_field.setStringValue_("")
     
     def _format_chat_history(self):
         if hasattr(self.macllm, 'chat_history'):
@@ -241,15 +235,16 @@ class MacLLMUI:
         else:
             return MacLLMUI.text_prompt
 
-    def _calculate_minimum_text_height(self):
+    def _calculate_minimum_text_height(self, text):
         """Calculate the minimum height needed to display the initial text content."""
         # Create a temporary NSTextView with the same width as our intended text area
         temp_text_view = NSTextView.alloc().initWithFrame_(((0, 0), (MacLLMUI.text_area_width - 2*MacLLMUI.text_corner_radius, 1000)))
         
         # Set the same font and text content
         temp_text_view.setFont_(NSFont.systemFontOfSize_(13.0))
-        temp_text_view.setString_(MacLLMUI.text_prompt)
-        
+        temp_text_view.setString_(text)
+        print(f"temp_text_view: {text}")        
+
         # Get the layout manager to calculate the actual height with width constraints
         layout_manager = temp_text_view.layoutManager()
         text_container = temp_text_view.textContainer()
@@ -260,19 +255,25 @@ class MacLLMUI:
             
             # Calculate the bounding rect for the glyphs with width constraints
             bounding_rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
+            print(f"bounding_rect: {bounding_rect.size.height}")
             return bounding_rect.size.height
         
         # Fallback to a reasonable minimum height
         return 200.0
 
-    def open_quick_window(self):
+    def update_window(self):
+
+        print(f"update_window: {self.quick_window}")
 
         # Find the width and height of the screen
         screen_width = NSScreen.mainScreen().frame().size.width
         screen_height = NSScreen.mainScreen().frame().size.height
         
+        # Get text for main conversation area from chat history
+        main_text = self._format_chat_history()
+
         # Calculate minimum text height using a temporary NSTextView
-        minimum_text_height = self._calculate_minimum_text_height()
+        minimum_text_height = self._calculate_minimum_text_height(main_text)
         
         # Calculate window dimensions according to specification
         # 90% of screen height, width for 80 characters
@@ -289,7 +290,6 @@ class MacLLMUI:
         textbox_x_fudge = 3
         textbox_y_fudge = 3
         top_bar_height = MacLLMUI.top_bar_height
-        icon_height = MacLLMUI.icon_width
         entry_height = MacLLMUI.input_field_height
         # There are 4 paddings: top, between top bar and main, between main and entry, bottom
         total_padding = padding * 4
@@ -313,108 +313,155 @@ class MacLLMUI:
         top_bar_y = window_height - padding - top_bar_height
         icon_y = top_bar_y  # Flush with top bar, no centering
 
-        win = QuickWindowPanel.alloc()
-        self.quick_window = win
+        if self.quick_window is None:
+            new_window = True
+            win = QuickWindowPanel.alloc()
+            self.quick_window = win
 
-        # Position window in center of screen
-        frame = ( 
-                  ( (screen_width - window_width) / 2-window_corner_radius, 
-                     (screen_height - window_height) / 2-window_corner_radius
-                  ), (window_width+2*window_corner_radius, window_height+2*window_corner_radius) 
-                ) 
-        window_mask = NSBorderlessWindowMask
-        win.initWithContentRect_styleMask_backing_defer_(frame, window_mask, 2, 0)
-        win.setTitle_("🦙 macLLM")
-        win.setLevel_(3)  # floating window
+            # Position window in center of screen
+            frame = ( 
+                      ( (screen_width - window_width) / 2-window_corner_radius, 
+                         (screen_height - window_height) / 2-window_corner_radius
+                      ), (window_width+2*window_corner_radius, window_height+2*window_corner_radius) 
+                    ) 
+            window_mask = NSBorderlessWindowMask
+            win.initWithContentRect_styleMask_backing_defer_(frame, window_mask, 2, 0)
+            win.setTitle_("🦙 macLLM")
+            win.setLevel_(3)  # floating window
 
-        # Set the background color of the window to be transparent
-        win.setBackgroundColor_(NSColor.clearColor())
+            # Set the background color of the window to be transparent
+            win.setBackgroundColor_(NSColor.clearColor())
+        else:
+            new_window = False
+            win = self.quick_window
+            # Update window frame for resize
+            frame = ( 
+                      ( (screen_width - window_width) / 2-window_corner_radius, 
+                         (screen_height - window_height) / 2-window_corner_radius
+                      ), (window_width+2*window_corner_radius, window_height+2*window_corner_radius) 
+                    ) 
+            win.setFrame_display_(frame, True)
         
-        # Create an NSBox to serve as the rounded, colored background
-        box = NSBox.alloc().initWithFrame_(((0, 0), (window_width+window_corner_radius, window_height+window_corner_radius)))
-        box.setBoxType_(NSBoxCustom) 
-        box.setBorderType_(NSNoBorder)  
-        box.setCornerRadius_(window_corner_radius)
-        #box.setTransparent_(True)
-        box.setFillColor_(NSColor.colorWithCalibratedWhite_alpha_(0.7, 0.7))
-        win.contentView().addSubview_(box)
+        if new_window:
+            # Create an NSBox to serve as the rounded, colored background
+            box = NSBox.alloc().initWithFrame_(((0, 0), (window_width+window_corner_radius, window_height+window_corner_radius)))
+            box.setBoxType_(NSBoxCustom) 
+            box.setBorderType_(NSNoBorder)  
+            box.setCornerRadius_(window_corner_radius)
+            #box.setTransparent_(True)
+            box.setFillColor_(NSColor.colorWithCalibratedWhite_alpha_(0.7, 0.7))
+            win.contentView().addSubview_(box)
+            self.background_box = box
+        else:
+            # Update existing background box frame
+            box = self.background_box
+            box.setFrame_(((0, 0), (window_width+window_corner_radius, window_height+window_corner_radius)))
 
-        # Add image view (logo in top bar) as a subview of the box
-        image_view = NSImageView.alloc().initWithFrame_(
-            ((MacLLMUI.icon_x, icon_y), 
-             (MacLLMUI.icon_width, MacLLMUI.icon_width))
-        )
-        image_view.setImage_(self.logo_image)
-        image_view.setImageScaling_(3)  # NSScaleToFit = 3
-        image_view.setContentHuggingPriority_forOrientation_(1000, 0)  # Horizontal
-        image_view.setContentHuggingPriority_forOrientation_(1000, 1)  # Vertical
-        box.addSubview_(image_view)
+        # ----- Top bar with icon, status and preferences ---------------------------------------------------------------
 
-        # Main conversation area (middle section) as a scrollable NSTextView with rounded corners
-        # Create a container view with rounded corners
-        text_container = NSBox.alloc().initWithFrame_(
-            ((MacLLMUI.text_area_x, main_area_y),
-             (MacLLMUI.text_area_width, main_area_height))
-        )
-        text_container.setBoxType_(NSBoxCustom)
-        text_container.setBorderType_(NSNoBorder)
-        text_container.setCornerRadius_(text_corner_radius)
-        text_container.setFillColor_(NSColor.whiteColor())
-        box.addSubview_(text_container)
+        if new_window:
+            # Add image view (logo in top bar) as a subview of the box
+            image_view = NSImageView.alloc().initWithFrame_(
+                ((MacLLMUI.icon_x, icon_y), 
+                 (MacLLMUI.icon_width, MacLLMUI.icon_width))
+            )
+            image_view.setImage_(self.logo_image)
+            image_view.setImageScaling_(3)  # NSScaleToFit = 3
+            image_view.setContentHuggingPriority_forOrientation_(1000, 0)  # Horizontal
+            image_view.setContentHuggingPriority_forOrientation_(1000, 1)  # Vertical
+            box.addSubview_(image_view)
+            self.logo_image_view = image_view
+        else:
+            # Update existing image view position
+            image_view = self.logo_image_view
+            image_view.setFrame_(((MacLLMUI.icon_x, icon_y), 
+                                 (MacLLMUI.icon_width, MacLLMUI.icon_width)))
+
+        # ----- Main conversation area (middle section) as a scrollable NSTextView with rounded corners -------------------
+
+        if new_window:
+            text_container = NSBox.alloc().initWithFrame_(
+                ((MacLLMUI.text_area_x, main_area_y),
+                 (MacLLMUI.text_area_width, main_area_height))
+            )
+            text_container.setBoxType_(NSBoxCustom)
+            text_container.setBorderType_(NSNoBorder)
+            text_container.setCornerRadius_(text_corner_radius)
+            text_container.setFillColor_(NSColor.whiteColor())
+            box.addSubview_(text_container)
+            self.text_container = text_container
+        else:
+            text_container = self.text_container
+            # Update existing text container and scroll view frames
+            text_container.setFrame_(((MacLLMUI.text_area_x, main_area_y),
+                                     (MacLLMUI.text_area_width, main_area_height)))
 
         # Create scroll view inside the container
         scroll_view = NSScrollView.alloc().initWithFrame_(
             ((0, 3), 
-             (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius))
+            (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius))
         )
+
         scroll_view.setHasVerticalScroller_(True)
         scroll_view.setHasHorizontalScroller_(False)
         scroll_view.setAutohidesScrollers_(True)
+        self.scroll_view = scroll_view
 
-        text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
-        text_view.setEditable_(False)
-        text_view.setDrawsBackground_(False)  # Let the container handle the background
+        if new_window:
+            text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
+            text_view.setEditable_(False)
+            text_view.setDrawsBackground_(False)  # Let the container handle the background
+            text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+            self.text_area = text_view
+        else:
+            # Update existing text view frame and content
+            text_view = self.text_area
+            text_view.setFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
         
-        # Initialize with chat history
-        initial_text = self._format_chat_history()
-        text_view.setString_(initial_text)
-        self.text_area = text_view
+        # Update with latest chat history
         scroll_view.setDocumentView_(text_view)
         text_container.addSubview_(scroll_view)
-
+        text_view.setString_(main_text)
+   
         # Set font size for main text area
-        text_view.setFont_(NSFont.systemFontOfSize_(13.0))
-        main_font = text_view.font()
-        if main_font is not None:
-            print(f"Main text area font size: {main_font.pointSize()}")
+
+        # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
+
+        if new_window:
+            # Create a container view with rounded corners for the input field
+            input_container = NSBox.alloc().initWithFrame_(
+                ((MacLLMUI.input_field_x, input_field_y), 
+                 (MacLLMUI.input_field_width, MacLLMUI.input_field_height))
+            )
+            input_container.setBoxType_(NSBoxCustom)
+            input_container.setBorderType_(NSNoBorder)
+            input_container.setCornerRadius_(text_corner_radius)
+            input_container.setFillColor_(NSColor.whiteColor())
+            box.addSubview_(input_container)
+            self.input_container = input_container
+
+            # Create input field inside the container
+            input_field = NSTextField.alloc().initWithFrame_(
+                ((textbox_x_fudge, textbox_y_fudge), 
+                 (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius))
+            )
+            input_field.setStringValue_("")
+            input_field.setFont_(NSFont.systemFontOfSize_(13.0))
+            input_field.setDrawsBackground_(False)  # Let the container handle the background
+            self.window_delegate = WindowDelegate.alloc().initWithTextField_(input_field)
+            self.window_delegate.macllm_ui = self
+            input_field.setDelegate_(self.window_delegate)
+            input_container.addSubview_(input_field)
+            self.input_field = input_field
         else:
-            print("Main text area font is None")
-
-        # Input field at bottom with rounded corners
-        # Create a container view with rounded corners for the input field
-        input_container = NSBox.alloc().initWithFrame_(
-            ((MacLLMUI.input_field_x, input_field_y), 
-             (MacLLMUI.input_field_width, MacLLMUI.input_field_height))
-        )
-        input_container.setBoxType_(NSBoxCustom)
-        input_container.setBorderType_(NSNoBorder)
-        input_container.setCornerRadius_(text_corner_radius)
-        input_container.setFillColor_(NSColor.whiteColor())
-        box.addSubview_(input_container)
-
-        # Create input field inside the container
-        input_field = NSTextField.alloc().initWithFrame_(
-            ((textbox_x_fudge, textbox_y_fudge), 
-             (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius))
-        )
-        input_field.setStringValue_("")
-        input_field.setFont_(NSFont.systemFontOfSize_(13.0))
-        input_field.setDrawsBackground_(False)  # Let the container handle the background
-        self.window_delegate = WindowDelegate.alloc().initWithTextField_(input_field)
-        self.window_delegate.macllm_ui = self
-        input_field.setDelegate_(self.window_delegate)
-        input_container.addSubview_(input_field)
-        self.input_field = input_field
+            # Update existing input container and field frames
+            input_container = self.input_container
+            input_container.setFrame_(((MacLLMUI.input_field_x, input_field_y), 
+                                      (MacLLMUI.input_field_width, MacLLMUI.input_field_height)))
+            
+            input_field = self.input_field
+            input_field.setFrame_(((textbox_x_fudge, textbox_y_fudge), 
+                                  (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius)))
 
         input_font = input_field.font()
         if input_font is not None:
@@ -422,14 +469,19 @@ class MacLLMUI:
         else:
             print("Input field font is None")
 
-        # Move the window to the front and activate it
-        win.display()
-        win.orderFrontRegardless()
-        win.makeKeyWindow()  # Make it the key window
-        self.app.activateIgnoringOtherApps_(True)
-        self.input_field.becomeFirstResponder()  # Set focus to the input field
+        if new_window:
+            # Move the window to the front and activate it
+            win.display()
+            win.orderFrontRegardless()
+            win.makeKeyWindow()  # Make it the key window
+            self.app.activateIgnoringOtherApps_(True)
+            self.input_field.becomeFirstResponder()  # Set focus to the input field
+        else:
+            # Just refresh the window display for resize
+            win.needsDisplay = True
+            win.display()
 
-    def close_quick_window(self):
+    def close_window(self):
         self.quick_window.orderOut_(None)
         self.quick_window = None
         # Deactivate our app to return focus to the previous application
@@ -438,9 +490,9 @@ class MacLLMUI:
     # Handle the hotkey press
     def hotkey_pressed(self):
         if self.quick_window is None:
-            self.open_quick_window()
+            self.update_window()
         else:
-            self.close_quick_window()
+            self.close_window()
 
     def start(self):
         # Pointer to main class, we need this for callback
