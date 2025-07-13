@@ -3,6 +3,11 @@
 # (c) in 2023 Guido Appenzeller
 #
 
+import os
+import sys
+from pathlib import Path
+import tomllib
+
 # Class that handles shortcuts and the actions to be taken
 
 class ShortCut:
@@ -17,67 +22,63 @@ class ShortCut:
         return text
 
     @classmethod
-    def init_shortcuts(cls, macllm):
-        import os
-        import sys
-        from pathlib import Path
+    def read_shortcuts_file(cls, file_path, debug=False):
+        """Read shortcuts from a TOML file and return the number of shortcuts processed."""
+        if not os.path.exists(file_path):
+            return 0
 
-        def read_shortcuts_file(file_path, debug=False):
-            """Read shortcuts from a TOML file and return the number of shortcuts processed."""
-            if not os.path.exists(file_path):
-                return 0
-
-            # Skip non-TOML files
-            if not file_path.endswith('.toml'):
+        # Skip non-TOML files
+        if not file_path.endswith('.toml'):
+            if debug:
+                print(f"Skipping non-TOML file: {file_path}")
+            return 0
+            
+        try:
+            with open(file_path, "rb") as f:
+                config = tomllib.load(f)
+            
+            if 'shortcuts' not in config:
                 if debug:
-                    print(f"Skipping non-TOML file: {file_path}")
+                    print(f"No shortcuts table found in {file_path}")
                 return 0
-                
-            import tomllib
-            try:
-                with open(file_path, "rb") as f:
-                    config = tomllib.load(f)
-                
-                if 'shortcuts' not in config:
+            
+            shortcuts_count = 0
+            for shortcut in config['shortcuts']:
+                if len(shortcut) != 2:
                     if debug:
-                        print(f"No shortcuts table found in {file_path}")
-                    return 0
-                
-                shortcuts_count = 0
-                for shortcut in config['shortcuts']:
-                    if len(shortcut) != 2:
-                        if debug:
-                            print(f"Invalid shortcut format in {file_path}: {shortcut}")
-                        continue
-                        
-                    trigger, prompt = shortcut
-                    if not isinstance(trigger, str) or not isinstance(prompt, str):
-                        if debug:
-                            print(f"Invalid shortcut types in {file_path}: {shortcut}")
-                        continue
-                        
-                    if not trigger.startswith('@'):
-                        if debug:
-                            print(f"Trigger must start with @ in {file_path}: {trigger}")
-                        continue
-                        
-                    ShortCut(trigger, prompt)
-                    # print(f"Added shortcut: {trigger} -> {prompt}")
-                    shortcuts_count += 1
-                
-                if debug:
-                    print(f"Read {shortcuts_count} shortcuts from {file_path}")
-                return shortcuts_count
-                
-            except tomllib.TOMLDecodeError as e:
-                if debug:
-                    print(f"Error parsing TOML file {file_path}: {str(e)}")
-                return 0
-            except Exception as e:
-                if debug:
-                    print(f"Error reading shortcuts from {file_path}: {str(e)}")
-                return 0
+                        print(f"Invalid shortcut format in {file_path}: {shortcut}")
+                    continue
+                    
+                trigger, prompt = shortcut
+                if not isinstance(trigger, str) or not isinstance(prompt, str):
+                    if debug:
+                        print(f"Invalid shortcut types in {file_path}: {shortcut}")
+                    continue
+                    
+                if not trigger.startswith('@'):
+                    if debug:
+                        print(f"Trigger must start with @ in {file_path}: {trigger}")
+                    continue
+                    
+                ShortCut(trigger, prompt)
+                #print(f"Added shortcut: {trigger} -> {prompt}")
+                shortcuts_count += 1
+            
+            if debug:
+                print(f"Read {shortcuts_count} shortcuts from {file_path}")
+            return shortcuts_count
+            
+        except tomllib.TOMLDecodeError as e:
+            if debug:
+                print(f"Error parsing TOML file {file_path}: {str(e)}")
+            return 0
+        except Exception as e:
+            if debug:
+                print(f"Error reading shortcuts from {file_path}: {str(e)}")
+            return 0
 
+    @classmethod
+    def init_shortcuts(cls, macllm):
         # Get the application directory
         if getattr(sys, 'frozen', False):
             # If the application is run as a bundle
@@ -88,7 +89,7 @@ class ShortCut:
 
         # Use config_dirs from macllm if available, otherwise use defaults
         config_dirs = getattr(macllm, 'config_dirs', [
-            os.path.join(app_dir, "config"),                # App config dir
+            os.path.join(app_dir, "../config"),                # App config dir
             os.path.expanduser("~/.config/macllm")          # User config dir
         ])
 
@@ -104,7 +105,7 @@ class ShortCut:
                     config_file = os.path.join(config_dir, file)
                     if macllm.debug:
                         print(f"Processing config file: {config_file}")
-                    read_shortcuts_file(config_file, macllm.debug)
+                    cls.read_shortcuts_file(config_file, macllm.debug)
             except OSError:
                 if macllm.debug:
                     print(f"Error accessing directory: {config_dir}")

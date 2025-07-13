@@ -28,6 +28,8 @@ macLLM = None
 start_token = "@@"
 alias_token = "@"
 
+conv_start = "\n--- CONVERSATION STARTS HERE ---"
+
 # Class defining ANSI color codes for terminal output
 class color:
    RED = '\033[91m'
@@ -103,17 +105,19 @@ class MacLLM:
         # Initialize LLM after debug_log method is available
         self.llm = OpenAIConnector(model=model, debug_logger=self.debug_log if debug else None)
 
-    def handle_instructions(self, text):
+    def handle_instructions(self, user_input):
         self.req = self.req+1
-        text = text.strip()
-        txt = ShortCut.expandAll(text)
-        self.debug_log(f'Request #{self.req}: {txt}', 1)
-        
-        # Add user message to chat history
-        self.chat_history.add_entry("user", txt)
-        
+        user_input = user_input.strip()
+
+        # Note: expandAll expands shortcuts as well as references (e.g. file, url, etc.)
+        expanded_input = ShortCut.expandAll(user_input)
+        self.debug_log(f'Request #{self.req}: {expanded_input}', 1)
+
+        # Add request and response to chat history
+        self.chat_history.add_chat_entry("user", user_input, expanded_input)  # original, expanded
+
         # Create request object and process plugins
-        request = UserRequest(txt)
+        request = UserRequest(expanded_input)
         if not request.process_plugins(self.plugins, self.debug_log, self.debug_exception):
             return None  # Abort the entire operation
 
@@ -124,14 +128,16 @@ class MacLLM:
             image_path = image_plugin.tmp_image if image_plugin else "/tmp/macllm.png"
             out = self.llm.generate_with_image(request.expanded_prompt + request.context, image_path)
         else:                        
-            self.debug_log(f'Sending text length {len(request.expanded_prompt + request.context)} to {self.llm.model}.')
-            out = self.llm.generate(request.expanded_prompt + request.context).strip()
-            
-        # Add assistant response to chat history
+            self.debug_log(f'Sending text length {len(request.expanded_prompt)} to {self.llm.model}.')
+            # Use expanded chat history for LLM if needed, for now just use original
+            request_text = request.context + self.chat_history.get_chat_history_original() + request.expanded_prompt
+            out = self.llm.generate(request_text).strip()
+
         if out is not None:
-            self.chat_history.add_entry("assistant", out)
-            
-        self.debug_log(f'Output: {out.strip()}\n')
+            self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"
+        else:
+            self.chat_history.add_chat_entry("assistant", "Error: No output from LLM", "Error: No output from LLM")
+        self.debug_log(f'Output: {out.strip() if out else ""}\n')
         return out
         
     def clipboard_changed(self):

@@ -1,0 +1,37 @@
+macLLM Chat History Specification
+
+ChatHistory maintains two separate lists:
+- Chat history: List of dicts with fields:
+  - role: 'user' or 'assistant'
+  - text: The unexpanded text as typed by user or response from assistant
+  - expanded_text: The text with context references replaced by actual content
+  - timestamp: When the message was created
+  - context_refs: List of context names this message references (optional)
+- Context: List of dicts with fields:
+  - name: Unique identifier for this context block
+  - source: Original source (file path, URL, etc.)
+  - type: one of "url", "path", "clipboard", "image"
+  - context: The actual content/context string
+
+Chat Methods:
+- add_chat_entry(role, text, expanded_text): Adds conversation turn
+- get_chat_history_original(): returns the unexpanded chat history to show the user as a string
+- get_chat_history_expanded(): returns the fully expanded chat history for the LLM as a string
+
+Context Methods:
+- add_context(suggested_name, source, type, context): Adds context entry, returns actual name
+    - Will not add a duplicate, just return the correct name for the duplicate
+- get_context_history_text(): Returns context history as one large string except images
+- get_context_last_image(): Returns only the last image in the context history
+
+General Methods:
+- reset(): Clears both lists, restores default message
+
+Notes:
+- Storage: In-memory only, no persistence.
+- Images are stored in the normal context list as type "image" but handled differently.
+    - The reason is that the API of most LLMs can't accept an image as part of the main request
+        but instead needs it as a POST because of this images are not automatically returned 
+        by get_context_history_text() in the large text block but via get_context_last_image()
+    - Images are also stored and returned as binary for efficiency
+

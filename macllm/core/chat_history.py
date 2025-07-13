@@ -1,14 +1,102 @@
+import time
+from typing import List, Dict, Optional, Union
+
+
 class ChatHistory:
     def __init__(self):
         self.reset()
     
-    def add_entry(self, role, text):
+    def add_chat_entry(self, role: str, text: str, expanded_text: str, context_refs: Optional[List[str]] = None) -> None:
+        """Add a conversation turn to the chat history."""
         if role not in ['user', 'assistant']:
             raise ValueError("Role must be either 'user' or 'assistant'")
-        self.history.append((role, text))
+        
+        entry = {
+            'role': role,
+            'text': text,
+            'expanded_text': expanded_text,
+            'timestamp': time.time(),
+            'context_refs': context_refs or []
+        }
+        self.chat_history.append(entry)
     
-    def get_history(self):
-        return self.history
+    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes]) -> str:
+        """Add context entry, returns the actual name used. Avoids duplicates based on source."""
+        # Check if source already exists
+        for ctx in self.context_history:
+            if ctx['source'] == source:
+                return ctx['name']
+        
+        # Generate unique name if suggested_name already exists
+        actual_name = suggested_name
+        counter = 1
+        while any(ctx['name'] == actual_name for ctx in self.context_history):
+            actual_name = f"{suggested_name}-{counter}"
+            counter += 1
+        
+        # Add new context entry
+        entry = {
+            'name': actual_name,
+            'source': source,
+            'type': context_type,
+            'context': context
+        }
+        self.context_history.append(entry)
+        return actual_name
     
-    def reset(self):
-        self.history = [("assistant", "How can I help you?")] 
+    role_icons = {
+        'user': 'User: ',
+        'assistant': 'Assistant: ',
+        'system': 'System: ',
+    }
+
+    def get_chat_history_original(self) -> str:
+        """Returns the unexpanded chat history to show the user as a string."""
+        formatted_history = []
+        for entry in self.chat_history:
+            role = entry['role']
+            text = entry['text']
+            formatted_history.append(f"{self.role_icons[role]} {text}")
+        return "\n\n".join(formatted_history)
+    
+    def get_chat_history_expanded(self) -> str:
+        """Returns the fully expanded chat history for the LLM as a string."""
+        formatted_history = []
+        for entry in self.chat_history:
+            role = entry['role'].capitalize()
+            expanded_text = entry['expanded_text']
+            formatted_history.append(f"{role}: {expanded_text}")
+        return "\n".join(formatted_history)
+    
+    def get_context_history_text(self) -> str:
+        """Returns context history as one large string (excluding images)."""
+        text_parts = []
+        for ctx in self.context_history:
+            if ctx['type'] != 'image':
+                context_type = ctx['type'].upper()
+                context_name = ctx['name']
+                text_parts.append(
+                    f"--- CONTEXT {context_type} {context_name} ---"
+                    f"{ctx['context']}"
+                    f"--- END CONTEXT {context_type} {context_name} ---\n"
+                )
+        return "\n".join(text_parts)
+    
+    def get_context_last_image(self) -> Optional[bytes]:
+        """Returns only the last image in the context history."""
+        for ctx in reversed(self.context_history):
+            if ctx['type'] == 'image':
+                return ctx['context']
+        return None
+    
+    def reset(self) -> None:
+        """Clears both lists, restores default message."""
+        self.chat_history = []
+        self.context_history = []
+        # Add default welcome message
+        self.add_chat_entry(
+            role="assistant",
+            text="How can I help you?",
+            expanded_text="How can I help you?",
+            context_refs=[]
+        ) 

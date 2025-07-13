@@ -19,6 +19,11 @@ from Cocoa import NSBezierPath
 from Cocoa import NSString
 from Cocoa import NSFontAttributeName
 
+try:
+    from .ui_main_text import MainTextHandler
+except ImportError:
+    from ui_main_text import MainTextHandler
+
 import objc
 
 import signal
@@ -221,59 +226,20 @@ class MacLLMUI:
         self.update_window()
         # Clear the input field for the next message
         self.input_field.setStringValue_("")
-    
+
     def _format_chat_history(self):
-        if hasattr(self.macllm, 'chat_history'):
-            history = self.macllm.chat_history.get_history()
-            formatted_history = []
-            for role, text in history:
-                if role == "user":
-                    formatted_history.append(f"User: {text}")
-                else:
-                    formatted_history.append(f"Assistant: {text}")
-            return "\n\n".join(formatted_history)
-        else:
-            return MacLLMUI.text_prompt
-
-    def _calculate_minimum_text_height(self, text):
-        """Calculate the minimum height needed to display the initial text content."""
-        # Create a temporary NSTextView with the same width as our intended text area
-        temp_text_view = NSTextView.alloc().initWithFrame_(((0, 0), (MacLLMUI.text_area_width - 2*MacLLMUI.text_corner_radius, 1000)))
-        
-        # Set the same font and text content
-        temp_text_view.setFont_(NSFont.systemFontOfSize_(13.0))
-        temp_text_view.setString_(text)
-        print(f"temp_text_view: {text}")        
-
-        # Get the layout manager to calculate the actual height with width constraints
-        layout_manager = temp_text_view.layoutManager()
-        text_container = temp_text_view.textContainer()
-        
-        if layout_manager and text_container:
-            # Get the glyph range for the entire text
-            glyph_range = layout_manager.glyphRangeForTextContainer_(text_container)
-            
-            # Calculate the bounding rect for the glyphs with width constraints
-            bounding_rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
-            print(f"bounding_rect: {bounding_rect.size.height}")
-            return bounding_rect.size.height
-        
-        # Fallback to a reasonable minimum height
-        return 200.0
+        """Format chat history for display. For now, returns blank."""
+        return ""
 
     def update_window(self):
-
         print(f"update_window: {self.quick_window}")
 
         # Find the width and height of the screen
         screen_width = NSScreen.mainScreen().frame().size.width
         screen_height = NSScreen.mainScreen().frame().size.height
         
-        # Get text for main conversation area from chat history
-        main_text = self._format_chat_history()
-
-        # Calculate minimum text height using a temporary NSTextView
-        minimum_text_height = self._calculate_minimum_text_height(main_text)
+        # Calculate minimum text height using the new handler
+        minimum_text_height = MainTextHandler.calculate_minimum_text_height(self.macllm)
         
         # Calculate window dimensions according to specification
         # 90% of screen height, width for 80 characters
@@ -421,9 +387,7 @@ class MacLLMUI:
         # Update with latest chat history
         scroll_view.setDocumentView_(text_view)
         text_container.addSubview_(scroll_view)
-        text_view.setString_(main_text)
-   
-        # Set font size for main text area
+        MainTextHandler.set_text_content(self.macllm, text_view)
 
         # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
 
@@ -462,12 +426,6 @@ class MacLLMUI:
             input_field = self.input_field
             input_field.setFrame_(((textbox_x_fudge, textbox_y_fudge), 
                                   (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius)))
-
-        input_font = input_field.font()
-        if input_font is not None:
-            print(f"Input field font size: {input_font.pointSize()}")
-        else:
-            print("Input field font is None")
 
         if new_window:
             # Move the window to the front and activate it
