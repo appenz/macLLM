@@ -7,17 +7,18 @@
 
 import os
 import argparse
+import traceback
 
-from core.shortcuts import ShortCut
-from ui import MacLLMUI
-from core.user_request import UserRequest
-from core.chat_history import ChatHistory
-from shortcuts.base import ShortcutPlugin
-from shortcuts.url_plugin import URLPlugin
-from shortcuts.file_plugin import FilePlugin
-from shortcuts.clipboard_plugin import ClipboardPlugin
-from shortcuts.image_plugin import ImagePlugin
-from models.openai_connector import OpenAIConnector
+from macllm.core.shortcuts import ShortCut
+from macllm.ui import MacLLMUI
+from macllm.core.user_request import UserRequest
+from macllm.core.chat_history import ChatHistory
+from macllm.shortcuts.base import ShortcutPlugin
+from macllm.shortcuts.url_plugin import URLPlugin
+from macllm.shortcuts.file_plugin import FilePlugin
+from macllm.shortcuts.clipboard_plugin import ClipboardPlugin
+from macllm.shortcuts.image_plugin import ImagePlugin
+from macllm.models.openai_connector import OpenAIConnector
 
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
 from quickmachotkey import quickHotKey, mask
@@ -72,12 +73,14 @@ class MacLLM:
         print(f"{color_code}{message}{color.END}")
     
     def debug_exception(self, exception):
-        """Log exceptions with structured formatting."""
+        """Log exceptions with structured formatting and full stack trace."""
         if not self.debug:
             return
-            
-        print(f"{color.RED}--- Error ----------------------------{color.END}")
-        print(f"{exception}")
+        
+        exception_str = str(traceback.format_exc()).strip()
+        print(f"{color.RED}Exception: {exception}{color.END}")
+        print(f"{color.GREY}{exception_str}{color.END}")
+        print(f"{color.GREY}---{color.END}")
 
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
@@ -128,9 +131,9 @@ class MacLLM:
             image_path = image_plugin.tmp_image if image_plugin else "/tmp/macllm.png"
             out = self.llm.generate_with_image(request.expanded_prompt + request.context, image_path)
         else:                        
-            self.debug_log(f'Sending text length {len(request.expanded_prompt)} to {self.llm.model}.')
             # Use expanded chat history for LLM if needed, for now just use original
-            request_text = request.context + self.chat_history.get_chat_history_original() + request.expanded_prompt
+            request_text = request.context + self.chat_history.get_chat_history_original()
+            print(request_text)
             out = self.llm.generate(request_text).strip()
 
         if out is not None:

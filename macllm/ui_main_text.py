@@ -1,7 +1,27 @@
-from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName
+from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
+from AppKit import NSTextAlignmentCenter
 
 class MainTextHandler:
     """Handles the main text display functionality for the macLLM UI."""
+    
+    # Static separator attributes - defined once for efficiency
+    _separator_paragraph_style = None
+    _separator_attributes = None
+    
+    @classmethod
+    def _init_separator_attributes(cls):
+        """Initialize static separator attributes if not already done."""
+        if cls._separator_attributes is None:
+            # Create centered paragraph style for separator
+            cls._separator_paragraph_style = NSMutableParagraphStyle.alloc().init()
+            cls._separator_paragraph_style.setAlignment_(NSTextAlignmentCenter)
+            
+            # Define separator attributes
+            cls._separator_attributes = {
+                NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(0.9, 1.0),
+                NSFontAttributeName: NSFont.systemFontOfSize_(13.0),
+                NSParagraphStyleAttributeName: cls._separator_paragraph_style
+            }
     
     @staticmethod
     def append_colored_text(text_view, text, color):
@@ -53,6 +73,9 @@ class MainTextHandler:
     @staticmethod
     def set_text_content(macllm, text_view):
         """Set the text content for the main text view with colored text for different roles."""
+        # Initialize static separator attributes if needed
+        MainTextHandler._init_separator_attributes()
+        
         # Clear the text view first and set the font
         text_view.setString_("")
         text_view.setFont_(NSFont.systemFontOfSize_(13.0))
@@ -80,8 +103,13 @@ class MainTextHandler:
             # Append the colored text
             MainTextHandler.append_colored_text(text_view, prefix, color)
             
-            # Add \n\n between messages, but not after the last one
+            # Add separator between messages, but not after the last one
             if i < len(chat_history) - 1:
-                MainTextHandler.append_colored_text(text_view, text + "\n\n", color)
+                MainTextHandler.append_colored_text(text_view, text, color)
+                
+                # Add centered separator with paragraph breaks
+                separator_text = "\n" + "─"*47 + "\n"
+                separator_attributed_text = NSAttributedString.alloc().initWithString_attributes_(separator_text, MainTextHandler._separator_attributes)
+                text_view.textStorage().appendAttributedString_(separator_attributed_text)
             else:
                 MainTextHandler.append_colored_text(text_view, text, color) 

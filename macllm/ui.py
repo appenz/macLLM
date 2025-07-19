@@ -18,11 +18,10 @@ from Cocoa import NSBox, NSBoxCustom, NSNoBorder
 from Cocoa import NSBezierPath
 from Cocoa import NSString
 from Cocoa import NSFontAttributeName
+from Cocoa import NSFocusRingTypeNone
+from Cocoa import NSNoBorder
 
-try:
-    from .ui_main_text import MainTextHandler
-except ImportError:
-    from ui_main_text import MainTextHandler
+from macllm.ui_main_text import MainTextHandler
 
 import objc
 
@@ -122,27 +121,45 @@ class WindowDelegate(NSObject):
 
     # React to special keys like escape, copy etc.  
 
+    # List of keys and their effect:
+    #
+    # Command-C: Copy to clipboard (also closes the window)
+    # Command-N: Clear chat history
+    # Command-V: Paste from clipboard
+    #
+    # Escape: Close the window
+
     def control_textView_doCommandBySelector_(self, control, textView, commandSelector):
-        if commandSelector == 'cancelOperation:':  
-            # This handles Escape key. NSPanel does this automatically, but we need to do cleanup and
-            # thus have to implement it here.
-            self.macllm_ui.close_quick_window()
-            return True
-        elif commandSelector == 'noop:':  # Handle Command-C and Command-V
-            current_event = NSApp().currentEvent()
-            # Check for Command key (1 << 20)
-            if current_event.modifierFlags() & (1 << 20):
-                key = current_event.charactersIgnoringModifiers().lower()
-                if key == 'c':  # Handle Command-C
-                    self.macllm_ui.write_clipboard(self.text_field.stringValue())
-                    self.macllm_ui.close_quick_window()
-                    return True
-                elif key == 'v':  # Handle Command-V
-                    clipboard_content = self.macllm_ui.read_clipboard()
-                    if clipboard_content:
-                        self.text_field.setStringValue_(clipboard_content)
-                    return True
-        return False
+        try:
+            if commandSelector == 'cancelOperation:':  
+                # This handles Escape key. NSPanel does this automatically, but we need to do cleanup and
+                # thus have to implement it here.
+                self.macllm_ui.close_window()
+                return True
+            elif commandSelector == 'noop:':  # Handle Command-C, Command-V, and Command-N
+                current_event = NSApp().currentEvent()
+                # Check for Command key (1 << 20)
+                if current_event.modifierFlags() & (1 << 20):
+                    key = current_event.charactersIgnoringModifiers().lower()
+                    if key == 'c':  # Handle Command-C
+                        self.macllm_ui.write_clipboard(self.text_field.stringValue())
+                        self.macllm_ui.close_window()
+                        return True
+                    elif key == 'v':  # Handle Command-V
+                        clipboard_content = self.macllm_ui.read_clipboard()
+                        if clipboard_content:
+                            self.text_field.setStringValue_(clipboard_content)
+                        return True
+                    elif key == 'n':  # Handle Command-N
+                        # Clear the chat history
+                        self.macllm_ui.macllm.chat_history.reset()
+                        # Update the window to reflect the cleared history
+                        self.macllm_ui.update_window()
+                        return True
+            return False
+        except Exception as e:
+            self.macllm_ui.macllm.debug_exception(e)
+            return False
 
     def textDidChange_(self, notification):
         print("textDidChange_")
@@ -227,12 +244,7 @@ class MacLLMUI:
         # Clear the input field for the next message
         self.input_field.setStringValue_("")
 
-    def _format_chat_history(self):
-        """Format chat history for display. For now, returns blank."""
-        return ""
-
     def update_window(self):
-        print(f"update_window: {self.quick_window}")
 
         # Find the width and height of the screen
         screen_width = NSScreen.mainScreen().frame().size.width
@@ -362,31 +374,40 @@ class MacLLMUI:
             text_container.setFrame_(((MacLLMUI.text_area_x, main_area_y),
                                      (MacLLMUI.text_area_width, main_area_height)))
 
-        # Create scroll view inside the container
-        scroll_view = NSScrollView.alloc().initWithFrame_(
-            ((0, 3), 
-            (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius))
-        )
-
-        scroll_view.setHasVerticalScroller_(True)
-        scroll_view.setHasHorizontalScroller_(False)
-        scroll_view.setAutohidesScrollers_(True)
-        self.scroll_view = scroll_view
-
         if new_window:
+            scroll_view = NSScrollView.alloc().initWithFrame_(
+                ((0, 3),
+                (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius))
+            )
+
+            scroll_view.setHasVerticalScroller_(True)
+            scroll_view.setHasHorizontalScroller_(False)
+            scroll_view.setAutohidesScrollers_(True)
+            self.scroll_view = scroll_view
+
             text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
             text_view.setEditable_(False)
             text_view.setDrawsBackground_(False)  # Let the container handle the background
             text_view.setFont_(NSFont.systemFontOfSize_(13.0))
             self.text_area = text_view
+
+            # Attach text view to the scroll view and add to container
+            scroll_view.setDocumentView_(text_view)
+            text_container.addSubview_(scroll_view)
         else:
-            # Update existing text view frame and content
+            # Reuse existing scroll and text views
+            scroll_view = self.scroll_view
             text_view = self.text_area
+
+            # Update frames to match new size
+            scroll_view.setFrame_(((0, 3),
+                (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
             text_view.setFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
-        
-        # Update with latest chat history
-        scroll_view.setDocumentView_(text_view)
-        text_container.addSubview_(scroll_view)
+
+            # Ensure scroll view is in the container hierarchy (in case it was removed)
+            if scroll_view.superview() is None:
+                text_container.addSubview_(scroll_view)
+
         MainTextHandler.set_text_content(self.macllm, text_view)
 
         # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
@@ -412,6 +433,8 @@ class MacLLMUI:
             input_field.setStringValue_("")
             input_field.setFont_(NSFont.systemFontOfSize_(13.0))
             input_field.setDrawsBackground_(False)  # Let the container handle the background
+            input_field.setFocusRingType_(NSFocusRingTypeNone)  # Disable blue focus ring
+            input_field.setBordered_(False)  # Remove 3D border/shadow
             self.window_delegate = WindowDelegate.alloc().initWithTextField_(input_field)
             self.window_delegate.macllm_ui = self
             input_field.setDelegate_(self.window_delegate)

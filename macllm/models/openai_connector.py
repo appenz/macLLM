@@ -2,7 +2,7 @@ import base64
 import requests
 import os
 import openai
-from core.model_connector import ModelConnector
+from macllm.core.model_connector import ModelConnector
 
 class OpenAIConnector(ModelConnector):
     """OpenAI API connector for GPT models."""

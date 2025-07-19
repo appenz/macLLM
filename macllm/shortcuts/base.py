@@ -1,4 +1,4 @@
-from core.user_request import UserRequest
+from macllm.core.user_request import UserRequest
 
 class ShortcutPlugin:
     """Base class for macLLM shortcuts that handle @ tag expansions."""
