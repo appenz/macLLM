@@ -17,9 +17,12 @@ from Cocoa import NSFont
 from Cocoa import NSBox, NSBoxCustom, NSNoBorder
 from Cocoa import NSBezierPath
 from Cocoa import NSString
-from Cocoa import NSFontAttributeName
+from Cocoa import NSFontAttributeName, NSForegroundColorAttributeName, NSParagraphStyleAttributeName
 from Cocoa import NSFocusRingTypeNone
 from Cocoa import NSNoBorder
+from Cocoa import NSMutableParagraphStyle
+from Cocoa import NSGraphicsContext
+from Cocoa import NSAttributedString, NSMutableAttributedString
 
 from macllm.ui_main_text import MainTextHandler
 
@@ -174,7 +177,7 @@ class MacLLMUI:
 
     # Layout of the window - updated to match specification
     padding = 4
-    top_bar_height = 32
+    top_bar_height = 48  # Updated to match new specification
     text_area_width = 640   # Width for 80 characters
     input_field_height = 90  # 5 lines visible
     input_field_width = text_area_width
@@ -183,10 +186,11 @@ class MacLLMUI:
     fudge = 1 # no idea why this is needed, but it is
 
     # Everything below is calculated based on the above
-    icon_width = 32  # Fixed icon size for top bar
+    icon_width = 38  # Fixed icon size for top bar
     window_width = text_area_width + padding*2
 
-    # Positioning for the three sections
+    # Top bar positioning and sizing
+    top_bar_text_field_width = 80  # Width of the text field in top bar
     icon_x = padding + fudge
     text_area_x = padding + fudge
     input_field_x = padding + fudge
@@ -195,8 +199,12 @@ class MacLLMUI:
     status_ready   = "🟢 LLM"
     status_working = "🟠 LLM"
 
-    # Text messages and error messages
-    text_prompt = "How can I help you?"
+    # Colors
+    white = NSColor.whiteColor()
+    light_grey = NSColor.colorWithCalibratedWhite_alpha_(0.9, 1.0)
+    dark_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.8, 1.0)
+    text_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
+    text_grey_subtle  = NSColor.colorWithCalibratedWhite_alpha_(0.65, 1.0)
 
     def __init__(self):
         self.app = None
@@ -208,10 +216,37 @@ class MacLLMUI:
 
         self.quick_window = None
         self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
-        self.logo_image = NSImage.alloc().initByReferencingFile_("./assets/icon32x32.png")
+        self.logo_image = NSImage.alloc().initByReferencingFile_("./assets/icon-nobg.png")
+        
+        # Create a high-quality scaled version of the logo for the top bar
+        self._create_scaled_logo()
 
     def dummy(self):
         return
+
+    def _create_scaled_logo(self):
+        """Create a high-quality scaled version of the logo for the top bar."""
+        if self.logo_image and self.logo_image.size().width > 0:
+            # Create a new image with the target size
+            target_size = (MacLLMUI.icon_width, MacLLMUI.icon_width)
+            scaled_image = NSImage.alloc().initWithSize_(target_size)
+            
+            # Lock focus on the new image for drawing
+            scaled_image.lockFocus()
+            
+            # Set high-quality interpolation
+            NSGraphicsContext.currentContext().setImageInterpolation_(3)  # NSImageInterpolationHigh = 3
+            
+            # Draw the original image scaled to fit
+            original_rect = ((0, 0), self.logo_image.size())
+            target_rect = ((0, 0), target_size)
+            self.logo_image.drawInRect_fromRect_operation_fraction_(target_rect, original_rect, 1, 1.0)  # NSCompositeSourceOver = 1
+            
+            # Unlock focus
+            scaled_image.unlockFocus()
+            
+            # Use the scaled version
+            self.logo_image = scaled_image
 
     @staticmethod
     def handle_interrupt(signal, frame):
@@ -289,7 +324,6 @@ class MacLLMUI:
         input_field_y = padding
         main_area_y = input_field_y + entry_height + padding + padding_internal_fudge
         top_bar_y = window_height - padding - top_bar_height
-        icon_y = top_bar_y  # Flush with top bar, no centering
 
         if self.quick_window is None:
             new_window = True
@@ -327,7 +361,7 @@ class MacLLMUI:
             box.setBorderType_(NSNoBorder)  
             box.setCornerRadius_(window_corner_radius)
             #box.setTransparent_(True)
-            box.setFillColor_(NSColor.colorWithCalibratedWhite_alpha_(0.7, 0.7))
+            box.setFillColor_(MacLLMUI.light_grey)
             win.contentView().addSubview_(box)
             self.background_box = box
         else:
@@ -335,25 +369,89 @@ class MacLLMUI:
             box = self.background_box
             box.setFrame_(((0, 0), (window_width+window_corner_radius, window_height+window_corner_radius)))
 
-        # ----- Top bar with icon, status and preferences ---------------------------------------------------------------
+        # ----- Top bar with dark grey container, icon, context area, and text field ---------------------------------------------------------------
+
+        # Create or update the top bar container
+        if new_window:
+            # Create dark grey NSBox container for top bar
+            top_bar_container = NSBox.alloc().initWithFrame_(
+                ((MacLLMUI.text_area_x, top_bar_y), 
+                 (MacLLMUI.text_area_width, MacLLMUI.top_bar_height))
+            )
+            top_bar_container.setBoxType_(NSBoxCustom)
+            top_bar_container.setBorderType_(NSNoBorder)
+            top_bar_container.setCornerRadius_(text_corner_radius)
+            top_bar_container.setFillColor_(MacLLMUI.dark_grey)
+            box.addSubview_(top_bar_container)
+            self.top_bar_container = top_bar_container
+        else:
+            # Update existing top bar container frame
+            top_bar_container = self.top_bar_container
+            top_bar_container.setFrame_(((MacLLMUI.text_area_x, top_bar_y), 
+                                        (MacLLMUI.text_area_width, MacLLMUI.top_bar_height)))
+
+        # Calculate positions within the top bar container
+        top_bar_internal_padding = 8  # Internal padding within the top bar
+        icon_x_internal = 0
+        # Vertically centre icon and text inside the 48-px bar
+        icon_y = int((MacLLMUI.top_bar_height - MacLLMUI.icon_width) / 2)-5
+        text_y = icon_y
+        text_height = MacLLMUI.top_bar_height - text_y-10
+
+        context_area_x = icon_x_internal + MacLLMUI.icon_width + top_bar_internal_padding
+        text_field_x = MacLLMUI.text_area_width - MacLLMUI.top_bar_text_field_width - top_bar_internal_padding
 
         if new_window:
-            # Add image view (logo in top bar) as a subview of the box
+            # Add image view (logo in top bar) as a subview of the top bar container
             image_view = NSImageView.alloc().initWithFrame_(
-                ((MacLLMUI.icon_x, icon_y), 
+                ((icon_x_internal, icon_y), 
                  (MacLLMUI.icon_width, MacLLMUI.icon_width))
             )
             image_view.setImage_(self.logo_image)
             image_view.setImageScaling_(3)  # NSScaleToFit = 3
+            image_view.setImageAlignment_(1)  # NSImageAlignCenter = 1
+            image_view.setImageFrameStyle_(0)  # NSImageFrameNone = 0
+            image_view.setAnimates_(False)
             image_view.setContentHuggingPriority_forOrientation_(1000, 0)  # Horizontal
             image_view.setContentHuggingPriority_forOrientation_(1000, 1)  # Vertical
-            box.addSubview_(image_view)
+            top_bar_container.addSubview_(image_view)
             self.logo_image_view = image_view
+
+            # Create text view in top bar (flush right) for multiple lines
+            top_bar_text_view = NSTextView.alloc().initWithFrame_(
+                ((text_field_x, text_y), 
+                 (MacLLMUI.top_bar_text_field_width, text_height))
+            )
+            top_bar_text_view.setString_("")
+            top_bar_text_view.setDrawsBackground_(False)
+            top_bar_text_view.setEditable_(False)  # Read-only for now
+            top_bar_text_view.setSelectable_(False)  # Not selectable
+            # Remove default text container inset so lines stick to the right/ top equally
+            top_bar_text_view.setTextContainerInset_((0.0, 0.0))
+            
+            # Set right alignment and styling for the text
+            paragraph_style = NSMutableParagraphStyle.alloc().init()
+            paragraph_style.setAlignment_(2)  # NSRightTextAlignment = 2
+            text_attributes = {
+                NSFontAttributeName: NSFont.systemFontOfSize_(11.0),
+                NSForegroundColorAttributeName: MacLLMUI.text_grey_subtle,
+                NSParagraphStyleAttributeName: paragraph_style
+            }
+            top_bar_text_view.setTypingAttributes_(text_attributes)
+            top_bar_container.addSubview_(top_bar_text_view)
+            self.top_bar_text_view = top_bar_text_view
         else:
             # Update existing image view position
             image_view = self.logo_image_view
-            image_view.setFrame_(((MacLLMUI.icon_x, icon_y), 
+            image_view.setFrame_(((icon_x_internal, icon_y), 
                                  (MacLLMUI.icon_width, MacLLMUI.icon_width)))
+            
+            # Update existing text view position
+            top_bar_text_view = self.top_bar_text_view
+            top_bar_text_view.setFrame_(((text_field_x, text_y), 
+                                        (MacLLMUI.top_bar_text_field_width, text_height)))
+            top_bar_text_view.setTextContainerInset_((0.0, 0.0))
+
 
         # ----- Main conversation area (middle section) as a scrollable NSTextView with rounded corners -------------------
 
@@ -365,7 +463,7 @@ class MacLLMUI:
             text_container.setBoxType_(NSBoxCustom)
             text_container.setBorderType_(NSNoBorder)
             text_container.setCornerRadius_(text_corner_radius)
-            text_container.setFillColor_(NSColor.whiteColor())
+            text_container.setFillColor_(MacLLMUI.white)
             box.addSubview_(text_container)
             self.text_container = text_container
         else:
@@ -410,6 +508,9 @@ class MacLLMUI:
 
         MainTextHandler.set_text_content(self.macllm, text_view)
 
+        # Update the top bar text with model and token information
+        self.update_top_bar_text()
+
         # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
 
         if new_window:
@@ -421,7 +522,7 @@ class MacLLMUI:
             input_container.setBoxType_(NSBoxCustom)
             input_container.setBorderType_(NSNoBorder)
             input_container.setCornerRadius_(text_corner_radius)
-            input_container.setFillColor_(NSColor.whiteColor())
+            input_container.setFillColor_(MacLLMUI.white)
             box.addSubview_(input_container)
             self.input_container = input_container
 
@@ -461,6 +562,44 @@ class MacLLMUI:
             # Just refresh the window display for resize
             win.needsDisplay = True
             win.display()
+
+    def update_top_bar_text(self):
+        if not hasattr(self, "top_bar_text_view"):
+            return
+
+        provider, model = self.macllm.llm.get_provider_model()
+        tokens   = self.macllm.llm.get_token_count()
+
+        # Create the full text
+        txt = f"{provider}\n{model}\n{tokens} tkns"
+
+        para = NSMutableParagraphStyle.alloc().init()
+        para.setAlignment_(2)                          # right
+
+        attrs_provider_name = {
+            NSFontAttributeName: NSFont.systemFontOfSize_(11),
+            NSForegroundColorAttributeName: MacLLMUI.text_grey,
+            NSParagraphStyleAttributeName: para,
+        }
+
+        attrs_rest_of_text = {
+            NSFontAttributeName: NSFont.systemFontOfSize_(11),
+            NSForegroundColorAttributeName: MacLLMUI.text_grey_subtle,
+            NSParagraphStyleAttributeName: para,
+        }
+
+        # Create attributed string with mixed styles
+        attr_str = NSMutableAttributedString.alloc().initWithString_(txt)
+        
+        # Apply provider style to the first line (provider name)
+        provider_range = (0, len(provider))
+        attr_str.addAttributes_range_(attrs_provider_name, provider_range)
+        
+        # Apply rest of text style to everything after the provider
+        rest_range = (len(provider), len(txt) - len(provider))
+        attr_str.addAttributes_range_(attrs_rest_of_text, rest_range)
+        
+        self.top_bar_text_view.textStorage().setAttributedString_(attr_str)
 
     def close_window(self):
         self.quick_window.orderOut_(None)

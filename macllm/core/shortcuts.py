@@ -12,6 +12,7 @@ import tomllib
 
 class ShortCut:
     shortcuts = []
+    macllm = None
 
     # Class method to expand all shortcuts in the text
 
@@ -65,7 +66,7 @@ class ShortCut:
                 shortcuts_count += 1
             
             if debug:
-                print(f"Read {shortcuts_count} shortcuts from {file_path}")
+                cls.macllm.debug_log(f"Found {shortcuts_count} shortcuts.",0)
             return shortcuts_count
             
         except tomllib.TOMLDecodeError as e:
@@ -79,6 +80,9 @@ class ShortCut:
 
     @classmethod
     def init_shortcuts(cls, macllm):
+
+        cls.macllm = macllm
+        
         # Get the application directory
         if getattr(sys, 'frozen', False):
             # If the application is run as a bundle

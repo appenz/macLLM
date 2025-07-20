@@ -6,9 +6,10 @@ from macllm.core.model_connector import ModelConnector
 
 class OpenAIConnector(ModelConnector):
     """OpenAI API connector for GPT models."""
-    
-    def __init__(self, model: str, temperature: float = 0.0, debug_logger=None):
-        super().__init__(model, temperature)
+
+    def __init__(self, model, debug_logger=None):
+        super().__init__(model)
+        self.provider = "OpenAI"
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         if self.openai_api_key is None:
             raise Exception("OPENAI_API_KEY not found in environment variables")
@@ -22,8 +23,12 @@ class OpenAIConnector(ModelConnector):
             messages=[
                 {"role": "user", "content": str(text)},
             ],
-            temperature=self.temperature,
         )
+        
+        # Update token count from response usage
+        if hasattr(c, 'usage') and c.usage:
+            self.token_count = c.usage.total_tokens
+        
         return c.choices[0].message.content
     
     def _encode_image(self, image_path: str) -> str:
@@ -72,6 +77,14 @@ class OpenAIConnector(ModelConnector):
             response_data = response.json()
             if 'choices' in response_data and len(response_data['choices']) > 0:
                 generated_text = response_data['choices'][0]['message']['content']
+                
+                # Update token count from response usage
+                if 'usage' in response_data:
+                    usage = response_data['usage']
+                    self.token_count = usage.get('total_tokens', 0)
+                    if self.debug_logger:
+                        self.debug_logger(f'Token usage - Prompt: {usage.get("prompt_tokens", 0)}, Completion: {usage.get("completion_tokens", 0)}, Total: {usage.get("total_tokens", 0)}')
+                
                 if self.debug_logger:
                     self.debug_logger(f'Generated Text: {generated_text}')
                 return generated_text

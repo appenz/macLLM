@@ -14,10 +14,6 @@ from macllm.ui import MacLLMUI
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ChatHistory
 from macllm.shortcuts.base import ShortcutPlugin
-from macllm.shortcuts.url_plugin import URLPlugin
-from macllm.shortcuts.file_plugin import FilePlugin
-from macllm.shortcuts.clipboard_plugin import ClipboardPlugin
-from macllm.shortcuts.image_plugin import ImagePlugin
 from macllm.models.openai_connector import OpenAIConnector
 
 # Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
@@ -86,7 +82,7 @@ class MacLLM:
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
         print(f'To use via the clipboard, copy text starting with "@@"')
 
-    def __init__(self, model, debug=False):
+    def __init__(self, debug=False):
         self.debug = debug
         self.ui = MacLLMUI()
         self.ui.macllm = self
@@ -96,50 +92,46 @@ class MacLLM:
         
         # Initialize chat history
         self.chat_history = ChatHistory()
-        
-        # Initialize plugins
-        self.plugins = [
-            URLPlugin(),
-            FilePlugin(),
-            ClipboardPlugin(self.ui),
-            ImagePlugin(self)
-        ]
-        
+                
         # Initialize LLM after debug_log method is available
-        self.llm = OpenAIConnector(model=model, debug_logger=self.debug_log if debug else None)
+        self.llm = OpenAIConnector(model="gpt-4o", debug_logger=self.debug_log if debug else None)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
         user_input = user_input.strip()
 
-        # Note: expandAll expands shortcuts as well as references (e.g. file, url, etc.)
-        expanded_input = ShortCut.expandAll(user_input)
-        self.debug_log(f'Request #{self.req}: {expanded_input}', 1)
+        try:
+            # Note: expandAll expands shortcuts as well as references (e.g. file, url, etc.)
+            expanded_input = ShortCut.expandAll(user_input)
+            self.debug_log(f'Request #{self.req}: {expanded_input}', 1)
 
-        # Add request and response to chat history
-        self.chat_history.add_chat_entry("user", user_input, expanded_input)  # original, expanded
+            # Add request and response to chat history
+            self.chat_history.add_chat_entry("user", user_input, expanded_input)  # original, expanded
 
-        # Create request object and process plugins
-        request = UserRequest(expanded_input)
-        if not request.process_plugins(self.plugins, self.debug_log, self.debug_exception):
-            return None  # Abort the entire operation
+            # Create request object and process plugins
+            request = UserRequest(expanded_input)
+            if not request.process_plugins(self.plugins, self.debug_log, self.debug_exception):
+                return None  # Abort the entire operation
 
-        # Use image generation if needed
-        if request.needs_image:
-            # Find the ImagePlugin to get the image path
-            image_plugin = next((p for p in self.plugins if isinstance(p, ImagePlugin)), None)
-            image_path = image_plugin.tmp_image if image_plugin else "/tmp/macllm.png"
-            out = self.llm.generate_with_image(request.expanded_prompt + request.context, image_path)
-        else:                        
-            # Use expanded chat history for LLM if needed, for now just use original
-            request_text = request.context + self.chat_history.get_chat_history_original()
-            print(request_text)
-            out = self.llm.generate(request_text).strip()
+            # Use image generation if needed
+            if request.needs_image:
+                # Find the ImagePlugin to get the image path
+                image_plugin = next((p for p in self.plugins if isinstance(p, ImagePlugin)), None)
+                image_path = image_plugin.tmp_image if image_plugin else "/tmp/macllm.png"
+                out = self.llm.generate_with_image(request.expanded_prompt + request.context, image_path)
+            else:                        
+                # Use expanded chat history for LLM if needed, for now just use original
+                request_text = request.context + self.chat_history.get_chat_history_original()
+                out = self.llm.generate(request_text).strip()
 
-        if out is not None:
-            self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"
-        else:
-            self.chat_history.add_chat_entry("assistant", "Error: No output from LLM", "Error: No output from LLM")
+            if out is not None:
+                self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"
+            else:
+                self.chat_history.add_chat_entry("system", "Error: No output from LLM", "Error: No output from LLM")
+        except Exception as e:
+            self.debug_exception(e)
+            return None
+
         self.debug_log(f'Output: {out.strip() if out else ""}\n')
         return out
         
@@ -155,7 +147,6 @@ def main():
     global macLLM
 
     parser = argparse.ArgumentParser(description="macLLM - a simple LLM tool for the macOS clipboard")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="The LLM model to use")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--version", action="store_true", help="Print version and exit")
     args = parser.parse_args()
@@ -164,11 +155,12 @@ def main():
         print(MacLLM.version)
         return
 
-    macLLM = MacLLM(model=args.model, debug=args.debug)
+    macLLM = MacLLM(debug=args.debug)
     
     if args.debug:
         macLLM.debug_log(f"Debug mode is enabled (v {MacLLM.version})", 2)
     ShortCut.init_shortcuts(macLLM)
+    macLLM.plugins = ShortcutPlugin.load_plugins(macLLM)
     macLLM.show_instructions()
     macLLM.ui.start()
 

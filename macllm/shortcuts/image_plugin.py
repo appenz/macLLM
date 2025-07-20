@@ -3,7 +3,7 @@ from .base import ShortcutPlugin
 
 class ImagePlugin(ShortcutPlugin):
     def __init__(self, macllm):
-        self.macllm = macllm
+        super().__init__(macllm)
         self.tmp_image = "/tmp/macllm.png"
     
     def get_prefixes(self) -> list[str]:

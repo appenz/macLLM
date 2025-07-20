@@ -1,8 +1,9 @@
 from .base import ShortcutPlugin
 
 class ClipboardPlugin(ShortcutPlugin):
-    def __init__(self, ui):
-        self.ui = ui
+    def __init__(self, macllm):
+        super().__init__(macllm)
+        self.ui = macllm.ui
     
     def get_prefixes(self) -> list[str]:
         return ["@clipboard"]
