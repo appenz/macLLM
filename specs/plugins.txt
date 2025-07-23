@@ -1,14 +1,5 @@
 # macLLM Plugin Architecture Specification
 
-## UserRequest Class
-```python
-class UserRequest:
-    def __init__(self, original_prompt: str):
-        self.original_prompt = original_prompt
-        self.expanded_prompt = original_prompt  # Current working text
-        self.context = ""                       # Additional context to append
-        self.needs_image = False               # Whether image generation is needed
-```
 
 ## Base Plugin Class
 ```python

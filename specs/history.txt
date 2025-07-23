@@ -1,17 +1,37 @@
-macLLM Chat History Specification
+macLLM Conversation History & Requests
 
-ChatHistory maintains two separate lists:
+## Key Concepts
+Request - An individual request to the LLM consisting of a prompt and response
+Conversation - A series of user inputs and LLM responses, plus context for these inputs
+ConversationHistory - The collection of all previous Conversationts
+
+## UserRequest Class
+
+Gathers all the data for a single request to the LLM.
+
+```python
+class UserRequest:
+    def __init__(self, original_prompt: str):
+        self.original_prompt = original_prompt
+        self.expanded_prompt = original_prompt  # Current working text
+        self.context = ""                       # All the relevant text context for this request as a text string
+        self.image = None                       # Image that is sent as part of this request, or None.
+```
+
+## Conversation
+
+A Conversation object maintains two separate lists:
 - Chat history: List of dicts with fields:
   - role: 'user' or 'assistant'
   - text: The unexpanded text as typed by user or response from assistant
-  - expanded_text: The text with context references replaced by actual content
+  - expanded_text: The text with expanded shortcuts and expanded context references
   - timestamp: When the message was created
-  - context_refs: List of context names this message references (optional)
 - Context: List of dicts with fields:
   - name: Unique identifier for this context block
   - source: Original source (file path, URL, etc.)
   - type: one of "url", "path", "clipboard", "image"
   - context: The actual content/context string
+Context is not specific to a Request, but is for the conversation as a whole.
 
 Chat Methods:
 - add_chat_entry(role, text, expanded_text): Adds conversation turn
@@ -35,3 +55,7 @@ Notes:
         by get_context_history_text() in the large text block but via get_context_last_image()
     - Images are also stored and returned as binary for efficiency
 
+## ConversationHistory
+
+The ConversationtHistory contains a list of Conversation objects.
+The current conversation is the last object in the list.

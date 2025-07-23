@@ -1,4 +1,4 @@
-# Shortcut Rules
+# Shortcut Parsing Rules
 
 macLLM can use shortcuts. They start with the @ symbol. The rules are as follows:
 
@@ -8,3 +8,31 @@ macLLM can use shortcuts. They start with the @ symbol. The rules are as follows
     example: @~/My Home/foo -> "@~/My"
 3. If a shortcut starts with an @" it includes all text until either a closing " or a newline is encountered (quotes are stripped)
     example: @"~/My Home/foo" -> "@~/My Home/foo"
+
+There are two types of shortcuts:
+
+### User defined shortcuts. 
+Functionality for them is in the file `shortcuts.py`.
+- They are read from two locations: 
+    1. the application-supplied TOML file `config/default_shortcuts.toml` 
+    2. **and** any `*.toml` file found in the user directory `~/.config/macllm/`.  
+  Each TOML file must contain a `shortcuts` table whose items are two-element arrays `[trigger, expansion]`.
+- They are simple text-expansion *trigger → text* mappings.
+- For example "@fix" is expanded to "Correct any spelling or grammar mistakes in the following text:"
+
+### Shortcut plugins
+These are more complex as they not only expand text but also add context to a Conversation. 
+- Context plugins are in the shortcuts subdirectory
+- Their name must end in _plugin in order to be loaded.
+- They inherit from the base class `ShortcutPlugin` (`macllm.shortcuts.base.ShortcutPlugin`).
+- Every plugin must implement at least the following methods:
+  - `get_prefixes() -> list[str]` — return all `@` prefixes the plugin should react to.
+  - `expand(trigger : str) -> (expanded_txt : str, context : str)` - return a tuple containing
+     the expanded text and the additional context that needs to be added to the Conversation
+- Image plugins additionally add an image context to the conversation
+
+Right now, the following shortcut plugins exist
+- **ClipboardPlugin** (`@clipboard`) — Inserts clipboard text as context.
+- **FilePlugin** (`@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10KB) as context.
+- **URLPlugin** (`@http://`, `@https://`) — Downloads and strips web page content as context.
+- **ImagePlugin** (`@selection`, `@window`) — Captures screenshots for image analysis.

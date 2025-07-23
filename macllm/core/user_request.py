@@ -14,10 +14,10 @@ class UserRequest:
         Args:
             original_prompt: The original text from the user (may contain @ tags)
         """
-        self.original_prompt = original_prompt
-        self.expanded_prompt = original_prompt  # Current working text
+        self.original_prompt = original_prompt  # The original text from the user (may contain @ tags)
+        self.expanded_prompt = original_prompt  # Expanded text (may no longer contain @ tags)
         self.context = ""                       # Additional context to append
-        self.needs_image = False               # Whether image generation is needed
+        self.needs_image = False                # Whether image generation is needed
     
     @classmethod
     def find_shortcuts(cls, text: str) -> list[tuple[int, int, str]]:
@@ -89,54 +89,44 @@ class UserRequest:
         
         return shortcuts
 
-    def process_plugins(self, plugins, debug_logger=None, debug_exception=None):
+    def process_tags(self, plugins, conversation, debug_logger=None, debug_exception=None):
         """
-        Process the request through all registered plugins.
-        
-        Finds shortcuts in the expanded prompt and processes them through plugins.
-        Replaces shortcuts in place while preserving all other text exactly.
-        
+        Process the user prompt through all registered TagPlugins.
+
+        The method scans *expanded_prompt* for @tags, calls the corresponding
+        plugin's *expand()* method which may add context to *conversation*, and
+        replaces the tag in-place with the string returned by the plugin.
+
         Args:
-            plugins: List of MacLLMPlugin instances to process
-            debug_logger: Optional debug logging function
-            debug_exception: Optional exception logging function
-            
+            plugins: List of TagPlugin instances.
+            conversation: The current Conversation object.
+            debug_logger: Optional debug log callback.
+            debug_exception: Optional exception log callback.
+
         Returns:
-            bool: True if all plugins processed successfully, False if any plugin failed
+            bool – True on success, False if any plugin raises and we abort.
         """
         shortcuts = self.find_shortcuts(self.expanded_prompt)
-        
-        # Process shortcuts in reverse order to maintain positions
+
+        # Replace from the back to preserve string offsets
         for start, end, shortcut_text in reversed(shortcuts):
             for plugin in plugins:
                 if any(shortcut_text.startswith(prefix) for prefix in plugin.get_prefixes()):
                     try:
-                        # Create a temporary request to get the expansion
-                        temp_request = UserRequest("")
-                        temp_request.expanded_prompt = shortcut_text
-                        temp_request.context = ""
-                        temp_request.needs_image = False
-                        
-                        plugin.expand(shortcut_text, temp_request)
-                        
-                        # Replace the shortcut with expanded content
-                        replacement = temp_request.expanded_prompt + temp_request.context
+                        replacement = plugin.expand(shortcut_text, conversation)
                         self.expanded_prompt = (
-                            self.expanded_prompt[:start] + 
-                            replacement + 
-                            self.expanded_prompt[end:]
+                            self.expanded_prompt[:start]
+                            + replacement
+                            + self.expanded_prompt[end:]
                         )
-                        
-                        # Update image flag if needed
-                        if temp_request.needs_image:
-                            self.needs_image = True
-                            
                     except Exception as e:
                         if debug_exception:
                             debug_exception(e)
                         if debug_logger:
                             debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
-                        return False  # Indicate failure
-                    break
-        
-        return True  # Indicate success 
+                        return False
+                    break  # Stop checking other plugins for this shortcut
+        return True
+
+    # Maintain backwards-compatibility name
+    process_plugins = process_tags 

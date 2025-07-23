@@ -122,4 +122,4 @@ class ShortCut:
 
     # Find all occurrences of the trigger in the text and expand them
     def expand(self, text):
-        return text.replace(self.trigger, self.prompt+" ")
+        return text.replace(self.trigger, self.prompt)

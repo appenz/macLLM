@@ -2,7 +2,7 @@ import time
 from typing import List, Dict, Optional, Union
 
 
-class ChatHistory:
+class Conversation:
     def __init__(self):
         self.reset()
     
@@ -73,12 +73,11 @@ class ChatHistory:
         text_parts = []
         for ctx in self.context_history:
             if ctx['type'] != 'image':
-                context_type = ctx['type'].upper()
                 context_name = ctx['name']
                 text_parts.append(
-                    f"--- CONTEXT {context_type} {context_name} ---"
-                    f"{ctx['context']}"
-                    f"--- END CONTEXT {context_type} {context_name} ---\n"
+                    f"--- contents:{context_name} ---\n"
+                    f"{ctx['context']}\n"
+                    f"--- end contents:{context_name} ---\n"
                 )
         return "\n".join(text_parts)
     
@@ -100,3 +99,21 @@ class ChatHistory:
             expanded_text="How can I help you?",
             context_refs=[]
         ) 
+
+
+class ConversationHistory:
+    def __init__(self):
+        self.conversations = []
+
+    def add_conversation(self, conversation=None):
+        """Add a new Conversation object and make it the current conversation. Optionally accept an existing Conversation."""
+        if conversation is None:
+            conversation = Conversation()
+        self.conversations.append(conversation)
+        return conversation
+
+    def get_current_conversation(self):
+        """Return the most recent Conversation object, or None if none exists."""
+        if self.conversations:
+            return self.conversations[-1]
+        return None 

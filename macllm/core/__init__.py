@@ -1,3 +1,3 @@
 # macLLM Core Package 
 
-from .chat_history import ChatHistory 
+from .chat_history import Conversation 

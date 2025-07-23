@@ -9,12 +9,12 @@ class TestCommandLineOptions:
     
     def test_version_flag(self):
         """Test that --version flag returns the version and exits."""
-        # Get the path to the main script
-        script_path = os.path.join(os.path.dirname(__file__), '..', '..', 'macllm', 'macllm.py')
+        # Get the path to the package root
+        package_root = os.path.join(os.path.dirname(__file__), '..', '..')
         
-        # Run the script with --version flag
-        result = subprocess.run([sys.executable, script_path, '--version'], 
-                              capture_output=True, text=True)
+        # Run the package module with --version flag
+        result = subprocess.run([sys.executable, '-m', 'macllm', '--version'], 
+                              capture_output=True, text=True, cwd=package_root)
         
         # Check that the command executed successfully (exit code 0)
         assert result.returncode == 0, f"Expected exit code 0, got {result.returncode}"
