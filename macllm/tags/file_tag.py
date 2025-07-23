@@ -28,14 +28,14 @@ class FileTag(TagPlugin):
                 self.macllm.debug_log(str(e), 2)
             return tag  # leave unmodified
 
-        suggested_name = f"File:{Path(path_spec).name}"
+        suggested_name = f"{Path(path_spec).name}"
         context_name = conversation.add_context(
             suggested_name,
             path_spec,
             "path",
             content,
         )
-        return context_name
+        return f"content:{context_name}" 
 
     # ------------------------------------------------------------------
     # Helpers

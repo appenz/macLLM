@@ -15,10 +15,10 @@ class ClipboardTag(TagPlugin):
         content = self.ui.read_clipboard()
         # Store in conversation context
         context_name = conversation.add_context(
-            "Clipboard",  # suggested name
+            "clipboard",            # suggested name
             "clipboard",            # source (constant)
             "clipboard",            # context type
-            content                  # actual text
+            content                 # actual text
         )
         # Replace tag with the context name (e.g. CLIPBOARD_CONTENTS or with -1 suffix)
-        return f"context:{context_name}" 
+        return f"content:{context_name}" 

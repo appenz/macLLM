@@ -19,12 +19,12 @@ class URLTag(TagPlugin):
             return tag
 
         context_name = conversation.add_context(
-            "URL_CONTENTS",
+            "url",
             url,
             "url",
             content,
         )
-        return context_name
+        return f"content:{context_name}"
 
     # ------------------------------------------------------------------
     # Helpers
