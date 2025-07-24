@@ -7,24 +7,21 @@ from Foundation import NSThread
 
 from Cocoa import NSApplication, NSStatusBar, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
-from Cocoa import NSPasteboard, NSStringPboardType, NSVariableStatusItemLength
+from Cocoa import NSPasteboard, NSStringPboardType
 
-from Cocoa import NSPanel, NSScreen, NSTextField, NSPanel, NSBorderlessWindowMask, NSImageView
-from Cocoa import NSBorderlessWindowMask, NSWindowStyleMaskBorderless
+from Cocoa import NSPanel, NSScreen, NSPanel, NSBorderlessWindowMask, NSImageView
+from Cocoa import NSBorderlessWindowMask
 from Cocoa import NSColor
 from Cocoa import NSScrollView, NSTextView
 from Cocoa import NSFont
 from Cocoa import NSBox, NSBoxCustom, NSNoBorder
-from Cocoa import NSBezierPath
-from Cocoa import NSString
 from Cocoa import NSFontAttributeName, NSForegroundColorAttributeName, NSParagraphStyleAttributeName
-from Cocoa import NSFocusRingTypeNone
-from Cocoa import NSNoBorder
 from Cocoa import NSMutableParagraphStyle
 from Cocoa import NSGraphicsContext
-from Cocoa import NSAttributedString, NSMutableAttributedString
+from Cocoa import NSMutableAttributedString
 
 from macllm.ui_main_text import MainTextHandler
+from macllm.ui_input_field import InputFieldHandler
 
 import objc
 
@@ -112,68 +109,12 @@ class AppDelegate(NSObject):
             NSApp().terminate_(self)
 
 
-class WindowDelegate(NSObject):
 
-    macllm_ui = None
-
-    def initWithTextField_(self, text_field):
-        self = objc.super(WindowDelegate, self).init()
-        self.text_field = text_field
-        self.text_field.setDelegate_(self)
-        return self
-
-    # React to special keys like escape, copy etc.  
-
-    # List of keys and their effect:
-    #
-    # Command-C: Copy to clipboard (also closes the window)
-    # Command-N: Clear chat history
-    # Command-V: Paste from clipboard
-    #
-    # Escape: Close the window
-
-    def control_textView_doCommandBySelector_(self, control, textView, commandSelector):
-        try:
-            if commandSelector == 'cancelOperation:':  
-                # This handles Escape key. NSPanel does this automatically, but we need to do cleanup and
-                # thus have to implement it here.
-                self.macllm_ui.close_window()
-                return True
-            elif commandSelector == 'noop:':  # Handle Command-C, Command-V, and Command-N
-                current_event = NSApp().currentEvent()
-                # Check for Command key (1 << 20)
-                if current_event.modifierFlags() & (1 << 20):
-                    key = current_event.charactersIgnoringModifiers().lower()
-                    if key == 'c':  # Handle Command-C
-                        self.macllm_ui.write_clipboard(self.text_field.stringValue())
-                        self.macllm_ui.close_window()
-                        return True
-                    elif key == 'v':  # Handle Command-V
-                        clipboard_content = self.macllm_ui.read_clipboard()
-                        if clipboard_content:
-                            self.text_field.setStringValue_(clipboard_content)
-                        return True
-                    elif key == 'n':  # Handle Command-N
-                        # Clear the chat history
-                        self.macllm_ui.macllm.chat_history.reset()
-                        # Update the window to reflect the cleared history
-                        self.macllm_ui.update_window()
-                        return True
-            return False
-        except Exception as e:
-            self.macllm_ui.macllm.debug_exception(e)
-            return False
-
-    def textDidChange_(self, notification):
-        print("textDidChange_")
-
-    def controlTextDidEndEditing_(self, notification):
-        # This gets called when Return is pressed
-        text_field = notification.object()
-        input_text = text_field.stringValue()
-        self.macllm_ui.handle_user_input(input_text)
 
 class MacLLMUI:
+
+    # Font
+    font_size = 13.0
 
     # Layout of the window - updated to match specification
     padding = 4
@@ -277,7 +218,7 @@ class MacLLMUI:
         # Resize window to fit new content (this also updates the text area)
         self.update_window()
         # Clear the input field for the next message
-        self.input_field.setStringValue_("")
+        InputFieldHandler.clear_input_field(self.input_field)
 
     def update_window(self):
 
@@ -486,7 +427,7 @@ class MacLLMUI:
             text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
             text_view.setEditable_(False)
             text_view.setDrawsBackground_(False)  # Let the container handle the background
-            text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+            text_view.setFont_(NSFont.systemFontOfSize_(MacLLMUI.font_size))
             self.text_area = text_view
 
             # Attach text view to the scroll view and add to container
@@ -514,42 +455,29 @@ class MacLLMUI:
         # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
 
         if new_window:
-            # Create a container view with rounded corners for the input field
-            input_container = NSBox.alloc().initWithFrame_(
-                ((MacLLMUI.input_field_x, input_field_y), 
-                 (MacLLMUI.input_field_width, MacLLMUI.input_field_height))
-            )
-            input_container.setBoxType_(NSBoxCustom)
-            input_container.setBorderType_(NSNoBorder)
-            input_container.setCornerRadius_(text_corner_radius)
-            input_container.setFillColor_(MacLLMUI.white)
-            box.addSubview_(input_container)
+            # Create input field using the new handler
+            (input_container, input_field, delegate) = InputFieldHandler.create_input_field(
+                box, (0, input_field_y), self)
             self.input_container = input_container
-
-            # Create input field inside the container
-            input_field = NSTextField.alloc().initWithFrame_(
-                ((textbox_x_fudge, textbox_y_fudge), 
-                 (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius))
-            )
-            input_field.setStringValue_("")
-            input_field.setFont_(NSFont.systemFontOfSize_(13.0))
-            input_field.setDrawsBackground_(False)  # Let the container handle the background
-            input_field.setFocusRingType_(NSFocusRingTypeNone)  # Disable blue focus ring
-            input_field.setBordered_(False)  # Remove 3D border/shadow
-            self.window_delegate = WindowDelegate.alloc().initWithTextField_(input_field)
-            self.window_delegate.macllm_ui = self
-            input_field.setDelegate_(self.window_delegate)
-            input_container.addSubview_(input_field)
             self.input_field = input_field
+            self.window_delegate = delegate
+
+            # --------------------------------------------------------------
+            # Provide list of available @tag prefixes for autocomplete.
+            # --------------------------------------------------------------
+            try:
+                available_tags = []
+                if hasattr(self.macllm, "plugins"):
+                    for plugin in self.macllm.plugins:
+                        available_tags.extend(plugin.get_prefixes())
+                if hasattr(delegate, "autocomplete") and delegate.autocomplete:
+                    delegate.autocomplete.update_suggestions("")  # seed list
+            except Exception as exc:  # pragma: no cover
+                self.macllm.debug_exception(exc)
         else:
-            # Update existing input container and field frames
-            input_container = self.input_container
-            input_container.setFrame_(((MacLLMUI.input_field_x, input_field_y), 
-                                      (MacLLMUI.input_field_width, MacLLMUI.input_field_height)))
-            
-            input_field = self.input_field
-            input_field.setFrame_(((textbox_x_fudge, textbox_y_fudge), 
-                                  (MacLLMUI.input_field_width - 2*text_corner_radius, MacLLMUI.input_field_height - 2*text_corner_radius)))
+            # Update existing input field position
+            InputFieldHandler.update_input_field_position(
+                self.input_container, self.input_field, (0, input_field_y), self)
 
         if new_window:
             # Move the window to the front and activate it
@@ -557,7 +485,7 @@ class MacLLMUI:
             win.orderFrontRegardless()
             win.makeKeyWindow()  # Make it the key window
             self.app.activateIgnoringOtherApps_(True)
-            self.input_field.becomeFirstResponder()  # Set focus to the input field
+            InputFieldHandler.focus_input_field(self.input_field)  # Set focus to the input field
         else:
             # Just refresh the window display for resize
             win.needsDisplay = True
