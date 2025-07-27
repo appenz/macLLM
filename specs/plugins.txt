@@ -4,17 +4,34 @@
 ## Base Plugin Class
 ```python
 class MacLLMPlugin:
+    # Required hooks
     def get_prefixes(self) -> list[str]:  # e.g. ["@http://", "@https://", "@~"]
         pass
-    
-    def expand(self, word: str, request: UserRequest) -> None:
-        """Modify the request object directly instead of returning tuples"""
+
+    def expand(self, tag: str, request: UserRequest) -> None:
         pass
+
+    # Optional config-time hooks (processed while reading shortcut files)
+    def get_config_prefixes(self) -> list[str]:
+        return []
+
+    def on_config_tag(self, tag: str, value: str) -> None:
+        pass
+
+    # Optional dynamic-autocomplete hooks (for UI suggestions)
+    def supports_autocomplete(self) -> bool:
+        return False
+
+    def autocomplete(self, fragment: str, max_results: int = 10) -> list[str]:
+        return []
+
+    def display_string(self, suggestion: str) -> str:
+        return suggestion
 ```
 
 ## Plugin Examples
 - **URLPlugin**: handles "@http://", "@https://" → fetches web content, adds to context
-- **FilePlugin**: handles "@/", "@~" → reads local files, adds to context  
+- **FilePlugin**: config tag "@IndexFiles" indexes .txt/.md directories; typing "@" + ≥3 chars shows matching files, selecting one inserts its contents into context
 - **ClipboardPlugin**: handles "@clipboard" → gets clipboard content, adds to context
 - **ImagePlugin**: handles "@selection", "@window" → captures screenshots, sets needs_image=True
 

@@ -183,11 +183,17 @@ def main():
         return
 
     macLLM = MacLLM(debug=args.debug)
-    
+
     if args.debug:
         macLLM.debug_log(f"Debug mode is enabled (v {MacLLM.version})", 2)
-    ShortCut.init_shortcuts(macLLM)
+
+    # Load plugins first so that configuration tags found in shortcut files
+    # can be handled by their respective plugins during shortcut parsing.
     macLLM.plugins = TagPlugin.load_plugins(macLLM)
+
+    # Now initialise shortcuts – this will invoke *on_config_tag()* on any
+    # plugin that registered configuration prefixes.
+    ShortCut.init_shortcuts(macLLM)
     macLLM.show_instructions()
     macLLM.ui.start()
 

@@ -108,10 +108,6 @@ def _make_tag_attachment(tag: str) -> NSAttributedString:
         NSAttributedString.attributedStringWithAttachment_(attachment)
     )
 
-    # Tag attribute key – unique string so it survives archiving
-    TAG_ATTR_NAME = "macLLMTagString"
-    attr_string.addAttribute_value_range_(TAG_ATTR_NAME, tag, NSRange(0, 1))
-
     # Lower the pill by the font's descender (negative) *and* the extra bottom
     # padding we added.  This ensures the bottom edge sits exactly on the
     # baseline.
@@ -161,9 +157,9 @@ class InputFieldDelegate(NSObject):
                 # --- Tag editing mode, the autocomplete popup is visible ---------
                 if commandSelector in ('insertNewline:', 'insertTab:'):
                     # Accept autocomplete selection
-                    tag = self.autocomplete.current_selection()
-                    if tag:
-                        self._insert_tag(tag)
+                    selection = self.autocomplete.current_selection()
+                    if selection:
+                        self._insert_tag(selection)
                         self.autocomplete.hide()
                     return True
                 elif commandSelector in ('moveUp:', 'moveDown:'):
@@ -227,29 +223,51 @@ class InputFieldDelegate(NSObject):
             start -= 1
         return full_text[start:cursor]
 
-    def _insert_tag(self, tag: str):
-        """Replace current fragment with *tag* inserted as an atomic NSToken (macOS 13+)."""
-        # Get current font attributes to preserve them
-        current_attrs = self.text_view.typingAttributes()
-        attr = _make_tag_attachment(tag)
+    def _insert_tag(self, tag):  # type: ignore[override]
+        """Insert an auto-completed tag.  *tag* can be either a string or a
+        tuple ``(raw, display)`` where *raw* is the full underlying tag text
+        (e.g. ``@"/long/path.txt"``) and *display* is the short label shown in
+        the UI pill (e.g. ``path.txt``)."""
 
-        # Apply current font attributes to the attachment
-        if current_attrs:
-            # Create a mutable copy to modify
-            mutable_attr = attr.mutableCopy()
-            mutable_attr.addAttributes_range_(current_attrs, NSRange(0, 1))
-            attr = mutable_attr
+        if isinstance(tag, tuple):
+            raw_tag, display_text = tag
+        else:
+            raw_tag = display_text = tag
 
+        # Build pill image using the *display* text
+        attr = _make_tag_attachment(display_text)
+
+        # Get typing attributes, but clean them first. If we just inserted a
+        # tag, the typing attributes will contain the previous tag's raw
+        # value, which we don't want to carry over.
+        TAG_ATTR_NAME = "macLLMTagString"
+        typing_attrs = self.text_view.typingAttributes().mutableCopy()
+        if typing_attrs.objectForKey_(TAG_ATTR_NAME):
+            typing_attrs.removeObjectForKey_(TAG_ATTR_NAME)
+
+        # Now, create the full attributed string for the tag.
+        # Start with a mutable copy of the visual attachment.
+        mutable_attr = attr.mutableCopy()
+
+        # Add the cleaned typing attributes.
+        mutable_attr.addAttributes_range_(typing_attrs, NSRange(0, 1))
+
+        # Finally, set the raw tag value, ensuring it overwrites anything
+        # that might have slipped through.
+        mutable_attr.addAttribute_value_range_(TAG_ATTR_NAME, raw_tag, NSRange(0, 1))
+
+        attr = mutable_attr
+
+        # Replace the current word fragment with the attachment
         rng = self.text_view.selectedRange()  # current caret range
         fragment = self._current_fragment()
         replace_start = rng.location - len(fragment)
 
-        # Replace fragment with attachment
         self.text_view.textStorage().replaceCharactersInRange_withAttributedString_(  # type: ignore[attr-defined]
             NSRange(replace_start, len(fragment)), attr
         )
 
-        # Move caret to position immediately after the attachment (occupies 1 char)
+        # Move caret to position immediately after the attachment (1 char)
         self.text_view.setSelectedRange_(NSRange(replace_start + 1, 0))  # type: ignore[attr-defined]
 
 
@@ -357,12 +375,10 @@ class InputFieldHandler:
         delegate = InputFieldDelegate.alloc().initWithTextView_(input_field)
         delegate.macllm_ui = macllm_ui
 
-        # Load available tag prefixes via the main UI instance (set later)
-        available_tags = []
-        if hasattr(macllm_ui, "macllm") and hasattr(macllm_ui.macllm, "plugins"):
-            for plugin in macllm_ui.macllm.plugins:
-                available_tags.extend(plugin.get_prefixes())
-        delegate.autocomplete = AutocompleteController(available_tags, input_field)
+        # Create autocomplete controller with the full plugin list so that
+        # dynamic suggestions (e.g. from the new file-plugin) are supported.
+        plugin_list = macllm_ui.macllm.plugins if hasattr(macllm_ui.macllm, "plugins") else []
+        delegate.autocomplete = AutocompleteController(plugin_list, input_field)
 
         return (input_container, input_field, delegate)
 

@@ -163,37 +163,99 @@ class AutocompletePopup:  # pylint: disable=too-few-public-methods
 
 
 class AutocompleteController:  # pylint: disable=too-few-public-methods
-    """Filter available *tags* and coordinate popup selection/insertions."""
+    """Filter available *tags* and coordinate popup selection/insertions.
 
-    def __init__(self, tags: List[str], anchor_view):
-        self._all_tags = sorted(tags)
-        self._filtered: List[str] = []
+    Besides static prefixes this controller now supports *dynamic* suggestions
+    supplied by plugins that implement the optional autocomplete hooks."""
+
+    def __init__(self, plugins: List[object], anchor_view):
+        # Store plugin refs
+        self._plugins = plugins
+
+        # Collect static tag prefixes for quick filtering (used when plugins do
+        # not provide dynamic autocomplete).
+        all_tags: list[str] = []
+        for plugin in plugins:
+            try:
+                all_tags.extend(plugin.get_prefixes())
+            except Exception:  # pragma: no cover – defensive
+                pass
+
+        self._static_tags = sorted(all_tags)
+
+        # Populated each time *update_suggestions* is called:
+        # list[tuple[str raw, str display]]
+        self._entries: list[tuple[str, str]] = []
         self._selected: int = 0
+
         self._popup = AutocompletePopup(anchor_view)
 
     # ------------------------------------------------------------------
     # Public helpers called from the *InputFieldDelegate*
     # ------------------------------------------------------------------
     def update_suggestions(self, fragment: str):
-        """Filter available tags based on *fragment* and refresh popup."""
-        if fragment.startswith("@") is False:
+        """Refresh suggestions based on current *fragment*.  This now queries
+        plugins that support dynamic autocomplete in addition to simple prefix
+        filtering."""
+        if not fragment.startswith("@"):
             self._popup.hide()
             return
+
+        entries: list[tuple[str, str]] = []  # raw, display
+        seen: set[str] = set()
+
+        # 1. Always add matching *static* tag prefixes first so that built-in
+        #    tags and user-defined shortcuts take precedence over file-based
+        #    suggestions.
         lower = fragment.lower()
-        self._filtered = [t for t in self._all_tags if t.lower().startswith(lower)]
+        for tag in self._static_tags:
+            if tag.lower().startswith(lower):
+                entries.append((tag, tag))
+                seen.add(tag)
+
+        # 2. Ask plugins that support dynamic autocomplete *after* static
+        #    prefixes so their (potentially longer) suggestion list appears
+        #    below the built-in tags.  This is important for the FileTag
+        #    plugin so that files never outrank normal tag completions.
+        for plugin in self._plugins:
+            try:
+                if not plugin.supports_autocomplete():
+                    continue
+                for prefix in plugin.get_prefixes():
+                    if fragment.lower().startswith(prefix.lower()):
+                        suggestions = plugin.autocomplete(fragment, 10)
+                        for s in suggestions:
+                            if s in seen:
+                                continue  # avoid duplicates
+                            entries.append((s, plugin.display_string(s)))
+                            seen.add(s)
+                        break  # no need to check other prefixes for same plugin
+            except Exception:  # pragma: no cover
+                continue
+
+        # Keep only the first 10 entries overall
+        entries = entries[:10]
+
+        # Prepare popup
+        self._entries = entries
+        display_list = [disp for _raw, disp in entries]
+
         self._selected = 0
-        self._popup.show(self._filtered)
+        self._popup.show(display_list)
         self._popup.update_selection(self._selected)
 
     def navigate(self, delta: int):
-        if not self._filtered:
+        if not self._entries:
             return
-        self._selected = (self._selected + delta) % len(self._filtered)
+        self._selected = (self._selected + delta) % len(self._entries)
         self._popup.update_selection(self._selected)
 
-    def current_selection(self) -> str | None:
-        if self._filtered:
-            return self._filtered[self._selected]
+    def current_selection(self):
+        """Return a ``(raw, display)`` tuple for the highlighted entry.  *raw*
+        is the full tag string that will be inserted into the text buffer,
+        *display* is what should be rendered in the pill."""
+        if self._entries:
+            return self._entries[self._selected]
         return None
 
     def hide(self):

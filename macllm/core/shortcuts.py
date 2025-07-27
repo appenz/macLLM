@@ -60,9 +60,25 @@ class ShortCut:
                     if debug:
                         print(f"Trigger must start with @ in {file_path}: {trigger}")
                     continue
-                    
+
+                # Check if any plugin wants to handle this as a *config tag*
+                handled_as_config = False
+                if cls.macllm and hasattr(cls.macllm, 'plugins'):
+                    for plugin in cls.macllm.plugins:
+                        try:
+                            if any(trigger.startswith(pfx) for pfx in plugin.get_config_prefixes()):
+                                plugin.on_config_tag(trigger, prompt)
+                                handled_as_config = True
+                                break
+                        except Exception as exc:  # pragma: no cover
+                            if debug:
+                                cls.macllm.debug_exception(exc)
+
+                if handled_as_config:
+                    continue  # Don't add as normal shortcut
+
+                # Normal shortcut entry
                 ShortCut(trigger, prompt)
-                #print(f"Added shortcut: {trigger} -> {prompt}")
                 shortcuts_count += 1
             
             if debug:

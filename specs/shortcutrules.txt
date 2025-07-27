@@ -33,6 +33,6 @@ These are more complex as they not only expand text but also add context to a Co
 
 Right now, the following shortcut plugins exist
 - **ClipboardPlugin** (`@clipboard`) — Inserts clipboard text as context.
-- **FilePlugin** (`@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10KB) as context.
+- **PathPlugin** (`@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10KB) as context.
 - **URLPlugin** (`@http://`, `@https://`) — Downloads and strips web page content as context.
 - **ImagePlugin** (`@selection`, `@window`) — Captures screenshots for image analysis.
