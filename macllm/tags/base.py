@@ -96,3 +96,13 @@ class TagPlugin:
         By default this is the identity mapping so callers can directly show
         the suggestion text."""
         return suggestion 
+
+    # ------------------------------------------------------------------
+    # Optional catch-all autocomplete hook
+    # ------------------------------------------------------------------
+    def match_any_autocomplete(self) -> bool:  # noqa: D401
+        """Return *True* if the plugin wants to receive autocomplete
+        callbacks even when *fragment* does not match one of its declared
+        prefixes (e.g. generic substring search like FileTag).  Default:
+        *False* so only prefix-matching plugins are consulted."""
+        return False 

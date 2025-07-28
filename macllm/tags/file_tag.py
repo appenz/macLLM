@@ -71,11 +71,20 @@ class FileTag(TagPlugin):
     # TagPlugin interface – normal expansion
     # ------------------------------------------------------------------
     def get_prefixes(self) -> List[str]:
-        # We now own *all* path-like tags.  Return:
-        #   • Internal @file prefix (historical, not shown to the user)
-        #   • All explicit path prefixes ("@/", "@~", etc.)
-        #   • Generic "@" for autocomplete hook
-        return [self.PREFIX_REF, "@"] + self.PATH_PREFIXES
+        # We now own *all* path-like tags.  Return only prefixes that should
+        # trigger *expansion*.  The generic "@" is **excluded** here so that
+        # other plugins (e.g. ClipboardTag) are not shadowed during
+        # expansion.  We still use the generic symbol for autocomplete via
+        # *match_any_autocomplete()*.
+        return [self.PREFIX_REF] + self.PATH_PREFIXES
+
+    # ------------------------------------------------------------------
+    # Catch-all autocomplete flag
+    # ------------------------------------------------------------------
+    def match_any_autocomplete(self) -> bool:  # noqa: D401
+        """Indicate that this plugin wants to be queried for autocomplete
+        suggestions for *all* "@…" fragments, regardless of prefix match."""
+        return True
 
     def expand(self, tag: str, conversation):
         """Read the referenced file (tag may be a plain path or an internal

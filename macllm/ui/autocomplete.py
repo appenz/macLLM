@@ -221,15 +221,28 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
             try:
                 if not plugin.supports_autocomplete():
                     continue
-                for prefix in plugin.get_prefixes():
-                    if fragment.lower().startswith(prefix.lower()):
-                        suggestions = plugin.autocomplete(fragment, 10)
-                        for s in suggestions:
-                            if s in seen:
-                                continue  # avoid duplicates
-                            entries.append((s, plugin.display_string(s)))
-                            seen.add(s)
-                        break  # no need to check other prefixes for same plugin
+
+                # Decide whether to query this plugin: either the fragment
+                # matches one of its declared prefixes *or* the plugin has
+                # opted in as a catch-all provider via *match_any_autocomplete()*.
+                call_plugin = False
+                if getattr(plugin, "match_any_autocomplete", lambda: False)():
+                    call_plugin = True
+                else:
+                    for prefix in plugin.get_prefixes():
+                        if fragment.lower().startswith(prefix.lower()):
+                            call_plugin = True
+                            break
+
+                if not call_plugin:
+                    continue
+
+                suggestions = plugin.autocomplete(fragment, 10)
+                for s in suggestions:
+                    if s in seen:
+                        continue  # avoid duplicates
+                    entries.append((s, plugin.display_string(s)))
+                    seen.add(s)
             except Exception:  # pragma: no cover
                 continue
 
