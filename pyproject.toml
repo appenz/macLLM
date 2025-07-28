@@ -13,3 +13,10 @@ dependencies = [
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
 ]
+
+
+[tool.pytest.ini_options]
+addopts = "-m 'not external'"
+markers = [
+    "external: tests that hit external services",
+]

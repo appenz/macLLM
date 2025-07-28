@@ -22,7 +22,7 @@ from Cocoa import (
     NSMutableAttributedString,
     NSAttachmentAttributeName,
 )
-from macllm.ui_autocomplete import AutocompleteController
+from macllm.ui.autocomplete import AutocompleteController
 import objc
 
 # ---------------------------------------------------------------------------

@@ -20,8 +20,8 @@ from Cocoa import NSMutableParagraphStyle
 from Cocoa import NSGraphicsContext
 from Cocoa import NSMutableAttributedString
 
-from macllm.ui_main_text import MainTextHandler
-from macllm.ui_input_field import InputFieldHandler
+from macllm.ui.main_text import MainTextHandler
+from macllm.ui.input_field import InputFieldHandler
 
 import objc
 
@@ -542,7 +542,7 @@ class MacLLMUI:
         else:
             self.close_window()
 
-    def start(self):
+    def start(self, dont_run_app: bool = False):
         # Pointer to main class, we need this for callback
         signal.signal(signal.SIGINT, self.handle_interrupt)
 
@@ -560,6 +560,7 @@ class MacLLMUI:
         if self.dock_image.size().width > 0 and self.dock_image.size().height > 0:
             self.app.setApplicationIconImage_(self.dock_image)
 
-        # Start the application event loop
-        self.app.run()
+        # Start the application event loop (unless in test mode)
+        if not dont_run_app:
+            self.app.run()
 

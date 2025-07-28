@@ -6,5 +6,8 @@ run:
 	$(uv) run -m --env-file .env macllm --debug 
 
 test:
-	$(uv) run python -m pytest test/ -v
+	$(uv) run --env-file .env python -m pytest -v
+
+test-external:
+	$(uv) run --env-file .env python -m pytest -v -m external
 

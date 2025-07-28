@@ -10,15 +10,51 @@ import argparse
 import traceback
 
 from macllm.core.shortcuts import ShortCut
-from macllm.ui import MacLLMUI
+# UI depends on macOS-specific Cocoa.  Provide a dummy fallback for headless
+# or non-macOS environments so that tests can import the package anywhere.
+try:
+    from macllm.ui import MacLLMUI  # noqa: F401
+except Exception:  # pragma: no cover
+    class _DummyUI:  # minimal stub
+        def __init__(self):
+            self.pb_change_count = 0
+            self.clipboardCallback = lambda: None
+
+        # Clipboard methods used in tests
+        def read_clipboard(self):
+            return ""
+
+        def write_clipboard(self, _content):
+            pass
+
+        # Main loop stub
+        def start(self, dont_run_app: bool = False):
+            pass
+
+        def hotkey_pressed(self):
+            pass
+
+    MacLLMUI = _DummyUI
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
 from macllm.models.openai_connector import OpenAIConnector
 
-# Note: quickmachotkey needs to be imported after the ui.py file is imported. No idea why.
-from quickmachotkey import quickHotKey, mask
-from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
+# Quickmachotkey is only available on macOS systems with proper accessibility
+# permissions.  For headless test environments we fall back to no-op stubs.
+try:
+    from quickmachotkey import quickHotKey, mask
+    from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
+except ModuleNotFoundError:  # pragma: no cover
+    def quickHotKey(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def mask(*_args, **_kwargs):  # noqa: D401
+        return 0
+
+    kVK_ANSI_A = kVK_Space = cmdKey = controlKey = optionKey = 0
 
 macLLM = None
 
@@ -194,9 +230,20 @@ def main():
     # Now initialise shortcuts – this will invoke *on_config_tag()* on any
     # plugin that registered configuration prefixes.
     ShortCut.init_shortcuts(macLLM)
+    
     macLLM.show_instructions()
-    macLLM.ui.start()
+    macLLM.ui.start(dont_run_app=False)
 
 if __name__ == "__main__":
     main()
+
+# Helper for tests
+
+def create_macllm(debug: bool = False, start_ui: bool = False):
+    mac = MacLLM(debug=debug)
+    mac.plugins = TagPlugin.load_plugins(mac)
+    ShortCut.init_shortcuts(mac)
+    if start_ui:
+        mac.ui.start(dont_run_app=True)
+    return mac
 
