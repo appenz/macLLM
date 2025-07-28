@@ -3,9 +3,13 @@ import inspect
 from pathlib import Path
 from macllm.core.chat_history import Conversation
 
+# Cache plugin classes, not instances, so each MacLLM gets fresh plugin objects.
+
 class TagPlugin:
     """Base class for macLLM @tag expansion plugins."""
-    _plugins: list["TagPlugin"] | None = None
+
+    # Discovered plugin classes (instances created per MacLLM).
+    _plugin_classes: list[type] | None = None
 
     def __init__(self, macllm):
         # Keep reference to main app so a plugin can access UI / debug_log, etc.
@@ -16,33 +20,41 @@ class TagPlugin:
     # ---------------------------------------------------------------------
     @classmethod
     def load_plugins(cls, macllm_instance):
-        """Dynamically load all *_tag.py plugins in the *tags* directory."""
-        if cls._plugins is not None:
-            return cls._plugins
+        """Return fresh plugin instances for *macllm_instance*."""
 
+        # Discover classes (once per interpreter)
+        if cls._plugin_classes is None:
+            cls._plugin_classes = []
+            tags_dir = Path(__file__).parent
+
+            for file_path in tags_dir.glob("*_tag.py"):
+                module_name = f"macllm.tags.{file_path.stem}"
+                try:
+                    module = importlib.import_module(module_name)
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, cls) and obj is not cls:
+                            cls._plugin_classes.append(obj)
+                except ImportError as e:
+                    print(f"Warning: Could not import {module_name}: {e}")
+                except Exception as e:
+                    print(f"Warning: Error loading plugin from {file_path.name}: {e}")
+
+        # Instantiate per MacLLM
         plugins: list[TagPlugin] = []
         plugin_names: list[str] = []
-        tags_dir = Path(__file__).parent
 
-        for file_path in tags_dir.glob("*_tag.py"):
-            module_name = f"macllm.tags.{file_path.stem}"
+        for plugin_cls in cls._plugin_classes:
             try:
-                module = importlib.import_module(module_name)
-                for name, obj in inspect.getmembers(module, inspect.isclass):
-                    if issubclass(obj, cls) and obj is not cls:
-                        instance = obj(macllm_instance)
-                        plugins.append(instance)
-                        plugin_names.append(name)
-            except ImportError as e:
-                print(f"Warning: Could not import {module_name}: {e}")
+                instance = plugin_cls(macllm_instance)
+                plugins.append(instance)
+                plugin_names.append(plugin_cls.__name__)
             except Exception as e:
-                print(f"Warning: Error loading plugin from {file_path.name}: {e}")
-
-        cls._plugins = plugins
+                print(f"Warning: Failed to instantiate plugin {plugin_cls.__name__}: {e}")
 
         if macllm_instance.debug and plugin_names:
             macllm_instance.debug_log(f"Loaded tag plugins: {', '.join(plugin_names)}")
-        return cls._plugins
+
+        return plugins
 
     # ------------------------------------------------------------------
     # Interface each concrete plugin must implement

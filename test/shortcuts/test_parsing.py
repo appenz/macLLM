@@ -52,9 +52,7 @@ AAA
         
         for input_string, expected_shortcut in self.test_cases:
             # Find shortcuts in the input string
-            print(f"Input string: {input_string}")
             shortcuts = UserRequest.find_shortcuts(input_string)
-            print(f"Shortcuts: {shortcuts}")
             
             if expected_shortcut is None:
                 # Should find no shortcuts

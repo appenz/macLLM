@@ -8,7 +8,7 @@ from macllm.models.openai_connector import OpenAIConnector
 
 @pytest.fixture
 def app_fake():
-    app = create_macllm(debug=False)
+    app = create_macllm(debug=True)
     # Swap in fake connector
     app.llm = FakeConnector()
     return app
@@ -19,7 +19,7 @@ def app_real():
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set – skipping external tests")
     # create_macllm will construct the default OpenAIConnector
-    return create_macllm(debug=False)
+    return create_macllm(debug=True)
 
 
 def pytest_configure(config):

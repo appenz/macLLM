@@ -157,6 +157,7 @@ class MacLLM:
             # Step 2: Build UserRequest and process all @tags
             request = UserRequest(expanded_input)
             if not request.process_tags(self.plugins, self.chat_history, self.debug_log, self.debug_exception):
+                self.debug_log(f'Request #{self.req}: {user_input} - Abort on plugin failure', 1)
                 return None  # Abort on plugin failure
 
             # Step 3: Record user message (original and expanded)
