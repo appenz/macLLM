@@ -1,7 +1,7 @@
 # macLLM Plugin Architecture Specification
 
-
 ## Base Plugin Class
+
 ```python
 class MacLLMPlugin:
     # Required hooks
@@ -30,14 +30,16 @@ class MacLLMPlugin:
 ```
 
 ## Plugin Examples
-- **URLPlugin**: handles "@http://", "@https://" → fetches web content, adds to context
-- **FilePlugin**: config tag "@IndexFiles" indexes .txt/.md directories; typing "@" + ≥3 chars shows matching files, selecting one inserts its contents into context
-- **ClipboardPlugin**: handles "@clipboard" → gets clipboard content, adds to context
-- **ImagePlugin**: handles "@selection", "@window" → captures screenshots, sets needs_image=True
+
+- **URLPlugin**: handles `@http://`, `@https://` → fetches web content, adds to context
+- **FilePlugin**: config tag `@IndexFiles` indexes `.txt`/`.md` directories; typing `@` + ≥3 chars shows matching files, selecting one inserts its contents into context
+- **ClipboardPlugin**: handles `@clipboard` → gets clipboard content, adds to context
+- **ImagePlugin**: handles `@selection`, `@window` → captures screenshots, sets `needs_image=True`
 
 ## Model Architecture
 
 ### Base Model Connector
+
 ```python
 class ModelConnector:
     def __init__(self, model: str, temperature: float = 0.0):
@@ -53,20 +55,23 @@ class ModelConnector:
 ```
 
 ### Model Connectors
+
 - **OpenAIConnector**: implements OpenAI API for GPT models
 - **Future connectors**: Anthropic, local models, etc.
 
 ## Integration
+
 - Main MacLLM class maintains list of registered plugins
 - Main MacLLM class uses ModelConnector for LLM interactions
-- handle_instructions() creates UserRequest object, passes to plugins
+- `handle_instructions()` creates UserRequest object, passes to plugins
 - Plugins modify the request object directly (no return values)
 - Each plugin is self-contained and can be tested independently
 - Easy to add new expansion types without modifying core logic
 
 ## Benefits
+
 - No more tuple returns - cleaner interface
 - Centralized state management in UserRequest
 - Plugins can modify multiple aspects of the request
 - Model abstraction allows easy switching between LLM providers
-- More object-oriented and maintainable
+- More object-oriented and maintainable 

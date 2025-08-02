@@ -215,7 +215,7 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
         #    Only do so if they are at least 3 characters long.
         lower = fragment.lower()
         for tag in self._static_tags:
-            if tag.lower().startswith(lower) and len(tag) >= 3:
+            if tag.lower().startswith(lower) and len(tag) > 3:
                 plugin = self._prefix_map.get(tag)
                 display_str = plugin.display_string(tag) if plugin else tag
                 entries.append((tag, display_str))

@@ -14,7 +14,6 @@ class FileTag(TagPlugin):
 
     # Public constants
     PREFIX_CONFIG = "@IndexFiles"
-    PREFIX_REF = "@file"  # **internal** prefix used only for UI/logic
 
     # Prefixes that represent plain path tags (previously handled by PathTag)
     PATH_PREFIXES = ["@/", "@~", "@\"/", "@\"~"]
@@ -76,7 +75,7 @@ class FileTag(TagPlugin):
         # other plugins (e.g. ClipboardTag) are not shadowed during
         # expansion.  We still use the generic symbol for autocomplete via
         # *match_any_autocomplete()*.
-        return [self.PREFIX_REF] + self.PATH_PREFIXES
+        return self.PATH_PREFIXES
 
     # ------------------------------------------------------------------
     # Catch-all autocomplete flag
@@ -91,10 +90,8 @@ class FileTag(TagPlugin):
         @file tag), add it to *conversation* context, and return a
         ``content:<handle>`` replacement string."""
 
-        # Determine *path_spec* depending on which prefix we received.
-        if tag.startswith(self.PREFIX_REF):
-            path_spec = tag[len(self.PREFIX_REF) :]
-        elif any(tag.startswith(p) for p in self.PATH_PREFIXES):
+        # Only handle tags that use one of our path prefixes.
+        if any(tag.startswith(p) for p in self.PATH_PREFIXES):
             # Strip the leading '@' to get the raw path (quotes may follow)
             path_spec = tag[1:]
         else:
@@ -128,50 +125,88 @@ class FileTag(TagPlugin):
         return True
 
     def autocomplete(self, fragment: str, max_results: int = 10) -> List[str]:
-        """Return up to *max_results* full-path suggestions whose basename
-        contains the fragment substring (case-insensitive)."""
-        # Determine the actual search term depending on which prefix we see.
-        if fragment.lower().startswith(self.PREFIX_REF):
-            search_term = fragment[len(self.PREFIX_REF) :].lower()
-        else:
-            # Generic "@" case – remove just the leading '@'
-            search_term = fragment[1:].lower()
+        """Return suggestions for *fragment* using either live filesystem
+        exploration or the pre-built index."""
 
-        # Bail out early unless the user typed at least *MIN_CHARS* chars
-        # (excluding the leading '@').  This prevents the file index from
-        # showing up too aggressively and ensures that built-in tags and
-        # user shortcuts are presented first for short fragments.
+        # Path-style fragments are handled via live filesystem completion without
+        # applying the *MIN_CHARS* limit so that patterns like "@/" start
+        # suggesting immediately.
+        if any(fragment.startswith(p) for p in self.PATH_PREFIXES):
+            return self._autocomplete_live_path(fragment, max_results)
+
+        # For indexed substring search we enforce the minimum length to avoid
+        # overly eager suggestions.
+        search_term = fragment[1:]
         if len(search_term) < self.MIN_CHARS:
             return []
 
-        if not search_term:
-            return []
-
-        matches = [fp for base, fp in self._index if search_term in base]
-        matches.sort()  # alphabetical by full path
-
-        # Build raw tag strings – always include the @file prefix so that our
-        # plugin is invoked during expansion.  Quote the path so we have a
-        # clear separator after the prefix and we don't need special handling
-        # for leading slashes.
+        term_lc = search_term.lower()
+        matches = [fp for base, fp in self._index if term_lc in base]
+        matches.sort()
         raw_tags: list[str] = []
         for p in matches[:max_results]:
-            # Insert as a *plain* path tag so the user sees @"/path".  Quotes
-            # are used to keep the path intact if it contains spaces.
             raw_tags.append(f'@"{p}"')
         return raw_tags
 
     def display_string(self, suggestion: str) -> str:
-        # Handle both internal @file"…" variants and plain path tags.
-        if suggestion.startswith(self.PREFIX_REF):
-            path_spec = suggestion[len(self.PREFIX_REF) :]
-        elif suggestion.startswith('@'):
+        if suggestion.startswith('@'):
             path_spec = suggestion[1:]
         else:
             return suggestion
         if path_spec.startswith('"') and path_spec.endswith('"'):
             path_spec = path_spec[1:-1]
-        return "📁" + Path(path_spec).name
+        # Keep trailing slash indicator for directories
+        if path_spec.endswith('/'):
+            name = Path(path_spec[:-1]).name + '/'
+        else:
+            name = Path(path_spec).name
+        return "📁" + name
+
+    # ------------------------------------------------------------------
+    # Live path completion helpers
+    # ------------------------------------------------------------------
+    def _parse_path_fragment(self, fragment: str) -> tuple[str, str]:
+        """Return (dir_raw, prefix) for *fragment* like '@~/dev/proj'.
+        *dir_raw* retains the original tilde or absolute prefix and always ends
+        with '/'. *prefix* is the partial filename after the last '/'."""
+        # Strip leading '@'
+        path_part = fragment[1:]
+        if path_part.startswith('"'):
+            path_part = path_part[1:]
+        # Ensure we're dealing with something that looks like a path
+        if not (path_part.startswith('/') or path_part.startswith('~')):
+            raise ValueError('Not a path fragment')
+        last_sep = path_part.rfind('/')
+        if last_sep == -1:
+            raise ValueError('No directory component')
+        dir_raw = path_part[: last_sep + 1]
+        prefix = path_part[last_sep + 1 :]
+        return dir_raw, prefix
+
+    def _autocomplete_live_path(self, fragment: str, max_results: int) -> List[str]:
+        try:
+            dir_raw, prefix = self._parse_path_fragment(fragment)
+        except ValueError:
+            return []
+        dir_abs = os.path.expanduser(dir_raw)
+        if not os.path.isdir(dir_abs):
+            return []
+        suggestions: list[str] = []
+        try:
+            with os.scandir(dir_abs) as it:
+                entries = sorted(it, key=lambda e: e.name.lower())
+                for entry in entries:
+                    if prefix and not entry.name.lower().startswith(prefix.lower()):
+                        continue
+                    p_raw = f"{dir_raw}{entry.name}"
+                    if entry.is_dir():
+                        p_raw += '/'
+                    suggestions.append(f'@"{p_raw}"')
+                    if len(suggestions) >= max_results:
+                        break
+        except PermissionError:
+            return []
+        return suggestions
 
     # ------------------------------------------------------------------
     # Helpers
