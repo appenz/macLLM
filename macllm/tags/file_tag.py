@@ -169,10 +169,9 @@ class FileTag(TagPlugin):
             path_spec = suggestion[1:]
         else:
             return suggestion
-
         if path_spec.startswith('"') and path_spec.endswith('"'):
             path_spec = path_spec[1:-1]
-        return Path(path_spec).name
+        return "📁" + Path(path_spec).name
 
     # ------------------------------------------------------------------
     # Helpers

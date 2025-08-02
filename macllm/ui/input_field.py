@@ -171,8 +171,6 @@ class InputFieldDelegate(NSObject):
                     # Hide popup (ESC)
                     self.autocomplete.hide()
                     return True
-                elif commandSelector == 'noop:':  # Block Cmd+C/V/N in tag mode
-                    return True
                 # Allow normal text editing (backspace, delete, arrows, etc.)
                 return False
                 
@@ -184,26 +182,34 @@ class InputFieldDelegate(NSObject):
                     self.macllm_ui.handle_user_input(input_text)
                     return True
                 elif commandSelector == 'cancelOperation:':
-                    # Close window (ESC)
+                    # Close window (ESC)  
                     self.macllm_ui.close_window()
                     return True
-                elif commandSelector == 'noop:':  # Handle Command-C/V/N
+                elif commandSelector == 'noop:':  # Handle Command-N
                     current_event = NSApp().currentEvent()
                     if current_event and (current_event.modifierFlags() & (1 << 20)):
                         key = current_event.charactersIgnoringModifiers().lower()
                         if key == 'c':
-                            self.macllm_ui.write_clipboard(self.text_view.string())
-                            self.macllm_ui.close_window()
+                            # Let NSTextView handle copying selected text to the clipboard
+                            self.text_view.copy_(None)
                             return True
                         if key == 'v':
-                            clipboard_content = self.macllm_ui.read_clipboard()
-                            if clipboard_content:
-                                self.text_view.setString_(clipboard_content)
+                            # Paste clipboard content as plain text, matching current style
+                            if hasattr(self.text_view, 'pasteAndMatchStyle_'):
+                                self.text_view.pasteAndMatchStyle_(None)
+                            else:
+                                # Fallback: read plain string and insert
+                                clipboard_content = self.macllm_ui.read_clipboard()
+                                if clipboard_content:
+                                    self.text_view.insertText_(clipboard_content)
                             return True
                         if key == 'n':
+                            # Reset chat history (custom shortcut)
                             self.macllm_ui.macllm.chat_history.reset()
                             self.macllm_ui.update_window()
                             return True
+                    # For any other Command-key shortcut, fall through to default handling
+                    return False
                 # Allow default behavior for other keys in normal mode
                 return False
                 
@@ -320,7 +326,7 @@ class InputFieldHandler:
     """Handler class for creating and managing input field components."""
     
     @staticmethod
-    def create_input_field(parent_view, position, macllm_ui):
+    def create_input_field(parent_view, position, macllm_ui, initial_text=""):
         """
         Create input field container and text field.
         
@@ -328,6 +334,7 @@ class InputFieldHandler:
             parent_view: The parent view to add the input field to
             position: (x, y) position for the input field
             macllm_ui: Reference to the main UI class (contains constants)
+            initial_text: Optional initial text to set in the input field
             
         Returns:
             tuple: (input_container, input_field, delegate)
@@ -368,6 +375,10 @@ class InputFieldHandler:
 
         scroll_view.setDocumentView_(input_field)
         input_container.addSubview_(scroll_view)
+
+        # Set initial text if provided
+        if initial_text:
+            input_field.setString_(initial_text)
 
         # --------------------------------------------------------------
         # Delegate & autocomplete setup

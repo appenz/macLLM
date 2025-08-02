@@ -174,14 +174,19 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
 
         # Collect static tag prefixes for quick filtering (used when plugins do
         # not provide dynamic autocomplete).
+        # Map prefix → plugin so we can ask for display strings later
+        prefix_to_plugin: dict[str, object] = {}
         all_tags: list[str] = []
         for plugin in plugins:
             try:
-                all_tags.extend(plugin.get_prefixes())
+                for pfx in plugin.get_prefixes():
+                    all_tags.append(pfx)
+                    prefix_to_plugin[pfx] = plugin
             except Exception:  # pragma: no cover – defensive
                 pass
 
         self._static_tags = sorted(all_tags)
+        self._prefix_map = prefix_to_plugin
 
         # Populated each time *update_suggestions* is called:
         # list[tuple[str raw, str display]]
@@ -207,10 +212,13 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
         # 1. Always add matching *static* tag prefixes first so that built-in
         #    tags and user-defined shortcuts take precedence over file-based
         #    suggestions.
+        #    Only do so if they are at least 3 characters long.
         lower = fragment.lower()
         for tag in self._static_tags:
-            if tag.lower().startswith(lower):
-                entries.append((tag, tag))
+            if tag.lower().startswith(lower) and len(tag) >= 3:
+                plugin = self._prefix_map.get(tag)
+                display_str = plugin.display_string(tag) if plugin else tag
+                entries.append((tag, display_str))
                 seen.add(tag)
 
         # 2. Ask plugins that support dynamic autocomplete *after* static
@@ -251,6 +259,7 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
 
         # Prepare popup
         self._entries = entries
+        # Show the prettier *display* variant in menu and text field
         display_list = [disp for _raw, disp in entries]
 
         self._selected = 0

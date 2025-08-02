@@ -22,3 +22,6 @@ class ClipboardTag(TagPlugin):
         )
         # Replace tag with the context name (e.g. CLIPBOARD_CONTENTS or with -1 suffix)
         return f"content:{context_name}" 
+    
+    def display_string(self, suggestion: str) -> str:
+        return "📋" + suggestion

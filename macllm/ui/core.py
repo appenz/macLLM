@@ -161,6 +161,9 @@ class MacLLMUI:
         
         # Create a high-quality scaled version of the logo for the top bar
         self._create_scaled_logo()
+        
+        # Preserve input text between window sessions
+        self.saved_input_text = ""
 
     def dummy(self):
         return
@@ -447,7 +450,11 @@ class MacLLMUI:
             if scroll_view.superview() is None:
                 text_container.addSubview_(scroll_view)
 
-        MainTextHandler.set_text_content(self.macllm, text_view)
+        # Render content and decide if scrolling is needed
+        rendered_height = MainTextHandler.set_text_content(self.macllm, text_view)
+        need_scroll = rendered_height > text_view.frame().size.height
+        scroll_view.setHasVerticalScroller_(need_scroll)
+        scroll_view.setAutohidesScrollers_(True)
 
         # Update the top bar text with model and token information
         self.update_top_bar_text()
@@ -457,10 +464,13 @@ class MacLLMUI:
         if new_window:
             # Create input field using the new handler
             (input_container, input_field, delegate) = InputFieldHandler.create_input_field(
-                box, (0, input_field_y), self)
+                box, (0, input_field_y), self, self.saved_input_text)
             self.input_container = input_container
             self.input_field = input_field
             self.window_delegate = delegate
+            
+            # Clear saved text after restoring it
+            self.saved_input_text = ""
 
             # --------------------------------------------------------------
             # Provide list of available @tag prefixes for autocomplete.
@@ -530,6 +540,10 @@ class MacLLMUI:
         self.top_bar_text_view.textStorage().setAttributedString_(attr_str)
 
     def close_window(self):
+        # Save current input text before closing
+        if hasattr(self, 'input_field') and self.input_field:
+            self.saved_input_text = self.input_field.string()
+        
         self.quick_window.orderOut_(None)
         self.quick_window = None
         # Deactivate our app to return focus to the previous application

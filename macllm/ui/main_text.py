@@ -1,5 +1,6 @@
 from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
+from .main_text_helpers import is_markdown
 
 class MainTextHandler:
     """Handles the main text display functionality for the macLLM UI."""
@@ -41,34 +42,141 @@ class MainTextHandler:
         text_storage.appendAttributedString_(attributed_text)
     
     @staticmethod
+    def append_markdown(text_view, text, color):
+        """Append markdown-formatted text to the NSTextView."""
+        text_storage = text_view.textStorage()
+        font = NSFont.systemFontOfSize_(13.0)
+        
+        # Remove trailing newline to avoid extra blank line after markdown blocks
+        text = text.rstrip('\n')
+        # Process text line by line
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            # Handle headlines
+            if line.startswith('#'):
+                # Process the entire headline line with bold font
+                bold_font = NSFont.boldSystemFontOfSize_(13.0)
+                headline_text = line.lstrip('#').strip()
+                if i < len(lines) - 1:  # Not the last line
+                    headline_text += "\n"
+                processed_headline = MainTextHandler._process_bold_text(headline_text, color, bold_font)
+                text_storage.appendAttributedString_(processed_headline)
+                continue
+            
+            # Handle bullets
+            if line.strip().startswith(('* ', '- ')):
+                # Remove the bullet marker and get content
+                content = line.strip()[2:]  # Remove first 2 chars (* or - plus space)
+                bullet_char = '•'
+                
+                # Calculate indentation (count leading spaces/tabs)
+                indent_level = 0
+                for char in line:
+                    if char in ' \t':
+                        indent_level += 1
+                    else:
+                        break
+                
+                # Create indentation
+                indent = "  " * indent_level
+                
+                # Create bullet prefix with indentation
+                bullet_prefix = indent + bullet_char + " "
+                bullet_prefix_attr = NSAttributedString.alloc().initWithString_attributes_(bullet_prefix, {
+                    NSForegroundColorAttributeName: color,
+                    NSFontAttributeName: font
+                })
+                text_storage.appendAttributedString_(bullet_prefix_attr)
+                
+                # Process and append the bullet content with bold formatting
+                processed_content = MainTextHandler._process_bold_text(content, color, font)
+                text_storage.appendAttributedString_(processed_content)
+                
+                # Add newline only if not the last line
+                if i < len(lines) - 1:
+                    newline_attr = NSAttributedString.alloc().initWithString_("\n")
+                    text_storage.appendAttributedString_(newline_attr)
+                continue
+            
+            # Handle regular text with bold formatting
+            processed_text = MainTextHandler._process_bold_text(line, color, font)
+            text_storage.appendAttributedString_(processed_text)
+            
+            # Add newline only if not the last line
+            if i < len(lines) - 1:
+                newline_attr = NSAttributedString.alloc().initWithString_("\n")
+                text_storage.appendAttributedString_(newline_attr)
+    
+    @staticmethod
+    def _process_bold_text(text, color, font):
+        """Process bold text markers (**text** or __text__) in a line."""
+        # Handle **bold** and __bold__ patterns
+        import re
+        
+        # Create a mutable attributed string
+        from Foundation import NSMutableAttributedString
+        
+        # Split text by bold markers
+        parts = re.split(r'(\*\*.*?\*\*|__.*?__)', text)
+        
+        if len(parts) == 1:
+            # No bold markers found, return regular text
+            attributes = {
+                NSForegroundColorAttributeName: color,
+                NSFontAttributeName: font
+            }
+            return NSAttributedString.alloc().initWithString_attributes_(text, attributes)
+        
+        # Create mutable attributed string
+        result = NSMutableAttributedString.alloc().init()
+        
+        for part in parts:
+            if not part:
+                continue
+                
+            # Check if this part is bold (starts and ends with ** or __)
+            is_bold = (part.startswith('**') and part.endswith('**')) or \
+                     (part.startswith('__') and part.endswith('__'))
+            
+            if is_bold:
+                # Remove the markers and make bold
+                bold_text = part[2:-2] if part.startswith('**') else part[2:-2]
+                bold_font = NSFont.boldSystemFontOfSize_(13.0)
+                attributes = {
+                    NSForegroundColorAttributeName: color,
+                    NSFontAttributeName: bold_font
+                }
+            else:
+                # Regular text
+                attributes = {
+                    NSForegroundColorAttributeName: color,
+                    NSFontAttributeName: font
+                }
+                bold_text = part
+            
+            # Create attributed string for this part
+            part_attr = NSAttributedString.alloc().initWithString_attributes_(bold_text, attributes)
+            result.appendAttributedString_(part_attr)
+        
+        return result
+
+    @staticmethod
     def calculate_minimum_text_height(macllm):
         """Calculate the minimum height needed to display the initial text content."""
-        # Generate main text from chat history
-        main_text = macllm.chat_history.get_chat_history_original()
+        # If a text area already exists, use it; otherwise create a temporary one for measurement
+        if hasattr(macllm.ui, "text_area"):
+            text_view = macllm.ui.text_area
+        else:
+            # Create an off-screen text view with the same width as the real one
+            text_corner_radius = macllm.ui.text_corner_radius
+            text_area_width = macllm.ui.text_area_width
+            text_view = NSTextView.alloc().initWithFrame_(((0, 0), (text_area_width - 2*text_corner_radius, 1000)))
+            text_view.setEditable_(False)
+            text_view.setDrawsBackground_(False)
+            text_view.setFont_(NSFont.systemFontOfSize_(13.0))
         
-        text_area_width = macllm.ui.text_area_width
-        text_corner_radius = macllm.ui.text_corner_radius
-        # Create a temporary NSTextView with the same width as our intended text area
-        temp_text_view = NSTextView.alloc().initWithFrame_(((0, 0), (text_area_width - 2*text_corner_radius, 1000)))
-        
-        # Set the same font and text content
-        temp_text_view.setFont_(NSFont.systemFontOfSize_(13.0))
-        temp_text_view.setString_(main_text)
-
-        # Get the layout manager to calculate the actual height with width constraints
-        layout_manager = temp_text_view.layoutManager()
-        text_container = temp_text_view.textContainer()
-        
-        if layout_manager and text_container:
-            # Get the glyph range for the entire text
-            glyph_range = layout_manager.glyphRangeForTextContainer_(text_container)
-            
-            # Calculate the bounding rect for the glyphs with width constraints
-            bounding_rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
-            return bounding_rect.size.height
-        
-        # Fallback to a reasonable minimum height
-        return 200.0
+        # Render the content and get the height
+        return MainTextHandler.set_text_content(macllm, text_view)
 
     @staticmethod
     def set_text_content(macllm, text_view):
@@ -98,18 +206,44 @@ class MainTextHandler:
                 prefix = "User: "
             else:  # assistant
                 color = assistant_color
-                prefix = "Assistant: "
+                if is_markdown(text):
+                    prefix = None
+                else:
+                    prefix = "Assistant: "
             
+
             # Append the colored text
-            MainTextHandler.append_colored_text(text_view, prefix, color)
+            if prefix:
+                MainTextHandler.append_colored_text(text_view, prefix, color)
             
             # Add separator between messages, but not after the last one
             if i < len(chat_history) - 1:
-                MainTextHandler.append_colored_text(text_view, text, color)
-                
+                if is_markdown(text):
+                    MainTextHandler.append_markdown(text_view, text, color)
+                else:
+                    MainTextHandler.append_colored_text(text_view, text, color)
+
                 # Add centered separator with paragraph breaks
                 separator_text = "\n" + "─"*47 + "\n"
                 separator_attributed_text = NSAttributedString.alloc().initWithString_attributes_(separator_text, MainTextHandler._separator_attributes)
                 text_view.textStorage().appendAttributedString_(separator_attributed_text)
             else:
-                MainTextHandler.append_colored_text(text_view, text, color) 
+                if is_markdown(text):
+                    MainTextHandler.append_markdown(text_view, text, color)
+                else:
+                    MainTextHandler.append_colored_text(text_view, text, color)
+        
+        # Calculate height from the rendered content
+        layout_manager = text_view.layoutManager()
+        text_container = text_view.textContainer()
+        
+        if layout_manager and text_container:
+            # Get the glyph range for the entire text
+            glyph_range = layout_manager.glyphRangeForTextContainer_(text_container)
+            
+            # Calculate the bounding rect for the glyphs with width constraints
+            bounding_rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
+            return bounding_rect.size.height
+        
+        # Fallback to a reasonable minimum height
+        return 200.0 
