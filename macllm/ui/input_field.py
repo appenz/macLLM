@@ -155,12 +155,36 @@ class InputFieldDelegate(NSObject):
         try:
             if self.autocomplete and self.autocomplete.is_visible():
                 # --- Tag editing mode, the autocomplete popup is visible ---------
-                if commandSelector in ('insertNewline:', 'insertTab:'):
-                    # Accept autocomplete selection
+                if commandSelector == 'insertNewline:':
+                    # Accept autocomplete selection and close the tag (convert to pill)
                     selection = self.autocomplete.current_selection()
                     if selection:
                         self._insert_tag(selection)
                         self.autocomplete.hide()
+                    return True
+                elif commandSelector == 'insertTab:':
+                    # Accept the suggestion but keep the tag editable – just insert the raw text
+                    selection = self.autocomplete.current_selection()
+                    if selection:
+                        # Unpack tuple or use string directly
+                        raw_tag = selection[0] if isinstance(selection, tuple) else selection
+                        # Strip trailing quote so the tag stays *open* while editing
+                        if raw_tag.endswith('"') and raw_tag.startswith('@"'):
+                            raw_edit = raw_tag[:-1]  # drop closing quote
+                        else:
+                            raw_edit = raw_tag
+                        # Replace current fragment with the editable tag text
+                        rng = self.text_view.selectedRange()
+                        fragment = self._current_fragment()
+                        replace_start = rng.location - len(fragment)
+                        self.text_view.textStorage().replaceCharactersInRange_withString_(
+                            NSRange(replace_start, len(fragment)), raw_edit
+                        )
+                        # Move caret to end *inside* the open quote
+                        self.text_view.setSelectedRange_(NSRange(replace_start + len(raw_edit), 0))
+                        # Refresh autocomplete suggestions for the now-completed tag
+                        self.autocomplete.update_suggestions(raw_edit)
+                    # Keep popup visible so the user can continue editing
                     return True
                 elif commandSelector in ('moveUp:', 'moveDown:'):
                     # Navigate popup
@@ -221,11 +245,21 @@ class InputFieldDelegate(NSObject):
     # Helper functions
     # ------------------------------------------------------------------
     def _current_fragment(self) -> str:
-        """Return the word fragment before the caret (used for filtering)."""
+        """Return the tag fragment before the caret, respecting quotes/escapes."""
         cursor = self.text_view.selectedRange().location  # type: ignore[attr-defined]
-        full_text = self.text_view.string()
+        full_text: str = self.text_view.string()
+
+        # Walk left until we hit whitespace *outside* quotes.
         start = cursor
-        while start > 0 and full_text[start - 1] not in (' ', '\n', '\t'):
+        in_quotes = False
+        while start > 0:
+            ch = full_text[start - 1]
+            if ch == '"':
+                in_quotes = not in_quotes
+                start -= 1
+                continue
+            if ch in (' ', '\n', '\t') and not in_quotes:
+                break
             start -= 1
         return full_text[start:cursor]
 
