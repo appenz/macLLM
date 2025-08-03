@@ -17,3 +17,5 @@ A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (
 - **Core building blocks** are in the `core/` subdirectory
 - **Plugins** that add additional `@` tags (e.g. `@clipboard`, file completion) are in the `tags` directory
 - **Connectors** to LLMs and other models are in the `models/` directory
+
+The code will only ever run on macOS. NEVER write dummy code or stub out code to make it run in other environments.

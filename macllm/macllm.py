@@ -10,31 +10,8 @@ import argparse
 import traceback
 
 from macllm.core.shortcuts import ShortCut
-# UI depends on macOS-specific Cocoa.  Provide a dummy fallback for headless
-# or non-macOS environments so that tests can import the package anywhere.
-try:
-    from macllm.ui import MacLLMUI  # noqa: F401
-except Exception:  # pragma: no cover
-    class _DummyUI:  # minimal stub
-        def __init__(self):
-            self.pb_change_count = 0
-            self.clipboardCallback = lambda: None
+from macllm.ui import MacLLMUI  # noqa: F401
 
-        # Clipboard methods used in tests
-        def read_clipboard(self):
-            return ""
-
-        def write_clipboard(self, _content):
-            pass
-
-        # Main loop stub
-        def start(self, dont_run_app: bool = False):
-            pass
-
-        def hotkey_pressed(self):
-            pass
-
-    MacLLMUI = _DummyUI
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
@@ -233,6 +210,7 @@ def main():
     ShortCut.init_shortcuts(macLLM)
     
     macLLM.show_instructions()
+    print("macLLM.ui.start")
     macLLM.ui.start(dont_run_app=False)
 
 if __name__ == "__main__":

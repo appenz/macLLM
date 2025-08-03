@@ -21,6 +21,7 @@ from Cocoa import NSGraphicsContext
 from Cocoa import NSMutableAttributedString
 
 from macllm.ui.main_text import MainTextHandler
+from macllm.ui.history_browse import HistoryBrowseDelegate
 from macllm.ui.input_field import InputFieldHandler
 
 import objc
@@ -164,6 +165,10 @@ class MacLLMUI:
         
         # Preserve input text between window sessions
         self.saved_input_text = ""
+
+        # Browsing history mode state
+        self.browsing_history = False
+        self.history_index = 0
 
     def dummy(self):
         return
@@ -433,6 +438,12 @@ class MacLLMUI:
             text_view.setFont_(NSFont.systemFontOfSize_(MacLLMUI.font_size))
             self.text_area = text_view
 
+            # Attach delegate for history browsing
+            history_delegate = HistoryBrowseDelegate.alloc().init()
+            history_delegate.macllm_ui = self
+            text_view.setDelegate_(history_delegate)
+            self.history_delegate = history_delegate
+
             # Attach text view to the scroll view and add to container
             scroll_view.setDocumentView_(text_view)
             text_container.addSubview_(scroll_view)
@@ -539,11 +550,71 @@ class MacLLMUI:
         
         self.top_bar_text_view.textStorage().setAttributedString_(attr_str)
 
+    # ------------------------------------------------------------------
+    # History browsing helpers
+    # ------------------------------------------------------------------
+    def begin_history_browsing(self):
+        """Enter history browsing mode (focus main text, highlight latest)."""
+        if self.browsing_history:
+            return
+        self.browsing_history = True
+        self.history_index = max(0, len(self.macllm.chat_history.chat_history) - 1)
+        # Focus main area and highlight
+        if hasattr(self, "text_area"):
+            self.text_area.window().makeFirstResponder_(self.text_area)
+        self.highlight_current_history()
+
+    def highlight_current_history(self):
+        """Re-render main text with the current selection highlighted."""
+        if not hasattr(self, "text_area"):
+            return
+        MainTextHandler.set_text_content(self.macllm, self.text_area, highlight_index=self.history_index)
+
+    def copy_current_history_to_clipboard(self):
+        """Copy the selected history entry (raw text only) to the clipboard."""
+        try:
+            entry = self.macllm.chat_history.chat_history[self.history_index]
+            self.write_clipboard(entry.get("text", ""))
+        except IndexError:
+            pass
+
+    def insert_current_history_into_input(self):
+        """Paste selected history entry into the input field and exit browsing."""
+        try:
+            entry_text = self.macllm.chat_history.chat_history[self.history_index].get("text", "")
+            if hasattr(self, "input_field") and self.input_field:
+                InputFieldHandler.clear_input_field(self.input_field)
+                self.input_field.insertText_(entry_text)
+        except IndexError:
+            pass
+        self.exit_history_browsing()
+        # Focus back to input field for editing
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
+
+    def exit_history_browsing(self):
+        """Return to normal mode (remove highlight & focus input)."""
+        if not self.browsing_history:
+            return
+        self.browsing_history = False
+        # Remove highlight by re-rendering without highlight
+        if hasattr(self, "text_area"):
+            MainTextHandler.set_text_content(self.macllm, self.text_area)
+        # Focus back to input field
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
+
+    # ------------------------------------------------------------------
+    # Existing methods
+    # ------------------------------------------------------------------
     def close_window(self):
         # Save current input text before closing
         if hasattr(self, 'input_field') and self.input_field:
             self.saved_input_text = self.input_field.string()
         
+        # Ensure we leave browsing mode cleanly
+        self.browsing_history = False
+
         self.quick_window.orderOut_(None)
         self.quick_window = None
         # Deactivate our app to return focus to the previous application

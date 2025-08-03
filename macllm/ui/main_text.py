@@ -1,4 +1,4 @@
-from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
+from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSBackgroundColorAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
 from .main_text_helpers import is_markdown
 
@@ -179,7 +179,7 @@ class MainTextHandler:
         return MainTextHandler.set_text_content(macllm, text_view)
 
     @staticmethod
-    def set_text_content(macllm, text_view):
+    def set_text_content(macllm, text_view, highlight_index=None):
         """Set the text content for the main text view with colored text for different roles."""
         # Initialize static separator attributes if needed
         MainTextHandler._init_separator_attributes()
@@ -197,6 +197,8 @@ class MainTextHandler:
         
         # Add each chat entry with appropriate color
         for i, entry in enumerate(chat_history):
+            # Track start index to allow highlighting
+            start_pos = text_view.textStorage().length()
             role = entry['role']
             text = entry['text']
             
@@ -216,12 +218,21 @@ class MainTextHandler:
             if prefix:
                 MainTextHandler.append_colored_text(text_view, prefix, color)
             
-            # Add separator between messages, but not after the last one
+            # Add message content and optional separator + highlight
             if i < len(chat_history) - 1:
                 if is_markdown(text):
                     MainTextHandler.append_markdown(text_view, text, color)
                 else:
                     MainTextHandler.append_colored_text(text_view, text, color)
+
+                # Apply highlight (exclude upcoming separator)
+                end_pos = text_view.textStorage().length()
+                if highlight_index is not None and i == highlight_index:
+                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+                    text_view.textStorage().addAttributes_range_(
+                        {NSBackgroundColorAttributeName: highlight_color},
+                        (start_pos, end_pos - start_pos)
+                    )
 
                 # Add centered separator with paragraph breaks
                 separator_text = "\n" + "─"*47 + "\n"
@@ -232,6 +243,16 @@ class MainTextHandler:
                     MainTextHandler.append_markdown(text_view, text, color)
                 else:
                     MainTextHandler.append_colored_text(text_view, text, color)
+
+                # Apply highlight for the last message
+                end_pos = text_view.textStorage().length()
+                if highlight_index is not None and i == highlight_index:
+                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+                    text_view.textStorage().addAttributes_range_(
+                        {NSBackgroundColorAttributeName: highlight_color},
+                        (start_pos, end_pos - start_pos)
+                    )
+
         
         # Calculate height from the rendered content
         layout_manager = text_view.layoutManager()

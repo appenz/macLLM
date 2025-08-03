@@ -200,7 +200,14 @@ class InputFieldDelegate(NSObject):
                 
             else:
                 # --- Normal mode, the autocomplete popup is not visible ---------
-                if commandSelector in ('insertNewline:'):
+                if commandSelector == 'moveUp:':
+                    # If caret is on the very first line, switch to history browsing
+                    if self._caret_on_first_line():
+                        self.macllm_ui.begin_history_browsing()
+                        return True
+                    # Otherwise, allow default movement
+                    return False
+                elif commandSelector in ('insertNewline:'):
                     # Send message
                     input_text = self._plain_text_from_view()
                     self.macllm_ui.handle_user_input(input_text)
@@ -262,6 +269,14 @@ class InputFieldDelegate(NSObject):
                 break
             start -= 1
         return full_text[start:cursor]
+
+    def _caret_on_first_line(self) -> bool:
+        """Return True if the caret is currently on the very first line of the text view."""
+        rng = self.text_view.selectedRange()
+        if rng.location == 0:
+            return True
+        text_before = self.text_view.string()[: rng.location]
+        return '\n' not in text_before
 
     def _insert_tag(self, tag):  # type: ignore[override]
         """Insert an auto-completed tag.  *tag* can be either a string or a
