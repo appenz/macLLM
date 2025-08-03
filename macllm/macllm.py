@@ -17,21 +17,8 @@ from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
 from macllm.models.openai_connector import OpenAIConnector
 
-# Quickmachotkey is only available on macOS systems with proper accessibility
-# permissions.  For headless test environments we fall back to no-op stubs.
-try:
-    from quickmachotkey import quickHotKey, mask
-    from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
-except ModuleNotFoundError:  # pragma: no cover
-    def quickHotKey(*_args, **_kwargs):
-        def decorator(func):
-            return func
-        return decorator
-
-    def mask(*_args, **_kwargs):  # noqa: D401
-        return 0
-
-    kVK_ANSI_A = kVK_Space = cmdKey = controlKey = optionKey = 0
+from quickmachotkey import quickHotKey, mask
+from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
 
 macLLM = None
 
