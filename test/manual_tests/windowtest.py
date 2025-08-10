@@ -19,7 +19,14 @@ def main():
 
     app.chat_history.add_chat_entry("user", user, user)
     app.chat_history.add_chat_entry("assistant", agent, agent)
-    app.chat_history.add_context("clipboard", "clipboard", "clipboard", context, icon="📋")
+    app.chat_history.add_context("clipboard", "clipboard-1", "clipboard", context, icon="📋")
+    app.chat_history.add_context("file", "file-1.txt", "file", context, icon="📁")
+#    app.chat_history.add_context("clipboard", "clipboard-2", "clipboard", context, icon="📋")
+#    app.chat_history.add_context("file", "file-2.txt", "file", context, icon="📁")
+#    app.chat_history.add_context("clipboard", "clipboard-3", "clipboard", context, icon="📋")
+#    app.chat_history.add_context("file", "file-3.txt", "file", context, icon="📁")
+#    app.chat_history.add_context("clipboard", "clipboard-4", "clipboard", context, icon="📋")
+#    app.chat_history.add_context("file", "file-4.txt", "file", context, icon="📁")
 
     app.ui.start(dont_run_app=True)
     app.ui.hotkey_pressed()

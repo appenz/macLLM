@@ -12,7 +12,7 @@ from Cocoa import (
     NSParagraphStyleAttributeName,
     NSAttributedString,
 )
-from AppKit import NSLineBorder
+from AppKit import NSLineBorder, NSLineBreakByClipping
 from Quartz import CGColorCreateGenericRGB
 
 # Helper function to convert NSColor to CGColor
@@ -31,36 +31,77 @@ class TopBarHandler:
             for pill in macllm_ui.context_pills:
                 pill.removeFromSuperview()
         
-        # Try to read the first non-image context entry from chat history
-        pill = None
+        # Gather newest-first, non-image, non-empty string context entries
+        pills_rendered = []
         try:
             conversation = getattr(macllm_ui.macllm, "chat_history", None)
-            context_items = getattr(conversation, "context_history", []) if conversation else []
-            first_entry = None
+            context_items = list(getattr(conversation, "context_history", [])) if conversation else []
+            context_items = list(reversed(context_items))  # newest first
+            filtered = []
             for ctx in context_items:
                 if ctx.get("type") == "image":
                     continue
                 content = ctx.get("context")
-                if isinstance(content, str) and content:
-                    first_entry = ctx
-                    break
+                if isinstance(content, str) and content.strip():
+                    filtered.append(ctx)
+            if not filtered:
+                macllm_ui.context_pills = []
+                return
 
-            if first_entry is not None:
+            # Limit to at most 10 entries
+            filtered = filtered[:10]
+
+            spacing = getattr(macllm_ui, "context_pill_spacing", 6) or 6
+            num = len(filtered)
+
+            # Layout strategy per spec
+            if num <= 5:
                 pill_width = 120
-                pill = TopBarHandler.render_context_block(
-                    macllm_ui=macllm_ui,
-                    parent_view=parent_view,
-                    x=origin_x,
-                    y=origin_y,
-                    width=pill_width,
-                    height=height,
-                    context_entry=first_entry,
-                )
+                # Fit as many as possible within available_width
+                max_fit = max(1, int((available_width + spacing) // (pill_width + spacing)))
+                display_count = min(num, max_fit)
+                entries_to_show = filtered[:display_count]
+                x = origin_x
+                for entry in entries_to_show:
+                    pill = TopBarHandler.render_context_block(
+                        macllm_ui=macllm_ui,
+                        parent_view=parent_view,
+                        x=x,
+                        y=origin_y,
+                        width=pill_width,
+                        height=height,
+                        context_entry=entry,
+                    )
+                    pills_rendered.append(pill)
+                    x += pill_width + spacing
+            else:
+                # Evenly distribute available width across all (up to 10) entries
+                total_spacing = spacing * (num - 1)
+                usable_width = max(0, available_width - total_spacing)
+                per_width = int(usable_width // num) if num > 0 else 0
+                per_width = max(40, per_width)  # ensure a minimal width
+                # If per_width * num + spacing overflows, reduce count to fit
+                while num > 0 and (per_width * num + spacing * (num - 1)) > available_width:
+                    num -= 1
+                entries_to_show = filtered[:num]
+                x = origin_x
+                for idx, entry in enumerate(entries_to_show):
+                    pill = TopBarHandler.render_context_block(
+                        macllm_ui=macllm_ui,
+                        parent_view=parent_view,
+                        x=x,
+                        y=origin_y,
+                        width=per_width,
+                        height=height,
+                        context_entry=entry,
+                    )
+                    pills_rendered.append(pill)
+                    x += per_width + (spacing if idx < len(entries_to_show) - 1 else 0)
         except Exception:
-            pill = None
+            pills_rendered = []
 
-        # Keep track of pills for cleanup next time (empty if nothing rendered)
-        macllm_ui.context_pills = [pill] if pill is not None else []
+        # Keep track of pills for cleanup next time
+        macllm_ui.context_pills = pills_rendered
 
     @staticmethod
     def render_context_block(macllm_ui, parent_view, x: int, y: int, width: int, height: int, context_entry: dict):
@@ -84,30 +125,46 @@ class TopBarHandler:
         if text:
             # Add some padding inside the pill
             padding = 6
-            text_view = NSTextView.alloc().initWithFrame_(((0, -3), (width - 2*padding, height - 2*padding)))
+            text_view = NSTextView.alloc().initWithFrame_(((0, 0), (width - 2*padding, height - padding)))
             text_view.setEditable_(False)
             text_view.setSelectable_(False)
             text_view.setDrawsBackground_(False)
             text_view.setTextContainerInset_((0.0, 0.0))
             
-            # Disable text wrapping and scrolling for clipping effect
+            # Disable wrapping: make container extremely wide; clip to view frame
+            text_view.setHorizontallyResizable_(False)
+            text_view.setVerticallyResizable_(False)
             if text_view.textContainer() is not None:
-                text_view.textContainer().setContainerSize_((width, height))
+                text_view.textContainer().setContainerSize_((60.0, height))
                 text_view.textContainer().setWidthTracksTextView_(False)
                 text_view.textContainer().setHeightTracksTextView_(False)
                 text_view.textContainer().setLineFragmentPadding_(0.0)
+            if hasattr(text_view, "setMaxSize_"):
+                text_view.setMaxSize_((60.0, height))
             
             # Set 13pt font with normal text color
+            paragraph_style = NSMutableParagraphStyle.alloc().init()
+            paragraph_style.setLineBreakMode_(NSLineBreakByClipping)
             attrs = {
                 NSFontAttributeName: NSFont.systemFontOfSize_(9.0),
                 NSForegroundColorAttributeName: NSColor.blackColor(),
+                NSParagraphStyleAttributeName: paragraph_style,
             }
 
-            # Remove blank lines from text, we want to show the user as much ass possible in the small amount of space we have
-            text = "\n".join([line for line in text.split("\n") if line.strip()])
+            # - remove blank lines but preserve line breaks
+            # - limit lines to 80 chars in length
+            lines = [line for line in text.split("\n") if line.strip()]
+            wrapped_lines = []
+            for line in lines:
+                while len(line) > 80:
+                    wrapped_lines.append(line[:80])
+                    line = line[80:]
+                wrapped_lines.append(line)
+            text = "\n".join(wrapped_lines)
 
             # Display name is: icon + "@" + reference name
-            text = f"{context_entry.get('icon', '')} @{context_entry.get('name', '')}\n"+text
+            text = f"{context_entry.get('icon', '')} @{context_entry.get('name', '')}\n" + text
+            text = text.strip("\n")
 
             attr_str = NSAttributedString.alloc().initWithString_attributes_(text, attrs)
             text_view.textStorage().setAttributedString_(attr_str)

@@ -13,12 +13,21 @@ class ClipboardTag(TagPlugin):
     def expand(self, tag: str, conversation):
         # Retrieve clipboard contents via UI helper
         content = self.ui.read_clipboard()
+
+        # Unique source name is clipboard-#
+        # where # is the number of context entires in the chat history
+        context_count = len(conversation.context_history)
+        if context_count == 0:
+            source_name = "clipboard"
+        else:
+            source_name = f"clipboard-{context_count}"
+
         # Store in conversation context
         context_name = conversation.add_context(
             "clipboard",            # suggested name
-            "clipboard",            # source (constant)
+            source_name,            # source (constant)
             "clipboard",            # context type
-            content,                 # actual text
+            content,                # actual text
             icon="📋",
         )
         # Replace tag with the context name (e.g. CLIPBOARD_CONTENTS or with -1 suffix)

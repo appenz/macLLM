@@ -35,7 +35,6 @@ class Conversation:
             actual_name = f"{suggested_name}-{counter}"
             counter += 1
         
-        print("Icon: ", icon)
         if icon is None:
             icon = ""
 
