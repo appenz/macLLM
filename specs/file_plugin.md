@@ -27,7 +27,7 @@ The **file-plugin** adds three user-facing capabilities:
 4. When the user hits ↩ to send the message, the normal tag-expansion pipeline (`UserRequest.process_tags`) calls the file-plugin's `expand()` method which
    - looks up the chosen full path,
    - adds the contents to the conversation context, and
-   - returns `content:<context_name>`.
+   - returns `RESOURCE:<context_name>`.
 
 ## Implementation
 
@@ -55,7 +55,7 @@ class FileTag(TagPlugin):
 6. **`expand(tag, conversation)`**
    - Strip the leading `@` and surrounding quotes, read file.
    - Enforce `MAX_CONTEXT_LEN` & binary check identical to `PathTag`.
-   - Add context and return `content:<handle>`.
+   - Add context and return `RESOURCE:<handle>`.
 
 ### Autocomplete Integration (UI)
 

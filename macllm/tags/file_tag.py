@@ -88,7 +88,7 @@ class FileTag(TagPlugin):
     def expand(self, tag: str, conversation):
         """Read the referenced file (tag may be a plain path or an internal
         @file tag), add it to *conversation* context, and return a
-        ``content:<handle>`` replacement string."""
+        ``RESOURCE:<handle>`` replacement string."""
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -115,8 +115,9 @@ class FileTag(TagPlugin):
             path_spec,
             "path",
             content,
+            icon="📁"
         )
-        return f"content:{context_name}"
+        return f"RESOURCE:{context_name}"
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks

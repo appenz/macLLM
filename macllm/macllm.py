@@ -27,18 +27,15 @@ alias_token = "@"
 
 system_prompt = """
 You are a helpful assistant.
-Below is the conversation history with the user's latest request at the end.
-If the user's request contains content:... this is a reference to an attachment.
-- One or multiple attachments follow below the user's request.
-- Use the content of these attachments to help you respond to the user's request.
-- Refer to the attachment by name only. So for "content:clipboard" just say "the clipboard" or for "content:hello.txt" just say "hello.txt".
+- If the conversation contains RESOURCE:... this is a reference to an attachment that follows below the user's request.
+- In most cases, answer directly and don't mention the resource.
+- If you have to mention the resource, refer to it by name only. So for "RESOURCE:clipboard" just say "the clipboard"
+- If the user's request is not clear, ask for clarification.
+- If the user's request is not possible, explain why.
 
-If the user's request is not clear, ask for clarification.
-
-If the user's request is not possible, explain why.
 """
 
-context_start = "\n--- END OF USER CONVERSATION, EVERYTHING BELOW IS CONTEXT ---\n"
+context_start = "\n\nRESOURCES START HERE]n\n"
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -108,7 +105,7 @@ class MacLLM:
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         
         # Initialize LLM after debug_log method is available
-        self.llm = OpenAIConnector(model="gpt-4o", debug_logger=self.debug_log if debug else None)
+        self.llm = OpenAIConnector(model="gpt-5", debug_logger=self.debug_log if debug else None)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1

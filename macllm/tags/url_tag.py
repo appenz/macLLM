@@ -24,7 +24,7 @@ class URLTag(TagPlugin):
             "url",
             content,
         )
-        return f"content:{context_name}"
+        return f"RESOURCE:{context_name}"
 
     # ------------------------------------------------------------------
     # Helpers

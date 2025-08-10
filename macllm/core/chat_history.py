@@ -20,7 +20,7 @@ class Conversation:
         }
         self.chat_history.append(entry)
     
-    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes]) -> str:
+    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon = None) -> str:
         """Add context entry, returns the actual name used. Avoids duplicates based on source."""
         # Check if source already exists
         for ctx in self.context_history:
@@ -30,16 +30,22 @@ class Conversation:
         # Generate unique name if suggested_name already exists
         actual_name = suggested_name
         counter = 1
+        
         while any(ctx['name'] == actual_name for ctx in self.context_history):
             actual_name = f"{suggested_name}-{counter}"
             counter += 1
         
+        print("Icon: ", icon)
+        if icon is None:
+            icon = ""
+
         # Add new context entry
         entry = {
             'name': actual_name,
             'source': source,
             'type': context_type,
-            'context': context
+            'context': context,
+            'icon': icon
         }
         self.context_history.append(entry)
         return actual_name

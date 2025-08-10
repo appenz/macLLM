@@ -21,6 +21,7 @@ from Cocoa import NSGraphicsContext
 from Cocoa import NSMutableAttributedString
 
 from macllm.ui.main_text import MainTextHandler
+from macllm.ui.top_bar import TopBarHandler
 from macllm.ui.history_browse import HistoryBrowseDelegate
 from macllm.ui.input_field import InputFieldHandler
 
@@ -116,6 +117,11 @@ class MacLLMUI:
 
     # Font
     font_size = 13.0
+    # Context item UI
+    context_font_size = 10.0
+    context_pill_spacing = 6
+    context_pill_vertical_margin = 3
+    context_pill_corner_radius = 6.0
 
     # Layout of the window - updated to match specification
     padding = 4
@@ -145,8 +151,13 @@ class MacLLMUI:
     white = NSColor.whiteColor()
     light_grey = NSColor.colorWithCalibratedWhite_alpha_(0.9, 1.0)
     dark_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.8, 1.0)
+    darker_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.6, 1.0)
     text_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
     text_grey_subtle  = NSColor.colorWithCalibratedWhite_alpha_(0.65, 1.0)
+
+    # Context pill on top bar
+    context_bg_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.85, 0.85, 0.9, 1.0)
+
 
     def __init__(self):
         self.app = None
@@ -318,88 +329,8 @@ class MacLLMUI:
             box = self.background_box
             box.setFrame_(((0, 0), (window_width+window_corner_radius, window_height+window_corner_radius)))
 
-        # ----- Top bar with dark grey container, icon, context area, and text field ---------------------------------------------------------------
-
-        # Create or update the top bar container
-        if new_window:
-            # Create dark grey NSBox container for top bar
-            top_bar_container = NSBox.alloc().initWithFrame_(
-                ((MacLLMUI.text_area_x, top_bar_y), 
-                 (MacLLMUI.text_area_width, MacLLMUI.top_bar_height))
-            )
-            top_bar_container.setBoxType_(NSBoxCustom)
-            top_bar_container.setBorderType_(NSNoBorder)
-            top_bar_container.setCornerRadius_(text_corner_radius)
-            top_bar_container.setFillColor_(MacLLMUI.dark_grey)
-            box.addSubview_(top_bar_container)
-            self.top_bar_container = top_bar_container
-        else:
-            # Update existing top bar container frame
-            top_bar_container = self.top_bar_container
-            top_bar_container.setFrame_(((MacLLMUI.text_area_x, top_bar_y), 
-                                        (MacLLMUI.text_area_width, MacLLMUI.top_bar_height)))
-
-        # Calculate positions within the top bar container
-        top_bar_internal_padding = 8  # Internal padding within the top bar
-        icon_x_internal = 0
-        # Vertically centre icon and text inside the 48-px bar
-        icon_y = int((MacLLMUI.top_bar_height - MacLLMUI.icon_width) / 2)-5
-        text_y = icon_y
-        text_height = MacLLMUI.top_bar_height - text_y-10
-
-        context_area_x = icon_x_internal + MacLLMUI.icon_width + top_bar_internal_padding
-        text_field_x = MacLLMUI.text_area_width - MacLLMUI.top_bar_text_field_width - top_bar_internal_padding
-
-        if new_window:
-            # Add image view (logo in top bar) as a subview of the top bar container
-            image_view = NSImageView.alloc().initWithFrame_(
-                ((icon_x_internal, icon_y), 
-                 (MacLLMUI.icon_width, MacLLMUI.icon_width))
-            )
-            image_view.setImage_(self.logo_image)
-            image_view.setImageScaling_(3)  # NSScaleToFit = 3
-            image_view.setImageAlignment_(1)  # NSImageAlignCenter = 1
-            image_view.setImageFrameStyle_(0)  # NSImageFrameNone = 0
-            image_view.setAnimates_(False)
-            image_view.setContentHuggingPriority_forOrientation_(1000, 0)  # Horizontal
-            image_view.setContentHuggingPriority_forOrientation_(1000, 1)  # Vertical
-            top_bar_container.addSubview_(image_view)
-            self.logo_image_view = image_view
-
-            # Create text view in top bar (flush right) for multiple lines
-            top_bar_text_view = NSTextView.alloc().initWithFrame_(
-                ((text_field_x, text_y), 
-                 (MacLLMUI.top_bar_text_field_width, text_height))
-            )
-            top_bar_text_view.setString_("")
-            top_bar_text_view.setDrawsBackground_(False)
-            top_bar_text_view.setEditable_(False)  # Read-only for now
-            top_bar_text_view.setSelectable_(False)  # Not selectable
-            # Remove default text container inset so lines stick to the right/ top equally
-            top_bar_text_view.setTextContainerInset_((0.0, 0.0))
-            
-            # Set right alignment and styling for the text
-            paragraph_style = NSMutableParagraphStyle.alloc().init()
-            paragraph_style.setAlignment_(2)  # NSRightTextAlignment = 2
-            text_attributes = {
-                NSFontAttributeName: NSFont.systemFontOfSize_(11.0),
-                NSForegroundColorAttributeName: MacLLMUI.text_grey_subtle,
-                NSParagraphStyleAttributeName: paragraph_style
-            }
-            top_bar_text_view.setTypingAttributes_(text_attributes)
-            top_bar_container.addSubview_(top_bar_text_view)
-            self.top_bar_text_view = top_bar_text_view
-        else:
-            # Update existing image view position
-            image_view = self.logo_image_view
-            image_view.setFrame_(((icon_x_internal, icon_y), 
-                                 (MacLLMUI.icon_width, MacLLMUI.icon_width)))
-            
-            # Update existing text view position
-            top_bar_text_view = self.top_bar_text_view
-            top_bar_text_view.setFrame_(((text_field_x, text_y), 
-                                        (MacLLMUI.top_bar_text_field_width, text_height)))
-            top_bar_text_view.setTextContainerInset_((0.0, 0.0))
+        # ----- Top bar with dark grey container, icon, context area, and text field -----
+        TopBarHandler.create_or_update_top_bar(self, box, top_bar_y)
 
 
         # ----- Main conversation area (middle section) as a scrollable NSTextView with rounded corners -------------------

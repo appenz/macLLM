@@ -19,3 +19,10 @@ A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (
 - **Connectors** to LLMs and other models are in the `models/` directory
 
 The code will only ever run on macOS. NEVER write dummy code or stub out code to make it run in other environments.
+
+# UI Layout
+
+The macLLM window has 3 main parts:
+- A top bar with the icon. It shows context for this conversation and statistics
+- The main conversation text area, it shows the conversation history
+- The input area at the bottom
