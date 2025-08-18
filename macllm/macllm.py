@@ -36,7 +36,7 @@ You are a helpful assistant.
 
 """
 
-context_start = "\n\nRESOURCES START HERE]n\n"
+context_start = "\n\n--- RESOURCES START HERE ---\n"
 
 # Class defining ANSI color codes for terminal output
 class color:

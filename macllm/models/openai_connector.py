@@ -1,5 +1,4 @@
 import base64
-import requests
 import os
 import openai
 from macllm.core.model_connector import ModelConnector
@@ -18,18 +17,27 @@ class OpenAIConnector(ModelConnector):
 
     def generate(self, text: str) -> str:
         """Generate text response using OpenAI API."""
-        c = self.client.chat.completions.create(
+        c = self.client.responses.create(
             model=self.model,
-            messages=[
-                {"role": "user", "content": str(text)},
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": str(text)}
+                    ],
+                }
             ],
+            service_tier="priority"
         )
-        
-        # Update token count from response usage
-        if hasattr(c, 'usage') and c.usage:
-            self.token_count = c.usage.total_tokens
-        
-        return c.choices[0].message.content
+
+        if hasattr(c, "usage") and c.usage:
+            # Responses API usage mirrors total/input/output tokens
+            total_tokens = getattr(c.usage, "total_tokens", None)
+            if total_tokens is not None:
+                self.token_count = total_tokens
+
+        # output_text is a convenience that concatenates all text outputs
+        return getattr(c, "output_text", "")
     
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64 string."""
@@ -38,62 +46,34 @@ class OpenAIConnector(ModelConnector):
 
     def generate_with_image(self, text: str, image_path: str) -> str:
         """Generate text response with image input using OpenAI API."""
-        # Getting the base64 string
         base64_image = self._encode_image(image_path)
         if base64_image is None:
-            print(f'Image encoding failed.')
+            if self.debug_logger:
+                self.debug_logger("Image encoding failed.", 2)
+            return None
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.openai_api_key}"
-        }
-
-        payload = {
-            "model": "gpt-4o",
-            "messages": [
+        c = self.client.responses.create(
+            model=self.model,
+            input=[
                 {
                     "role": "user",
                     "content": [
+                        {"type": "input_text", "text": f"{text}"},
                         {
-                            "type": "text",
-                            "text": f"{text}"
+                            "type": "input_image",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                         },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
+                    ],
                 }
             ],
-            "max_tokens": 1000
-        }
+        )
 
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        if hasattr(c, "usage") and c.usage:
+            total_tokens = getattr(c.usage, "total_tokens", None)
+            if total_tokens is not None:
+                self.token_count = total_tokens
 
-        # Extract the content from the response
-        if response.status_code == 200:
-            response_data = response.json()
-            if 'choices' in response_data and len(response_data['choices']) > 0:
-                generated_text = response_data['choices'][0]['message']['content']
-                
-                # Update token count from response usage
-                if 'usage' in response_data:
-                    usage = response_data['usage']
-                    self.token_count = usage.get('total_tokens', 0)
-                    if self.debug_logger:
-                        self.debug_logger(f'Token usage - Prompt: {usage.get("prompt_tokens", 0)}, Completion: {usage.get("completion_tokens", 0)}, Total: {usage.get("total_tokens", 0)}')
-                
-                if self.debug_logger:
-                    self.debug_logger(f'Generated Text: {generated_text}')
-                return generated_text
-            else:
-                if self.debug_logger:
-                    self.debug_logger('No generated content found.', 2)
-                return None
-        else:
-            if self.debug_logger:
-                self.debug_logger(f'Failed to generate content. Status Code: {response.status_code}', 2)
-                self.debug_logger(f'Response: {response.json()}', 2)
-            return None 
+        generated_text = getattr(c, "output_text", None)
+        if self.debug_logger and generated_text is not None:
+            self.debug_logger(f"Generated Text: {generated_text}")
+        return generated_text

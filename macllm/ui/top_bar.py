@@ -191,6 +191,22 @@ class TopBarHandler:
             macllm_ui.top_bar_container = top_bar_container
         else:
             top_bar_container = macllm_ui.top_bar_container
+            # If the container is not attached to the current parent_view, reattach it
+            try:
+                if top_bar_container.superview() is None or top_bar_container.superview() != parent_view:
+                    top_bar_container.removeFromSuperview()
+                    parent_view.addSubview_(top_bar_container)
+            except Exception:
+                # If anything goes wrong, recreate the container from scratch
+                top_bar_container = NSBox.alloc().initWithFrame_(
+                    ((macllm_ui.text_area_x, top_bar_y), (macllm_ui.text_area_width, macllm_ui.top_bar_height))
+                )
+                top_bar_container.setBoxType_(NSBoxCustom)
+                top_bar_container.setBorderType_(NSNoBorder)
+                top_bar_container.setCornerRadius_(text_corner_radius)
+                top_bar_container.setFillColor_(macllm_ui.dark_grey)
+                parent_view.addSubview_(top_bar_container)
+                macllm_ui.top_bar_container = top_bar_container
             top_bar_container.setFrame_(((macllm_ui.text_area_x, top_bar_y), (macllm_ui.text_area_width, macllm_ui.top_bar_height)))
 
         # Layout within top bar
@@ -219,6 +235,10 @@ class TopBarHandler:
             macllm_ui.logo_image_view = image_view
         else:
             image_view = macllm_ui.logo_image_view
+            # Ensure the image view is attached to the current container
+            if image_view.superview() is None or image_view.superview() != top_bar_container:
+                image_view.removeFromSuperview()
+                top_bar_container.addSubview_(image_view)
             image_view.setFrame_(((icon_x_internal, icon_y), (macllm_ui.icon_width, macllm_ui.icon_width)))
 
         # Right-aligned multi-line text view
@@ -242,6 +262,10 @@ class TopBarHandler:
             macllm_ui.top_bar_text_view = top_bar_text_view
         else:
             top_bar_text_view = macllm_ui.top_bar_text_view
+            # Ensure the text view is attached to the current container
+            if top_bar_text_view.superview() is None or top_bar_text_view.superview() != top_bar_container:
+                top_bar_text_view.removeFromSuperview()
+                top_bar_container.addSubview_(top_bar_text_view)
             top_bar_text_view.setFrame_(((text_field_x, text_y), (macllm_ui.top_bar_text_field_width, text_height)))
             top_bar_text_view.setTextContainerInset_((0.0, 0.0))
 
