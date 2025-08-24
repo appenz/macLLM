@@ -17,27 +17,28 @@ class OpenAIConnector(ModelConnector):
 
     def generate(self, text: str) -> str:
         """Generate text response using OpenAI API."""
-        c = self.client.responses.create(
+        c = self.client.chat.completions.create(
             model=self.model,
-            input=[
+            messages=[
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": str(text)}
-                    ],
+                    "content": str(text)
                 }
             ],
-            service_tier="priority"
+            # service_tier="priority"
+            # reasoning_effort="low"
         )
 
         if hasattr(c, "usage") and c.usage:
-            # Responses API usage mirrors total/input/output tokens
+            # Chat completions API usage has total/input/output tokens
             total_tokens = getattr(c.usage, "total_tokens", None)
             if total_tokens is not None:
                 self.token_count = total_tokens
 
-        # output_text is a convenience that concatenates all text outputs
-        return getattr(c, "output_text", "")
+        # Get the response content from the first choice
+        if c.choices and len(c.choices) > 0:
+            return c.choices[0].message.content
+        return ""
     
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64 string."""

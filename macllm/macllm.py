@@ -27,16 +27,15 @@ alias_token = "@"
 
 system_prompt = """
 You are a helpful assistant.
-- If the conversation contains RESOURCE:... this is a reference to an attachment that follows below the user's request.
-- In most cases, answer directly and don't mention the resource.
-- If you have to mention the resource, refer to it by name only. So for "RESOURCE:clipboard" just say "the clipboard"
-- If you are asked to just read a file, the clipboard or another source just acknowledge to have did. The user will follow up with a question.
+- If the user refers to a RESOURCE:... this is a reference to a resource block.
+- In most cases, you dont need to mention the resource.
+- If you refer to it, do it by name only. So for "RESOURCE:clipboard" just say "the clipboard"
+- If asked to just look at a resource, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
-- If the user's request is not possible, explain why.
-
+Conversation history follows below.
 """
 
-context_start = "\n\n--- RESOURCES START HERE ---\n"
+context_start = "\n\n--- RESOURCE BLOCKS START HERE ---\n"
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -106,7 +105,7 @@ class MacLLM:
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         
         # Initialize LLM after debug_log method is available
-        self.llm = OpenAIConnector(model="gpt-5", debug_logger=self.debug_log if debug else None)
+        self.llm = OpenAIConnector(model="gpt-5-mini", debug_logger=self.debug_log if debug else None)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -125,14 +124,17 @@ class MacLLM:
             # Step 3: Record user message (original and expanded)
             self.chat_history.add_chat_entry("user", user_input, request.expanded_prompt)
 
+            context = self.chat_history.get_context_history_text()
+
+            if context:
+                context = "\n" + context_start + context
+
             # Step 4: Compose full prompt for LLM (context + chat history)
             request_text = (
                 system_prompt
                 + "\n"
                 + self.chat_history.get_chat_history_expanded()
-                + "\n"
-                + context_start
-                + self.chat_history.get_context_history_text()
+                + context
             )
             self.debug_log(f'Request #{self.req}: {request_text}', 1)
 
