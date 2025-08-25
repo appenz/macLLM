@@ -85,7 +85,7 @@ class FileTag(TagPlugin):
         suggestions for *all* "@…" fragments, regardless of prefix match."""
         return True
 
-    def expand(self, tag: str, conversation):
+    def expand(self, tag: str, conversation, request):
         """Read the referenced file (tag may be a plain path or an internal
         @file tag), add it to *conversation* context, and return a
         ``RESOURCE:<handle>`` replacement string."""

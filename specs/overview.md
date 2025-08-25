@@ -1,6 +1,7 @@
 # MacLLM Overview
 
 MacLLM is a tool that helps a user to effectively use LLMs for working on macOS.
+It is written in Python with a UI in macOS Cocoa via the PyObjC bridge.
 
 A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (e.g. "2").
 - A collection of requests/responses are called a **Conversation**.

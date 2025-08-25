@@ -10,7 +10,7 @@ class ClipboardTag(TagPlugin):
     def get_prefixes(self) -> list[str]:
         return ["@clipboard"]
 
-    def expand(self, tag: str, conversation):
+    def expand(self, tag: str, conversation, request):
         # Retrieve clipboard contents via UI helper
         content = self.ui.read_clipboard()
 

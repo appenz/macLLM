@@ -11,7 +11,7 @@ class ImageTag(TagPlugin):
     def get_prefixes(self):
         return ["@selection", "@window"]
 
-    def expand(self, tag: str, conversation):
+    def expand(self, tag: str, conversation, request):
         # Capture the image to temporary file and load bytes
         if tag == "@selection":
             self._capture_screen()

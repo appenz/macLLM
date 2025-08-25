@@ -16,9 +16,16 @@ from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
 from macllm.models.openai_connector import OpenAIConnector
+from macllm.core.model_connector import ModelConnector
+from macllm.models.llm_config import llmConfig
 
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
+
+# LLM configuration constants for different speed levels
+SLOW_CONFIG = llmConfig(provider="OpenAI", model="gpt-5", reasoning_effort="medium", priority="auto")
+NORMAL_CONFIG = llmConfig(provider="OpenAI", model="gpt-5", reasoning_effort="low", priority="auto")
+FAST_CONFIG = llmConfig(provider="OpenAI", model="gpt-5-nano", reasoning_effort="minimal", priority="auto")
 
 macLLM = None
 
@@ -104,8 +111,10 @@ class MacLLM:
         self.conversation_history = ConversationHistory()
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         
-        # Initialize LLM after debug_log method is available
-        self.llm = OpenAIConnector(model="gpt-5-mini", debug_logger=self.debug_log if debug else None)
+        # Initialize lightweight placeholder for UI (Normal). Real connector is built per request.
+        self.llm = ModelConnector(model=FAST_CONFIG.model)
+        self.llm.provider = FAST_CONFIG.provider
+        self._prefix_index = []
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -117,7 +126,7 @@ class MacLLM:
 
             # Step 2: Build UserRequest and process all @tags
             request = UserRequest(expanded_input)
-            if not request.process_tags(self.plugins, self.chat_history, self.debug_log, self.debug_exception):
+            if not request.process_tags(self.plugins, self.chat_history, self.debug_log, self.debug_exception, self._prefix_index):
                 self.debug_log(f'Request #{self.req}: {user_input} - Abort on plugin failure', 1)
                 return None  # Abort on plugin failure
 
@@ -138,7 +147,38 @@ class MacLLM:
             )
             self.debug_log(f'Request #{self.req}: {request_text}', 1)
 
-            # Step 5: Decide whether to include image
+            # Step 5: Select LLM config based on conversation/request speed and create connector
+            # If the request has a speed preference from tags, update the conversation's sticky setting now
+            if request.speed_level is not None:
+                self.chat_history.speed_level = request.speed_level
+
+            speed = (self.chat_history.speed_level or "normal").lower()
+            if speed == "fast":
+                selected = FAST_CONFIG
+            elif speed == "slow":
+                selected = SLOW_CONFIG
+            else:
+                selected = NORMAL_CONFIG
+
+            # Build a real connector for this request when needed.
+            # If we are using the lightweight placeholder (base ModelConnector)
+            # or an actual OpenAI connector, build a fresh OpenAI connector
+            # from the selected config. Otherwise (e.g. tests using FakeConnector),
+            # reuse the injected connector.
+            if isinstance(self.llm, OpenAIConnector) or type(self.llm) is ModelConnector:
+                llm = OpenAIConnector(
+                    model=selected.model,
+                    priority=selected.priority,
+                    reasoning_effort=selected.reasoning_effort,
+                    debug_logger=self.debug_log if self.debug else None,
+                )
+            else:
+                llm = self.llm
+
+            # Expose the active connector to the UI for accurate provider/model/tokens display
+            self.llm = llm
+
+            # Step 6: Decide whether to include image
             last_image = self.chat_history.get_context_last_image()
             if last_image is not None:
                 image_path = "/tmp/macllm.png"
@@ -148,9 +188,11 @@ class MacLLM:
                 except Exception as e:
                     self.debug_exception(e)
                     return None
-                out = self.llm.generate_with_image(request_text, image_path)
+                out = llm.generate_with_image(request_text, image_path)
             else:
-                out = self.llm.generate(request_text).strip()
+                out = llm.generate(request_text)
+                if isinstance(out, str):
+                    out = out.strip()
 
             if out is not None:
                 self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"
@@ -191,6 +233,15 @@ def main():
     # Load plugins first so that configuration tags found in shortcut files
     # can be handled by their respective plugins during shortcut parsing.
     macLLM.plugins = TagPlugin.load_plugins(macLLM)
+
+    # Build prefix index once: list of (prefix, plugin) for fast startswith matching
+    prefix_pairs = []
+    for plugin in macLLM.plugins:
+        for prefix in plugin.get_prefixes():
+            prefix_pairs.append((prefix, plugin))
+    # Sort by descending prefix length to prefer longer, more specific matches first
+    prefix_pairs.sort(key=lambda x: len(x[0]), reverse=True)
+    macLLM._prefix_index = prefix_pairs
 
     # Now initialise shortcuts – this will invoke *on_config_tag()* on any
     # plugin that registered configuration prefixes.

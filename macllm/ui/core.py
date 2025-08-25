@@ -448,10 +448,21 @@ class MacLLMUI:
             return
 
         provider, model = self.macllm.llm.get_provider_model()
-        tokens   = self.macllm.llm.get_token_count()
+        tokens = self.macllm.llm.get_token_count()
 
-        # Create the full text
-        txt = f"{provider}\n{model}\n{tokens} tkns"
+        # Determine mode from conversation speed
+        speed = getattr(self.macllm.chat_history, "speed_level", "normal") or "normal"
+        speed_display = {
+            "fast": "Fast",
+            "normal": "Normal",
+            "slow": "Think",
+        }.get(speed.lower(), "Normal")
+
+        # Create the full text with requested ordering
+        line1 = f"{speed_display}"
+        line2 = f"{model}"
+        line3 = f"{tokens} tkns"
+        txt = f"{line1}\n{line2}\n{line3}"
 
         para = NSMutableParagraphStyle.alloc().init()
         para.setAlignment_(2)                          # right
@@ -471,12 +482,12 @@ class MacLLMUI:
         # Create attributed string with mixed styles
         attr_str = NSMutableAttributedString.alloc().initWithString_(txt)
         
-        # Apply provider style to the first line (provider name)
-        provider_range = (0, len(provider))
-        attr_str.addAttributes_range_(attrs_provider_name, provider_range)
+        # Apply provider style to the first line (Mode)
+        first_line_len = len(line1)
+        attr_str.addAttributes_range_(attrs_provider_name, (0, first_line_len))
         
-        # Apply rest of text style to everything after the provider
-        rest_range = (len(provider), len(txt) - len(provider))
+        # Apply rest of text style to everything after the first line
+        rest_range = (first_line_len, len(txt) - first_line_len)
         attr_str.addAttributes_range_(attrs_rest_of_text, rest_range)
         
         self.top_bar_text_view.textStorage().setAttributedString_(attr_str)

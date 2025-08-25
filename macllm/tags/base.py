@@ -63,7 +63,7 @@ class TagPlugin:
         """Return the list of prefixes (e.g. ["@clipboard"]) that this plugin handles."""
         raise NotImplementedError
 
-    def expand(self, tag: str, conversation: Conversation) -> str:  # noqa: D401
+    def expand(self, tag: str, conversation: Conversation, request) -> str:  # noqa: D401
         """Expand *tag* inside *conversation*.
 
         1. The plugin should call `conversation.add_context(...)` as needed to

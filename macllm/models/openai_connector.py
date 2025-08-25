@@ -6,7 +6,7 @@ from macllm.core.model_connector import ModelConnector
 class OpenAIConnector(ModelConnector):
     """OpenAI API connector for GPT models."""
 
-    def __init__(self, model, debug_logger=None):
+    def __init__(self, model, priority=None, reasoning_effort=None, debug_logger=None):
         super().__init__(model)
         self.provider = "OpenAI"
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -14,9 +14,17 @@ class OpenAIConnector(ModelConnector):
             raise Exception("OPENAI_API_KEY not found in environment variables")
         self.client = openai.OpenAI(api_key=self.openai_api_key)
         self.debug_logger = debug_logger
+        self.priority = priority
+        self.reasoning_effort = reasoning_effort
 
     def generate(self, text: str) -> str:
         """Generate text response using OpenAI API."""
+        extra_args = {}
+        if self.priority is not None:
+            extra_args["service_tier"] = self.priority
+        if self.reasoning_effort is not None:
+            extra_args["reasoning_effort"] = self.reasoning_effort
+
         c = self.client.chat.completions.create(
             model=self.model,
             messages=[
@@ -25,8 +33,7 @@ class OpenAIConnector(ModelConnector):
                     "content": str(text)
                 }
             ],
-            # service_tier="priority"
-            # reasoning_effort="low"
+            **extra_args
         )
 
         if hasattr(c, "usage") and c.usage:

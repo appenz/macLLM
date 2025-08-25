@@ -220,6 +220,17 @@ class InputFieldDelegate(NSObject):
                     current_event = NSApp().currentEvent()
                     if current_event and (current_event.modifierFlags() & (1 << 20)):
                         key = current_event.charactersIgnoringModifiers().lower()
+                        # Mode switches: Cmd-1 fast, Cmd-2 normal, Cmd-3 slow
+                        if key in ('1', '2', '3'):
+                            if key == '1':
+                                self.macllm_ui.macllm.chat_history.speed_level = 'fast'
+                            elif key == '2':
+                                self.macllm_ui.macllm.chat_history.speed_level = 'normal'
+                            elif key == '3':
+                                self.macllm_ui.macllm.chat_history.speed_level = 'slow'
+                            # Refresh the top bar immediately
+                            self.macllm_ui.update_top_bar_text()
+                            return True
                         if key == 'c':
                             # Let NSTextView handle copying selected text to the clipboard
                             self.text_view.copy_(None)

@@ -97,6 +97,8 @@ class Conversation:
         """Clears both lists, restores default message."""
         self.chat_history = []
         self.context_history = []
+        # Conversation-level defaults
+        self.speed_level = "normal"
         # Add default welcome message
         self.add_chat_entry(
             role="assistant",

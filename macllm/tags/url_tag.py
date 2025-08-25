@@ -9,7 +9,7 @@ class URLTag(TagPlugin):
     def get_prefixes(self):
         return ["@http://", "@https://"]
 
-    def expand(self, tag: str, conversation):
+    def expand(self, tag: str, conversation, request):
         url = tag[1:]  # remove '@'
         try:
             content = self._retrieve_url(url)

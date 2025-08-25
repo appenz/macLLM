@@ -18,6 +18,7 @@ class UserRequest:
         self.expanded_prompt = original_prompt  # Expanded text (may no longer contain @ tags)
         self.context = ""                       # Additional context to append
         self.needs_image = False                # Whether image generation is needed
+        self.speed_level = None                 # Speed preference for this request if provided
     
     @classmethod
     def find_shortcuts(cls, text: str) -> list[tuple[int, int, str]]:
@@ -89,7 +90,7 @@ class UserRequest:
         
         return shortcuts
 
-    def process_tags(self, plugins, conversation, debug_logger=None, debug_exception=None):
+    def process_tags(self, plugins, conversation, debug_logger=None, debug_exception=None, prefix_index=None):
         """
         Process the user prompt through all registered TagPlugins.
 
@@ -110,10 +111,32 @@ class UserRequest:
 
         # Replace from the back to preserve string offsets
         for start, end, shortcut_text in reversed(shortcuts):
+            if prefix_index is not None:
+                matched = False
+                for prefix, plugin in prefix_index:
+                    if shortcut_text.startswith(prefix):
+                        try:
+                            replacement = plugin.expand(shortcut_text, conversation, self)
+                            self.expanded_prompt = (
+                                self.expanded_prompt[:start]
+                                + replacement
+                                + self.expanded_prompt[end:]
+                            )
+                        except Exception as e:
+                            if debug_exception:
+                                debug_exception(e)
+                            if debug_logger:
+                                debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
+                            return False
+                        matched = True
+                        break
+                if matched:
+                    continue
+            # Fallback to scanning plugins in order
             for plugin in plugins:
                 if any(shortcut_text.startswith(prefix) for prefix in plugin.get_prefixes()):
                     try:
-                        replacement = plugin.expand(shortcut_text, conversation)
+                        replacement = plugin.expand(shortcut_text, conversation, self)
                         self.expanded_prompt = (
                             self.expanded_prompt[:start]
                             + replacement
