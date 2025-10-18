@@ -385,12 +385,24 @@ class InputFieldHandler:
         # Set initial text if provided
         if initial_text:
             input_field.setString_(initial_text)
+            # Place caret at end so rebuild maps correctly
+            try:
+                input_field.setSelectedRange_(NSRange(len(initial_text), 0))
+            except Exception:
+                pass
 
         # --------------------------------------------------------------
         # Delegate & autocomplete setup
         # --------------------------------------------------------------
         delegate = InputFieldDelegate.alloc().initWithTextView_(input_field)
         delegate.macllm_ui = macllm_ui
+
+        # One-time conversion of restored plain text into pills
+        try:
+            if initial_text:
+                delegate._rebuild_buffer_with_pills()
+        except Exception:
+            pass
 
         # Create autocomplete controller with the full plugin list so that
         # dynamic suggestions (e.g. from the new file-plugin) are supported.

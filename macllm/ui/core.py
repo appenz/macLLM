@@ -552,7 +552,17 @@ class MacLLMUI:
     def close_window(self):
         # Save current input text before closing
         if hasattr(self, 'input_field') and self.input_field:
-            self.saved_input_text = self.input_field.string()
+            # Prefer extracting plain text (expanding tag attachments) so that
+            # tags/shortcuts survive across window close/open cycles.
+            try:
+                if hasattr(self, 'window_delegate') and self.window_delegate:
+                    # Preserve whitespace as-typed; rebuilding will re-tokenize
+                    self.saved_input_text = self.window_delegate._plain_text_from_view(strip_ends=False)
+                else:
+                    self.saved_input_text = self.input_field.string()
+            except Exception:
+                # Fallback in case delegate extraction fails
+                self.saved_input_text = self.input_field.string()
         
         # Ensure we leave browsing mode cleanly
         self.browsing_history = False
