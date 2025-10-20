@@ -33,6 +33,17 @@ uv run -m macllm
 
 uv should take care of all the dependencies.
 
+### Command-line Options
+
+macLLM supports the following command-line options:
+- `--debug`: Enable debug mode with detailed logging
+- `--version`: Print version number and exit
+
+Example:
+```bash
+uv run -m macllm --debug
+```
+
 ## Basic Usage
 
 Press the hotkey. By default, it is option-space (⌥-space) but it can be easily remapped. 
@@ -49,13 +60,28 @@ After a second or so you should get the answer "Paris". You can now do a few thi
 ## Referencing external data
 
 macLLM understands a number of external data sources:
-* @clipboard is the current clipboard content
-* @window is any desktop window. You can select it after entering the query with your mouse.
-* @selection allows you to select any area on the screen.
-* @<filename> is any file in macOS. The path has to start with "/" or "~"
-* @<url> for an http url. It has to start with "http" or "https"
+* `@clipboard` is the current clipboard content
+* `@window` is any desktop window. You can select it after entering the query with your mouse.
+* `@selection` allows you to select any area on the screen.
+* `@<filename>` is any file in macOS. The path has to start with "/" or "~"
+* `@<url>` for an http url. It has to start with "http" or "https"
 
 The data can be referenced in the query, e.g. "translate @clipboard into French" or "summarize the slide @window".
+
+## Speed Control Tags
+
+You can control the speed and reasoning depth of the LLM response using special tags:
+* `@fast` - Uses a faster model (gpt-5-nano) with minimal reasoning for quick responses
+* `@slow` or `@think` - Uses a more capable model (gpt-5) with medium reasoning effort for complex tasks
+
+Speed tags are "sticky" - once set, they apply to all subsequent messages in the conversation until changed. The default speed is normal (gpt-5-chat-latest).
+
+Example:
+```
+@fast What's 2+2?
+```
+
+Note: Speed tags are removed from the prompt after processing and do not appear in the conversation history.
 
 ## Conversations and context
 
@@ -111,7 +137,8 @@ Both `/` shortcuts and `@` tags use the same autocomplete popup and inline pill 
 ## Example Shortcuts
 - Default examples in `config/default_shortcuts.toml`:
   - `/emoji`: Pick a relevant emoji for the text and reply only with that emoji.
-  - `/emojis`: Suggest a few relevant emojis and reply only with those emojis.
+  - `/emojis`: Suggest 5 relevant emojis and reply only with those emojis.
+  - `/fix`: Fix any spelling or grammar mistakes. Make no other changes. Reply only with the corrected text.
 - You can add more in your own TOML files under `~/.config/macllm/` (see sample above).
 
 ## Using it via the clipboard
