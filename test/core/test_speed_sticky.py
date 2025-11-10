@@ -14,16 +14,16 @@ class TestStickySpeedPreference:
         # Default is normal at conversation start
         assert mac.chat_history.speed_level == "normal"
 
-        # First message sets @fast and should persist
-        mac.handle_instructions("Hello @fast")
+        # First message sets /fast and should persist
+        mac.handle_instructions("Hello /fast")
         assert mac.chat_history.speed_level == "fast"
 
         # Next message without tag should still use fast
         mac.handle_instructions("Second message with no tag")
         assert mac.chat_history.speed_level == "fast"
 
-        # Switch to @think (treated as slow)
-        mac.handle_instructions("Please reason carefully @think")
+        # Switch to /think (treated as slow)
+        mac.handle_instructions("Please reason carefully /think")
         assert mac.chat_history.speed_level == "slow"
 
         # Start a new conversation and verify defaults restored

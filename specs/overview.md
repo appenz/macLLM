@@ -6,24 +6,22 @@ It is written in Python with a UI in macOS Cocoa via the PyObjC bridge.
 A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (e.g. "2").
 - A collection of requests/responses are called a **Conversation**.
 - A user can provide context, e.g. a file or data in the clipboard. Context is for the entire conversation.
-- The collection of all Conversations is called the **ChatHistory**.
-- A **Request** is an ephemeral object that contains all the data that needs to be sent to the LLM, including context.
+- The collection of all Conversations is called the **ConversationHistory**.
+- A **UserRequest** is an ephemeral object that processes @tags and contains all data sent to the LLM.
 
 ## Code Structure
 
-- **MacLLM** is the base class that implements the tool (`macllm.py`)
-    - The **ChatHistory**, **Conversations** and **Requests** are defined in (`chat_history.py`) 
-- **MacLLMUI** is the Cocoa UI for MacLLM. All UI macOS UI code is in `ui` 
-    - Main parts are the input area (bottom), main text area showing the conversation (middle) and the icon bar at thet top.
-- **Core building blocks** are in the `core/` subdirectory
-- **Plugins** that add additional `@` tags (e.g. `@clipboard`, file completion) are in the `tags` directory
-- **Connectors** to LLMs and other models are in the `models/` directory
+- **MacLLM** (`macllm.py`) - Main class that coordinates requests, conversation history, and UI
+- **MacLLMUI** (`ui/core.py`) - Cocoa UI implementation with three main areas:
+    - Top bar: icon, context pills, model/token stats
+    - Main text area: scrollable conversation history
+    - Input field: text entry with @tag autocomplete
+- **Core** (`core/`):
+    - `chat_history.py`: `ConversationHistory` (collection) and `Conversation` (individual)
+    - `user_request.py`: `UserRequest` class for processing @tags
+    - `shortcuts.py`: Slash-based user-defined shortcuts loaded from TOML config files (e.g. `/travelinfo`)
+    - `model_connector.py`: Base connector interface
+- **Tags** (`tags/`): Plugin system for @tag expansion (e.g. `@clipboard`, `@file`, `@speed`)
+- **Models** (`models/`): LLM connectors (`openai_connector.py`, `fake_connector.py` for tests)
 
 The code will only ever run on macOS. NEVER write dummy code or stub out code to make it run in other environments.
-
-# UI Layout
-
-The macLLM window has 3 main parts:
-- A top bar with the icon. It shows context for this conversation and statistics
-- The main conversation text area, it shows the conversation history
-- The input area at the bottom

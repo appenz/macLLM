@@ -212,13 +212,22 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
         entries: list[tuple[str, str]] = []  # raw, display
         seen: set[str] = set()
 
-        # 0. If fragment starts with '/' we are completing user-defined shortcuts.
+        # 0. If fragment starts with '/' we are completing user-defined shortcuts
+        #    and plugin-registered commands.
         if fragment.startswith('/'):
             lower = fragment.lower()
+            # Add user-defined shortcuts
             for s in self._shortcuts:
                 if s.lower().startswith(lower) and len(s) > 3:
                     entries.append((s, s))
                     seen.add(s)
+            # Add plugin-registered / commands
+            for tag in self._static_tags:
+                if tag.startswith('/') and tag.lower().startswith(lower) and len(tag) > 3:
+                    plugin = self._prefix_map.get(tag)
+                    display_str = plugin.display_string(tag) if plugin else tag
+                    entries.append((tag, display_str))
+                    seen.add(tag)
             # Limit and show
             entries = entries[:10]
             self._entries = entries
