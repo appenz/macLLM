@@ -12,6 +12,6 @@ class llmConfig:
     
     def __post_init__(self):
         # Validate that the provider exists
-        valid_providers = ["OpenAI", "Fake"]
+        valid_providers = ["OpenAI", "Fake", "Inception"]
         if self.provider not in valid_providers:
             raise ValueError(f"Invalid provider '{self.provider}'. Must be one of: {', '.join(valid_providers)}")

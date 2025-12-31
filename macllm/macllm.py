@@ -16,6 +16,7 @@ from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
 from macllm.models.openai_connector import OpenAIConnector
+from macllm.models.inception_connector import InceptionConnector
 from macllm.core.model_connector import ModelConnector
 from macllm.models.llm_config import llmConfig
 
@@ -25,7 +26,7 @@ from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, 
 # LLM configuration constants for different speed levels
 SLOW_CONFIG = llmConfig(provider="OpenAI", model="gpt-5", reasoning_effort="medium", priority="auto")
 NORMAL_CONFIG = llmConfig(provider="OpenAI", model="gpt-5-chat-latest", reasoning_effort=None, priority="auto")
-FAST_CONFIG = llmConfig(provider="OpenAI", model="gpt-5-nano", reasoning_effort="minimal", priority="auto")
+FAST_CONFIG = llmConfig(provider="Inception", model="mercury", reasoning_effort="minimal", priority="auto")
 
 macLLM = None
 
@@ -163,16 +164,26 @@ class MacLLM:
 
             # Build a real connector for this request when needed.
             # If we are using the lightweight placeholder (base ModelConnector)
-            # or an actual OpenAI connector, build a fresh OpenAI connector
+            # or an actual OpenAI/Inception connector, build a fresh connector
             # from the selected config. Otherwise (e.g. tests using FakeConnector),
             # reuse the injected connector.
-            if isinstance(self.llm, OpenAIConnector) or type(self.llm) is ModelConnector:
-                llm = OpenAIConnector(
-                    model=selected.model,
-                    priority=selected.priority,
-                    reasoning_effort=selected.reasoning_effort,
-                    debug_logger=self.debug_log if self.debug else None,
-                )
+            if isinstance(self.llm, OpenAIConnector) or isinstance(self.llm, InceptionConnector) or type(self.llm) is ModelConnector:
+                if selected.provider == "OpenAI":
+                    llm = OpenAIConnector(
+                        model=selected.model,
+                        priority=selected.priority,
+                        reasoning_effort=selected.reasoning_effort,
+                        debug_logger=self.debug_log if self.debug else None,
+                    )
+                elif selected.provider == "Inception":
+                    llm = InceptionConnector(
+                        model=selected.model,
+                        priority=selected.priority,
+                        reasoning_effort=selected.reasoning_effort,
+                        debug_logger=self.debug_log if self.debug else None,
+                    )
+                else:
+                    llm = self.llm
             else:
                 llm = self.llm
 

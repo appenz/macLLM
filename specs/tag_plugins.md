@@ -57,7 +57,8 @@ class ModelConnector:
 ### Model Connectors
 
 - **OpenAIConnector**: implements OpenAI API for GPT models
-- **Future connectors**: Anthropic, local models, etc.
+- **InceptionConnector**: implements Inception Labs API for Mercury model
+- **FakeConnector**: test connector that records prompts without making API calls
 
 ## Integration
 
