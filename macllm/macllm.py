@@ -17,16 +17,16 @@ from macllm.core.chat_history import ConversationHistory
 from macllm.tags.base import TagPlugin
 from macllm.models.openai_connector import OpenAIConnector
 from macllm.models.inception_connector import InceptionConnector
-from macllm.core.model_connector import ModelConnector
-from macllm.models.llm_config import llmConfig
 
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
 
-# LLM configuration constants for different speed levels
-SLOW_CONFIG = llmConfig(provider="OpenAI", model="gpt-5", reasoning_effort="medium", priority="auto")
-NORMAL_CONFIG = llmConfig(provider="OpenAI", model="gpt-5-chat-latest", reasoning_effort=None, priority="auto")
-FAST_CONFIG = llmConfig(provider="Inception", model="mercury", reasoning_effort="minimal", priority="auto")
+# Provider mapping for speed levels
+SPEED_PROVIDERS = {
+    'fast': InceptionConnector,
+    'normal': OpenAIConnector,
+    'slow': OpenAIConnector,
+}
 
 macLLM = None
 
@@ -112,11 +112,10 @@ class MacLLM:
         self.conversation_history = ConversationHistory()
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         
-        # Initialize lightweight placeholder for UI using default speed (Normal).
-        # This ensures the top bar shows the correct model before the first request.
-        self.llm = ModelConnector(model=NORMAL_CONFIG.model)
-        self.llm.provider = NORMAL_CONFIG.provider
+        # Initialize metadata for UI display (default speed is Normal)
+        self.llm_metadata = {'provider': 'OpenAI', 'model': 'gpt-5-chat-latest', 'tokens': 0}
         self._prefix_index = []
+        self.test_provider = None
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -149,49 +148,20 @@ class MacLLM:
             )
             self.debug_log(f'Request #{self.req}: {request_text}', 1)
 
-            # Step 5: Select LLM config based on conversation/request speed and create connector
+            # Step 5: Select provider and speed level
             # If the request has a speed preference from tags, update the conversation's sticky setting now
             if request.speed_level is not None:
                 self.chat_history.speed_level = request.speed_level
 
             speed = (self.chat_history.speed_level or "normal").lower()
-            if speed == "fast":
-                selected = FAST_CONFIG
-            elif speed == "slow":
-                selected = SLOW_CONFIG
-            else:
-                selected = NORMAL_CONFIG
-
-            # Build a real connector for this request when needed.
-            # If we are using the lightweight placeholder (base ModelConnector)
-            # or an actual OpenAI/Inception connector, build a fresh connector
-            # from the selected config. Otherwise (e.g. tests using FakeConnector),
-            # reuse the injected connector.
-            if isinstance(self.llm, OpenAIConnector) or isinstance(self.llm, InceptionConnector) or type(self.llm) is ModelConnector:
-                if selected.provider == "OpenAI":
-                    llm = OpenAIConnector(
-                        model=selected.model,
-                        priority=selected.priority,
-                        reasoning_effort=selected.reasoning_effort,
-                        debug_logger=self.debug_log if self.debug else None,
-                    )
-                elif selected.provider == "Inception":
-                    llm = InceptionConnector(
-                        model=selected.model,
-                        priority=selected.priority,
-                        reasoning_effort=selected.reasoning_effort,
-                        debug_logger=self.debug_log if self.debug else None,
-                    )
-                else:
-                    llm = self.llm
-            else:
-                llm = self.llm
-
-            # Expose the active connector to the UI for accurate provider/model/tokens display
-            self.llm = llm
+            
+            # Use test provider if set (for tests), otherwise use speed-based provider
+            provider_class = self.test_provider if self.test_provider else SPEED_PROVIDERS.get(speed, OpenAIConnector)
+            debug_logger = self.debug_log if self.debug else None
 
             # Step 6: Decide whether to include image
             last_image = self.chat_history.get_context_last_image()
+            image_path = None
             if last_image is not None:
                 image_path = "/tmp/macllm.png"
                 try:
@@ -200,11 +170,14 @@ class MacLLM:
                 except Exception as e:
                     self.debug_exception(e)
                     return None
-                out = llm.generate_with_image(request_text, image_path)
-            else:
-                out = llm.generate(request_text)
-                if isinstance(out, str):
-                    out = out.strip()
+            
+            out, metadata = provider_class.generate(request_text, speed=speed, image_path=image_path, debug_logger=debug_logger)
+            
+            # Update metadata for UI display
+            self.llm_metadata = metadata
+            
+            if isinstance(out, str):
+                out = out.strip()
 
             if out is not None:
                 self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"

@@ -9,8 +9,8 @@ from macllm.models.openai_connector import OpenAIConnector
 @pytest.fixture
 def app_fake():
     app = create_macllm(debug=True)
-    # Swap in fake connector
-    app.llm = FakeConnector()
+    # Use fake provider for tests
+    app.test_provider = FakeConnector
     return app
 
 

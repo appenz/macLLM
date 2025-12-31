@@ -9,7 +9,7 @@ class TestStickySpeedPreference:
         mac = create_macllm(debug=False, start_ui=False)
 
         # Use fake provider so tests run offline
-        mac.llm = FakeConnector()
+        mac.test_provider = FakeConnector
 
         # Default is normal at conversation start
         assert mac.chat_history.speed_level == "normal"

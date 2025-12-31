@@ -1,32 +1,43 @@
 import base64
 import os
 import openai
-from macllm.core.model_connector import ModelConnector
 
-class OpenAIConnector(ModelConnector):
+class OpenAIConnector:
     """OpenAI API connector for GPT models."""
 
-    def __init__(self, model, priority=None, reasoning_effort=None, debug_logger=None):
-        super().__init__(model)
-        self.provider = "OpenAI"
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        if self.openai_api_key is None:
+    @classmethod
+    def _get_client(cls):
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key is None:
             raise Exception("OPENAI_API_KEY not found in environment variables")
-        self.client = openai.OpenAI(api_key=self.openai_api_key)
-        self.debug_logger = debug_logger
-        self.priority = priority
-        self.reasoning_effort = reasoning_effort
+        return openai.OpenAI(api_key=api_key)
 
-    def generate(self, text: str) -> str:
-        """Generate text response using OpenAI API."""
+    @classmethod
+    def _encode_image(cls, image_path: str) -> str:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+
+    @classmethod
+    def _get_config(cls, speed: str):
+        speed = speed.lower()
+        if speed == "fast":
+            return {"model": "gpt-5-nano", "priority": "auto", "reasoning_effort": "minimal"}
+        elif speed == "slow":
+            return {"model": "gpt-5", "priority": "auto", "reasoning_effort": "medium"}
+        else:
+            return {"model": "gpt-5-chat-latest", "priority": "auto", "reasoning_effort": None}
+
+    @classmethod
+    def _generate(cls, text: str, model: str, priority=None, reasoning_effort=None, debug_logger=None) -> tuple[str, dict]:
+        client = cls._get_client()
         extra_args = {}
-        if self.priority is not None:
-            extra_args["service_tier"] = self.priority
-        if self.reasoning_effort is not None:
-            extra_args["reasoning_effort"] = self.reasoning_effort
+        if priority is not None:
+            extra_args["service_tier"] = priority
+        if reasoning_effort is not None:
+            extra_args["reasoning_effort"] = reasoning_effort
 
-        c = self.client.chat.completions.create(
-            model=self.model,
+        c = client.chat.completions.create(
+            model=model,
             messages=[
                 {
                     "role": "user",
@@ -36,32 +47,35 @@ class OpenAIConnector(ModelConnector):
             **extra_args
         )
 
+        token_count = 0
         if hasattr(c, "usage") and c.usage:
-            # Chat completions API usage has total/input/output tokens
             total_tokens = getattr(c.usage, "total_tokens", None)
             if total_tokens is not None:
-                self.token_count = total_tokens
+                token_count = total_tokens
 
-        # Get the response content from the first choice
+        response_text = ""
         if c.choices and len(c.choices) > 0:
-            return c.choices[0].message.content
-        return ""
-    
-    def _encode_image(self, image_path: str) -> str:
-        """Encode image to base64 string."""
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
+            response_text = c.choices[0].message.content or ""
 
-    def generate_with_image(self, text: str, image_path: str) -> str:
-        """Generate text response with image input using OpenAI API."""
-        base64_image = self._encode_image(image_path)
+        metadata = {
+            'provider': 'OpenAI',
+            'model': model,
+            'tokens': token_count
+        }
+
+        return response_text, metadata
+
+    @classmethod
+    def _generate_with_image(cls, text: str, image_path: str, model: str, priority=None, reasoning_effort=None, debug_logger=None) -> tuple[str, dict]:
+        client = cls._get_client()
+        base64_image = cls._encode_image(image_path)
         if base64_image is None:
-            if self.debug_logger:
-                self.debug_logger("Image encoding failed.", 2)
-            return None
+            if debug_logger:
+                debug_logger("Image encoding failed.", 2)
+            return None, {'provider': 'OpenAI', 'model': model, 'tokens': 0}
 
-        c = self.client.responses.create(
-            model=self.model,
+        c = client.responses.create(
+            model=model,
             input=[
                 {
                     "role": "user",
@@ -76,12 +90,28 @@ class OpenAIConnector(ModelConnector):
             ],
         )
 
+        token_count = 0
         if hasattr(c, "usage") and c.usage:
             total_tokens = getattr(c.usage, "total_tokens", None)
             if total_tokens is not None:
-                self.token_count = total_tokens
+                token_count = total_tokens
 
         generated_text = getattr(c, "output_text", None)
-        if self.debug_logger and generated_text is not None:
-            self.debug_logger(f"Generated Text: {generated_text}")
-        return generated_text
+        if debug_logger and generated_text is not None:
+            debug_logger(f"Generated Text: {generated_text}")
+
+        metadata = {
+            'provider': 'OpenAI',
+            'model': model,
+            'tokens': token_count
+        }
+
+        return generated_text, metadata
+
+    @classmethod
+    def generate(cls, text: str, speed: str = "normal", image_path: str = None, debug_logger=None) -> tuple[str, dict]:
+        config = cls._get_config(speed)
+        if image_path:
+            return cls._generate_with_image(text, image_path, **config, debug_logger=debug_logger)
+        else:
+            return cls._generate(text, **config, debug_logger=debug_logger)

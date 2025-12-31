@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import Mock, patch
 from macllm.ui.core import MacLLMUI
 from macllm.ui.input_field import InputFieldHandler
+from macllm.models.fake_connector import FakeConnector
 
 def test_clipboard_tag_plugin_loaded(app_fake):
     # plugin loaded?
@@ -13,7 +14,7 @@ def test_clipboard_tag_context_block(app_fake):
     app_fake.handle_instructions("Summarize the text in @clipboard")
 
     # ensure prompt recorded by fake connector contains context block
-    ctx = app_fake.llm.get_context_blocks()
+    ctx = FakeConnector.get_context_blocks()
     assert "clipboard" in ctx
     assert "TEST_TOKEN" in ctx["clipboard"]
 

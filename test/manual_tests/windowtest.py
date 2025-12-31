@@ -15,7 +15,7 @@ context = "France,[h] officially the French Republic,[i] is a country primarily 
 
 def main():
     app = create_macllm(debug=True, start_ui=False)
-    app.llm = FakeConnector()
+    app.test_provider = FakeConnector
 
     app.chat_history.add_chat_entry("user", user, user)
     app.chat_history.add_chat_entry("assistant", agent, agent)

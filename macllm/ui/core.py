@@ -447,8 +447,10 @@ class MacLLMUI:
         if not hasattr(self, "top_bar_text_view"):
             return
 
-        provider, model = self.macllm.llm.get_provider_model()
-        tokens = self.macllm.llm.get_token_count()
+        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'tokens': 0})
+        provider = metadata.get('provider', 'Unknown')
+        model = metadata.get('model', 'unknown')
+        tokens = metadata.get('tokens', 0)
 
         # Determine mode from conversation speed
         speed = getattr(self.macllm.chat_history, "speed_level", "normal") or "normal"

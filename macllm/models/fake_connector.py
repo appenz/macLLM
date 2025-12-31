@@ -1,28 +1,35 @@
-from macllm.core.model_connector import ModelConnector
+import re
 
-
-class FakeConnector(ModelConnector):
+class FakeConnector:
     """Minimal connector that records prompts for tests."""
 
-    def __init__(self, model: str = "fake-model"):
-        super().__init__(model)
-        self.last_text = None
-        self.last_image_path = None
+    last_text = None
+    last_image_path = None
 
-    def generate(self, text: str) -> str:  # noqa: D401
-        self.last_text = text
-        return "MOCK_RESPONSE"
+    @classmethod
+    def _generate(cls, text: str, model: str, image_path: str = None) -> tuple[str, dict]:
+        cls.last_text = text
+        cls.last_image_path = image_path
+        metadata = {
+            'provider': 'Fake',
+            'model': model,
+            'tokens': 0
+        }
+        return "MOCK_RESPONSE", metadata
 
-    def generate_with_image(self, text: str, image_path: str) -> str:  # noqa: D401
-        self.last_text = text
-        self.last_image_path = image_path
-        return "MOCK_RESPONSE"
+    @classmethod
+    def generate(cls, text: str, speed: str = "normal", image_path: str = None, debug_logger=None) -> tuple[str, dict]:
+        speed = speed.lower()
+        if speed == "fast":
+            model = "fake-model-fast"
+        elif speed == "slow":
+            model = "fake-model-slow"
+        else:
+            model = "fake-model"
+        return cls._generate(text, model, image_path)
 
-    # ------------------------------------------------------------------
-    # Test helpers
-    # ------------------------------------------------------------------
-
-    def get_context_blocks(self):  # pragma: no cover
+    @classmethod
+    def get_context_blocks(cls):
         """Return a dict of {context_name: context_contents} parsed from the
         *last_text* prompt.
 
@@ -37,14 +44,12 @@ class FakeConnector(ModelConnector):
         assertions on them without re-implementing the parsing logic.
         """
 
-        if not self.last_text:
+        if not cls.last_text:
             return {}
-
-        import re
 
         pattern = re.compile(
             r"--- context:(?P<name>[^\s]+) ---\n(?P<content>.*?)\n--- end context:\1 ---",
             re.DOTALL,
         )
 
-        return {m.group("name"): m.group("content") for m in pattern.finditer(self.last_text)} 
+        return {m.group("name"): m.group("content") for m in pattern.finditer(cls.last_text)}
