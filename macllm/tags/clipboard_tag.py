@@ -30,8 +30,8 @@ class ClipboardTag(TagPlugin):
             content,                # actual text
             icon="📋",
         )
-        # Replace tag with the context name (e.g. clipboard or clipboard-1)
-        return f"context:{context_name}" 
+        # Return context block format for embedding in message
+        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---" 
     
     def display_string(self, suggestion: str) -> str:
         return "📋" + suggestion

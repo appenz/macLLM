@@ -190,19 +190,19 @@ class MainTextHandler:
         text_view.setString_("")
         text_view.setFont_(NSFont.systemFontOfSize_(13.0))
         
-        # Get chat history entries
-        chat_history = macllm.chat_history.chat_history
+        # Get displayable messages (user and assistant only)
+        messages = macllm.chat_history.get_displayable_messages()
         
         # Define colors for different roles
         user_color = NSColor.blackColor()  # Black
         assistant_color = NSColor.darkGrayColor()  # Dark Grey
         
-        # Add each chat entry with appropriate color
-        for i, entry in enumerate(chat_history):
+        # Add each message with appropriate color
+        for i, message in enumerate(messages):
             # Track start index to allow highlighting
             start_pos = text_view.textStorage().length()
-            role = entry['role']
-            text = entry['text']
+            role = message['role']
+            text = macllm.chat_history.get_display_content(message)
             
             # Choose color based on role
             if role == 'user':
@@ -221,7 +221,7 @@ class MainTextHandler:
                 MainTextHandler.append_colored_text(text_view, prefix, color)
             
             # Add message content and optional separator + highlight
-            if i < len(chat_history) - 1:
+            if i < len(messages) - 1:
                 if role == 'user':
                     font = NSFont.systemFontOfSize_(13.0)
                     shortcuts_list = [s.trigger for s in ShortCut.shortcuts]

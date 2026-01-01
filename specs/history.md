@@ -1,66 +1,139 @@
-# macLLM Conversation History & Requests
+# macLLM Conversation History & Messages
 
 ## Key Concepts
 
-- **Request** - An individual request to the LLM consisting of a prompt and response
-- **Conversation** - A series of user inputs and LLM responses, plus context for these inputs
+- **Message** - A single turn in a conversation (user input, assistant response, system prompt, or tool result)
+- **Conversation** - A series of messages in OpenAI-compatible format, plus display metadata
 - **ConversationHistory** - The collection of all previous Conversations
+
+## Message Format
+
+Messages follow the OpenAI chat completions format. The `content` field contains the **expanded** text (with context embedded), not the original user input:
+
+```python
+{"role": "user", "content": "Summarize \n\n--- context:clipboard ---\nHello world\n--- end context:clipboard ---"}
+{"role": "assistant", "content": "The clipboard contains a greeting."}
+{"role": "system", "content": "You are a helpful assistant..."}
+{"role": "tool", "content": "..."}  # Future: for agentic features
+```
+
+The original user input (`"Summarize @clipboard"`) is stored separately in `display_metadata`.
+
+### Message Roles
+
+| Role | Sent to LLM | Shown in UI | Description |
+|------|-------------|-------------|-------------|
+| `system` | Yes | No | System prompt, instructions for the LLM |
+| `user` | Yes | Yes | User input |
+| `assistant` | Yes | Yes | LLM responses |
+| `tool` | Yes | No | Tool/function call results (future) |
+
+## Conversation Class
+
+A Conversation maintains two parallel data structures:
+
+### 1. Messages Array (OpenAI-compatible)
+
+Pure OpenAI format that can be passed directly to LiteLLM or agent frameworks:
+
+```python
+self.messages = [
+    {"role": "system", "content": "You are a helpful assistant..."},
+    {"role": "user", "content": "Summarize this\n\n--- context:clipboard ---\nHello world\n--- end context:clipboard ---"},
+    {"role": "assistant", "content": "The text says hello world."},
+]
+```
+
+### 2. Display Metadata (keyed by content hash)
+
+UI-specific data stored separately, linked by hash of message content:
+
+```python
+self.display_metadata = {
+    "a1b2c3d4": {  # hash of role + content
+        "display_content": "Summarize this @clipboard",  # Original user input before expansion
+        "timestamp": 1234567890.0,
+        "context_refs": ["clipboard"]  # For UI context pills
+    },
+    ...
+}
+```
+
+The hash is computed as: `sha256(f"{role}:{content}")[:16]`
 
 ## UserRequest Class
 
-Gathers all the data for a single request to the LLM.
+Ephemeral object that processes a single user input:
 
 ```python
 class UserRequest:
     def __init__(self, original_prompt: str):
-        self.original_prompt = original_prompt
-        self.expanded_prompt = original_prompt  # Current working text
-        self.context = ""                       # All the relevant text context for this request as a text string
-        self.image = None                       # Image that is sent as part of this request, or None.
+        self.original_prompt = original_prompt  # What user typed
+        self.expanded_prompt = original_prompt  # After tag expansion (context embedded)
+        self.speed_level = None                 # Speed preference if /fast, /slow used
 ```
 
-## Conversation
+## Conversation Methods
 
-A Conversation object maintains two separate lists:
+### Message Management
 
-- **Chat history**: List of dicts with fields:
-  - `role`: 'user' or 'assistant'
-  - `text`: The unexpanded text as typed by user or response from assistant
-  - `expanded_text`: The text with expanded shortcuts and expanded context references
-  - `timestamp`: When the message was created
+- `add_user_message(display_content, expanded_content)`: Add user message, store display metadata
+- `add_assistant_message(content)`: Add assistant response
+- `add_system_message(content)`: Add/update system prompt (typically only at conversation start)
 
-- **Context**: List of dicts with fields:
-  - `name`: Unique identifier for this context block
-  - `source`: Original source (file path, URL, etc.)
-  - `type`: one of "url", "path", "clipboard", "image"
-  - `context`: The actual content/context string
+### For LLM Calls
 
-Context is not specific to a Request, but is for the conversation as a whole.
+- `get_messages_for_llm() -> list[dict]`: Returns pure OpenAI-format messages array
 
-### Chat Methods
+### For UI Display
 
-- `add_chat_entry(role, text, expanded_text)`: Adds conversation turn
-- `get_chat_history_original()`: returns the unexpanded chat history to show the user as a string
-- `get_chat_history_expanded()`: returns the fully expanded chat history for the LLM as a string
+- `get_displayable_messages() -> list[dict]`: Returns only user/assistant messages
+- `get_display_content(message) -> str`: Returns original user input (before expansion) for a message
 
-### Context Methods
+### Context Tracking (for UI pills)
 
-- `add_context(suggested_name, source, type, context)`: Adds context entry, returns actual name
-  - Will not add a duplicate, just return the correct name for the duplicate
-- `get_context_history_text()`: Returns context history as one large string except images
-- `get_context_last_image()`: Returns only the last image in the context history
+- `context_history`: List tracking context sources for UI display
+- `add_context(name, source, type, content)`: Register context for UI pills
 
-### General Methods
+### General
 
-- `reset()`: Clears both lists, restores default message
+- `reset()`: Clear messages, restore default welcome message
 
-### Notes
+## Context Embedding
 
-- **Storage**: In-memory only, no persistence.
-- **Images** are stored in the normal context list as type "image" but handled differently.
-  - The reason is that the API of most LLMs can't accept an image as part of the main request but instead needs it as a POST because of this images are not automatically returned by `get_context_history_text()` in the large text block but via `get_context_last_image()`
-  - Images are also stored and returned as binary for efficiency
+Context (files, clipboard, URLs) is embedded directly in the user message content:
+
+```
+User types: "Summarize @clipboard"
+
+Stored in messages as:
+{
+    "role": "user", 
+    "content": "Summarize \n\n--- context:clipboard ---\nActual clipboard text here\n--- end context:clipboard ---"
+}
+
+Display metadata stores:
+{
+    "display_content": "Summarize @clipboard",
+    ...
+}
+```
+
+The UI shows "Summarize @clipboard" but the LLM receives the expanded version with actual content.
 
 ## ConversationHistory
 
-The ConversationHistory contains a list of Conversation objects. The current conversation is the last object in the list. 
+Container for all conversations:
+
+```python
+class ConversationHistory:
+    conversations: list[Conversation]
+    
+    def add_conversation(self) -> Conversation
+    def get_current_conversation() -> Conversation
+```
+
+## Notes
+
+- **Storage**: In-memory only, no persistence
+- **System prompt**: Stored as first message in messages array with role "system"

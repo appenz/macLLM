@@ -6,73 +6,65 @@
 class MacLLMPlugin:
     # Required hooks
     def get_prefixes(self) -> list[str]:  # e.g. ["@http://", "@https://", "@~"]
-        pass
-
     def expand(self, tag: str, request: UserRequest) -> None:
-        pass
-
     # Optional config-time hooks (processed while reading shortcut files)
     def get_config_prefixes(self) -> list[str]:
-        return []
-
     def on_config_tag(self, tag: str, value: str) -> None:
-        pass
-
     # Optional dynamic-autocomplete hooks (for UI suggestions)
     def supports_autocomplete(self) -> bool:
-        return False
-
     def autocomplete(self, fragment: str, max_results: int = 10) -> list[str]:
-        return []
-
     def display_string(self, suggestion: str) -> str:
-        return suggestion
 ```
 
 ## Plugin Examples
 
-- **URLPlugin**: handles `@http://`, `@https://` → fetches web content, adds to context
-- **FilePlugin**: config tag `@IndexFiles` indexes `.txt`/`.md` directories; typing `@` + ≥3 chars shows matching files, selecting one inserts its contents into context
-- **ClipboardPlugin**: handles `@clipboard` → gets clipboard content, adds to context
-- **ImagePlugin**: handles `@selection`, `@window` → captures screenshots, sets `needs_image=True`
+- **URLTag**: handles `@http://`, `@https://` → fetches web content, embeds in message
+- **FileTag**: config tag `@IndexFiles` indexes directories; `@path` references embed file contents
+- **ClipboardTag**: handles `@clipboard` → gets clipboard content, embeds in message
+- **SpeedTag**: handles `/fast`, `/slow`, `/think` → sets speed preference for the request
 
-## Model Architecture
+## Context Embedding
 
-### Base Model Connector
+Plugins that add context should:
+
+1. Fetch the content (file, URL, clipboard, etc.)
+2. Add to conversation's context_history (for UI pills)
+3. Return the context block to embed in the message:
 
 ```python
-class ModelConnector:
-    def __init__(self, model: str, temperature: float = 0.0):
-        self.model = model  # Required parameter - no default
-        self.temperature = temperature
-        self.context_limit = 10000
-    
-    def generate(self, text: str) -> str:
-        pass
-    
-    def generate_with_image(self, text: str, image_path: str) -> str:
-        pass
+def expand(self, tag: str, conversation, request) -> str:
+    content = self.fetch_content(tag)
+    name = conversation.add_context(
+        suggested_name="clipboard",
+        source="clipboard",
+        context_type="clipboard",
+        context=content
+    )
+    # Return context block that gets embedded in the user message
+    return f"\n\n--- context:{name} ---\n{content}\n--- end context:{name} ---"
 ```
-
-### Model Connectors
-
-- **OpenAIConnector**: implements OpenAI API for GPT models
-- **InceptionConnector**: implements Inception Labs API for Mercury model
-- **FakeConnector**: test connector that records prompts without making API calls
 
 ## Integration
 
 - Main MacLLM class maintains list of registered plugins
-- Main MacLLM class uses ModelConnector for LLM interactions
-- `handle_instructions()` creates UserRequest object, passes to plugins
-- Plugins modify the request object directly (no return values)
-- Each plugin is self-contained and can be tested independently
-- Easy to add new expansion types without modifying core logic
+- `handle_instructions()` creates UserRequest, passes to plugins via `process_tags()`
+- Plugins return replacement strings that get embedded in the message content
+- Display metadata preserves the original user input (with @tags visible)
 
-## Benefits
+## LLM Service
 
-- No more tuple returns - cleaner interface
-- Centralized state management in UserRequest
-- Plugins can modify multiple aspects of the request
-- Model abstraction allows easy switching between LLM providers
-- More object-oriented and maintainable 
+LLM calls are handled by `llm_service.py` which wraps LiteLLM:
+
+```python
+from macllm.core.llm_service import generate
+
+response, metadata = generate(
+    messages=conversation.get_messages_for_llm(),
+    speed="normal"
+)
+```
+
+Speed levels map to LiteLLM model strings:
+- `fast` → Fast/cheap model
+- `normal` → Default balanced model  
+- `slow` → High-capability model with reasoning

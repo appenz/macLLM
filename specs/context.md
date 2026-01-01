@@ -1,17 +1,60 @@
 # Context Overview
 
-A conversation with the LLM can have a number of context items. A context item 
-is added every time the user refers to an external source in the conversation 
-or the model uses a tool to find relevant context. Once context is added to a 
-conversation it is never removed.
+A conversation with the LLM can have context items. A context item is added when the user references an external source (e.g., `@clipboard`, `@file`) or when a tool fetches relevant data.
 
-Context is stored in the conversation object in chat_history.py, which has 
-functions to add_context which picks a unique name for the context that 
-from then on can be user to refer to it.
+## How Context Works
 
-Context sent to the LLM for every subsequent query.
+When a user includes a context tag like `@clipboard` in their message:
 
-In the UI, context is shown in the top bar in a minaturized form.
+1. The tag plugin fetches the content (clipboard text, file contents, etc.)
+2. The content is embedded directly in the user message using a structured format
+3. The original tag is preserved in display metadata for UI rendering
 
-When a new conversation is started, any previous context is ignored.
+### Context Format in Messages
 
+Context is embedded in the message content:
+
+```
+--- context:clipboard ---
+Actual clipboard content here
+--- end context:clipboard ---
+```
+
+Example flow:
+- User types: `Summarize the text in @clipboard`
+- Message stored with expanded content including the context block
+- UI displays: `Summarize the text in @clipboard` (from display metadata)
+
+## Context Tracking for UI
+
+The Conversation maintains a `context_history` list for UI display purposes (context pills in the top bar):
+
+```python
+context_history = [
+    {
+        "name": "clipboard",
+        "source": "clipboard",
+        "type": "clipboard",
+        "context": "Hello world",
+        "icon": ""
+    },
+]
+```
+
+This is separate from the messages array and used only for:
+- Rendering context pills in the UI top bar
+- Showing previews of context content
+- Tracking what external sources have been referenced
+
+## Context Lifetime
+
+- Context is embedded in the specific user message where it was referenced
+- Since the full message history is sent to the LLM, context remains available for the entire conversation
+- When a new conversation starts, there is no prior context
+
+## Context Names
+
+When context is added, a unique name is assigned:
+- First clipboard reference becomes `clipboard`
+- If a name already exists, a suffix is added: `clipboard-1`, `clipboard-2`
+- Names are used in the context block markers

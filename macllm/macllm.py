@@ -14,36 +14,24 @@ from macllm.ui import MacLLMUI  # noqa: F401
 
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
+from macllm.core.llm_service import generate as llm_generate
 from macllm.tags.base import TagPlugin
-from macllm.models.openai_connector import OpenAIConnector
-from macllm.models.inception_connector import InceptionConnector
 
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
-
-# Provider mapping for speed levels
-SPEED_PROVIDERS = {
-    'fast': InceptionConnector,
-    'normal': OpenAIConnector,
-    'slow': OpenAIConnector,
-}
 
 macLLM = None
 
 start_token = "@@"
 alias_token = "@"
 
-system_prompt = """
-You are a helpful assistant.
+SYSTEM_PROMPT = """You are a helpful assistant.
 - If the request refers to a context:... this is a reference to a context block.
 - In most cases, you dont need to mention the context explicitly.
 - If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
 - If asked to just look at a context, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
-Conversation history follows below.
-"""
-
-context_start = "\n\n\n--- context blocks follow below this line ---\n\n\n"
+Conversation history follows below."""
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -115,7 +103,6 @@ class MacLLM:
         # Initialize metadata for UI display (default speed is Normal)
         self.llm_metadata = {'provider': 'OpenAI', 'model': 'gpt-5-chat-latest', 'tokens': 0}
         self._prefix_index = []
-        self.test_provider = None
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -132,46 +119,25 @@ class MacLLM:
                 return None  # Abort on plugin failure
 
             # Step 3: Record user message (original and expanded)
-            self.chat_history.add_chat_entry("user", user_input, request.expanded_prompt)
-
-            context = self.chat_history.get_context_history_text()
-
-            if context:
-                context = "\n" + context_start + context
-
-            # Step 4: Compose full prompt for LLM (context + chat history)
-            request_text = (
-                system_prompt
-                + "\n"
-                + self.chat_history.get_chat_history_expanded()
-                + context
+            self.chat_history.add_user_message(
+                display_content=user_input,
+                expanded_content=request.expanded_prompt,
+                context_refs=[]  # Context refs tracked separately in context_history
             )
-            self.debug_log(f'Request #{self.req}: {request_text}', 1)
 
-            # Step 5: Select provider and speed level
-            # If the request has a speed preference from tags, update the conversation's sticky setting now
+            # Step 4: Get messages array for LLM
+            messages = self.chat_history.get_messages_for_llm()
+            self.debug_log(f'Request #{self.req}: messages={messages}', 1)
+
+            # Step 5: Select speed level
             if request.speed_level is not None:
                 self.chat_history.speed_level = request.speed_level
 
             speed = (self.chat_history.speed_level or "normal").lower()
-            
-            # Use test provider if set (for tests), otherwise use speed-based provider
-            provider_class = self.test_provider if self.test_provider else SPEED_PROVIDERS.get(speed, OpenAIConnector)
             debug_logger = self.debug_log if self.debug else None
 
-            # Step 6: Decide whether to include image
-            last_image = self.chat_history.get_context_last_image()
-            image_path = None
-            if last_image is not None:
-                image_path = "/tmp/macllm.png"
-                try:
-                    with open(image_path, "wb") as img_file:
-                        img_file.write(last_image)
-                except Exception as e:
-                    self.debug_exception(e)
-                    return None
-            
-            out, metadata = provider_class.generate(request_text, speed=speed, image_path=image_path, debug_logger=debug_logger)
+            # Step 6: Call LLM
+            out, metadata = llm_generate(messages, speed=speed, debug_logger=debug_logger)
             
             # Update metadata for UI display
             self.llm_metadata = metadata
@@ -180,9 +146,9 @@ class MacLLM:
                 out = out.strip()
 
             if out is not None:
-                self.chat_history.add_chat_entry("assistant", out, out)  # assistant responses are already "expanded"
+                self.chat_history.add_assistant_message(out)
             else:
-                self.chat_history.add_chat_entry("system", "Error: No output from LLM", "Error: No output from LLM")
+                self.chat_history.add_assistant_message("Error: No output from LLM")
         except Exception as e:
             self.debug_exception(e)
             return None

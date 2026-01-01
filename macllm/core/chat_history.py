@@ -1,33 +1,89 @@
 import time
+import hashlib
 from typing import List, Dict, Optional, Union
+from macllm import macllm
+
+
+def content_hash(role: str, content: str) -> str:
+    """Generate stable hash for message linking."""
+    return hashlib.sha256(f"{role}:{content}".encode()).hexdigest()[:16]
 
 
 class Conversation:
     def __init__(self):
         self.reset()
     
-    def add_chat_entry(self, role: str, text: str, expanded_text: str, context_refs: Optional[List[str]] = None) -> None:
-        """Add a conversation turn to the chat history."""
-        if role not in ['user', 'assistant']:
-            raise ValueError("Role must be either 'user' or 'assistant'")
+    def add_user_message(self, display_content: str, expanded_content: str, context_refs: Optional[List[str]] = None) -> None:
+        """Add a user message with both display and expanded content."""
+        msg_hash = content_hash("user", expanded_content)
         
-        entry = {
-            'role': role,
-            'text': text,
-            'expanded_text': expanded_text,
-            'timestamp': time.time(),
-            'context_refs': context_refs or []
+        message = {
+            "role": "user",
+            "content": expanded_content
         }
-        self.chat_history.append(entry)
+        self.messages.append(message)
+        
+        self.display_metadata[msg_hash] = {
+            "display_content": display_content,
+            "timestamp": time.time(),
+            "context_refs": context_refs or []
+        }
+    
+    def add_assistant_message(self, content: str) -> None:
+        """Add an assistant message."""
+        message = {
+            "role": "assistant",
+            "content": content
+        }
+        self.messages.append(message)
+        
+        msg_hash = content_hash("assistant", content)
+        self.display_metadata[msg_hash] = {
+            "display_content": content,
+            "timestamp": time.time(),
+            "context_refs": []
+        }
+    
+    def add_system_message(self, content: str) -> None:
+        """Add or update system message (typically only at conversation start)."""
+        if self.messages and self.messages[0]["role"] == "system":
+            self.messages[0]["content"] = content
+        else:
+            message = {
+                "role": "system",
+                "content": content
+            }
+            self.messages.insert(0, message)
+    
+    def get_messages_for_llm(self) -> List[Dict]:
+        """Returns pure OpenAI-format messages array for LiteLLM."""
+        return [
+            {"role": m["role"], "content": m["content"]}
+            for m in self.messages
+            if m["role"] in ("system", "user", "assistant")
+        ]
+    
+    def get_displayable_messages(self) -> List[Dict]:
+        """Returns messages for UI rendering (user and assistant only)."""
+        return [
+            m for m in self.messages
+            if m["role"] in ("user", "assistant")
+        ]
+    
+    def get_display_content(self, message: Dict) -> str:
+        """Returns original user input (before expansion) for a message."""
+        msg_hash = content_hash(message["role"], message["content"])
+        metadata = self.display_metadata.get(msg_hash)
+        if metadata:
+            return metadata["display_content"]
+        return message["content"]
     
     def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon = None) -> str:
         """Add context entry, returns the actual name used. Avoids duplicates based on source."""
-        # Check if source already exists
         for ctx in self.context_history:
             if ctx['source'] == source:
                 return ctx['name']
         
-        # Generate unique name if suggested_name already exists
         actual_name = suggested_name
         counter = 1
         
@@ -38,7 +94,6 @@ class Conversation:
         if icon is None:
             icon = ""
 
-        # Add new context entry
         entry = {
             'name': actual_name,
             'source': source,
@@ -49,63 +104,16 @@ class Conversation:
         self.context_history.append(entry)
         return actual_name
     
-    role_icons = {
-        'user': 'User: ',
-        'assistant': 'Assistant: ',
-        'system': 'System: ',
-    }
-
-    def get_chat_history_original(self) -> str:
-        """Returns the unexpanded chat history to show the user as a string."""
-        formatted_history = []
-        for entry in self.chat_history:
-            role = entry['role']
-            text = entry['text']
-            formatted_history.append(f"{self.role_icons[role]} {text}")
-        return "\n\n".join(formatted_history)
-    
-    def get_chat_history_expanded(self) -> str:
-        """Returns the fully expanded chat history for the LLM as a string."""
-        formatted_history = []
-        for entry in self.chat_history:
-            role = entry['role'].capitalize()
-            expanded_text = entry['expanded_text']
-            formatted_history.append(f"{role}: {expanded_text}")
-        return "\n".join(formatted_history)
-    
-    def get_context_history_text(self) -> str:
-        """Returns context history as one large string (excluding images)."""
-        text_parts = []
-        for ctx in self.context_history:
-            if ctx['type'] != 'image':
-                context_name = ctx['name']
-                text_parts.append(
-                    f"--- context:{context_name} ---\n"
-                    f"{ctx['context']}\n"
-                    f"--- end context:{context_name} ---\n"
-                )
-        return "\n".join(text_parts)
-    
-    def get_context_last_image(self) -> Optional[bytes]:
-        """Returns only the last image in the context history."""
-        for ctx in reversed(self.context_history):
-            if ctx['type'] == 'image':
-                return ctx['context']
-        return None
-    
     def reset(self) -> None:
-        """Clears both lists, restores default message."""
-        self.chat_history = []
+        """Clears messages and metadata, restores default welcome message."""
+        self.messages = []
+        self.display_metadata = {}
         self.context_history = []
-        # Conversation-level defaults
         self.speed_level = "normal"
-        # Add default welcome message
-        self.add_chat_entry(
-            role="assistant",
-            text="How can I help you?",
-            expanded_text="How can I help you?",
-            context_refs=[]
-        ) 
+        
+        self.add_system_message(macllm.SYSTEM_PROMPT)
+        
+        self.add_assistant_message("How can I help you?")
 
 
 class ConversationHistory:
@@ -123,4 +131,4 @@ class ConversationHistory:
         """Return the most recent Conversation object, or None if none exists."""
         if self.conversations:
             return self.conversations[-1]
-        return None 
+        return None

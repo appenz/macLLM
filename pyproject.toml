@@ -7,11 +7,13 @@ requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.12.3",
     "certifi>=2024.12.14",
+    "litellm>=1.0.0",
     "openai[realtime]>=1.54.4",
     "pyobjc>=10.3.1",
     "pytest>=8.3.5",
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
+    "smolagents>=0.1.0",
 ]
 
 

@@ -502,7 +502,8 @@ class MacLLMUI:
         if self.browsing_history:
             return
         self.browsing_history = True
-        self.history_index = max(0, len(self.macllm.chat_history.chat_history) - 1)
+        messages = self.macllm.chat_history.get_displayable_messages()
+        self.history_index = max(0, len(messages) - 1)
         # Focus main area and highlight
         if hasattr(self, "text_area"):
             self.text_area.window().makeFirstResponder_(self.text_area)
@@ -517,15 +518,19 @@ class MacLLMUI:
     def copy_current_history_to_clipboard(self):
         """Copy the selected history entry (raw text only) to the clipboard."""
         try:
-            entry = self.macllm.chat_history.chat_history[self.history_index]
-            self.write_clipboard(entry.get("text", ""))
+            messages = self.macllm.chat_history.get_displayable_messages()
+            message = messages[self.history_index]
+            text = self.macllm.chat_history.get_display_content(message)
+            self.write_clipboard(text)
         except IndexError:
             pass
 
     def insert_current_history_into_input(self):
         """Paste selected history entry into the input field and exit browsing."""
         try:
-            entry_text = self.macllm.chat_history.chat_history[self.history_index].get("text", "")
+            messages = self.macllm.chat_history.get_displayable_messages()
+            message = messages[self.history_index]
+            entry_text = self.macllm.chat_history.get_display_content(message)
             if hasattr(self, "input_field") and self.input_field:
                 InputFieldHandler.clear_input_field(self.input_field)
                 self.input_field.insertText_(entry_text)

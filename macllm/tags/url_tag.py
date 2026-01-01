@@ -24,7 +24,7 @@ class URLTag(TagPlugin):
             "url",
             content,
         )
-        return f"context:{context_name}"
+        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---"
 
     # ------------------------------------------------------------------
     # Helpers
