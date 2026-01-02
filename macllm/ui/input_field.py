@@ -22,6 +22,7 @@ from macllm.ui.tag_render import (
     build_input_attributed_with_caret,
 )
 from macllm.core.shortcuts import ShortCut
+from macllm.core.llm_service import get_model_for_speed
 import objc
 
 TAG_ATTR_NAME_CONST = TAG_ATTR_NAME
@@ -141,11 +142,13 @@ class InputFieldDelegate(NSObject):
                         # Mode switches: Cmd-1 fast, Cmd-2 normal, Cmd-3 slow
                         if key in ('1', '2', '3'):
                             if key == '1':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'fast'
+                                new_speed = 'fast'
                             elif key == '2':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'normal'
-                            elif key == '3':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'slow'
+                                new_speed = 'normal'
+                            else:
+                                new_speed = 'slow'
+                            self.macllm_ui.macllm.chat_history.speed_level = new_speed
+                            self.macllm_ui.macllm.llm_metadata['model'] = get_model_for_speed(new_speed)
                             # Refresh the top bar immediately
                             self.macllm_ui.update_top_bar_text()
                             return True

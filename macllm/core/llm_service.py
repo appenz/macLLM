@@ -34,6 +34,13 @@ MODELS = {
     ) if _openai_api_key else None,
 }
 
+def get_model_for_speed(speed: str) -> str:
+    model_obj = MODELS.get(speed.lower(), MODELS['normal'])
+    if model_obj is None:
+        return "unknown"
+    return model_obj.model_id
+
+
 def generate(messages: list[dict], speed: str = "normal", debug_logger=None) -> tuple[str, dict]:
     model_obj = MODELS.get(speed.lower(), MODELS['normal'])
     
