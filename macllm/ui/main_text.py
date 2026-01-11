@@ -202,7 +202,7 @@ class MainTextHandler:
             # Track start index to allow highlighting
             start_pos = text_view.textStorage().length()
             role = message['role']
-            text = macllm.chat_history.get_display_content(message)
+            text = message['content']
             
             # Choose color based on role
             if role == 'user':
@@ -269,6 +269,17 @@ class MainTextHandler:
                         (start_pos, end_pos - start_pos)
                     )
 
+        # Add agent status if present (shown at bottom during agent execution)
+        if hasattr(macllm.chat_history, 'agent_status') and macllm.chat_history.agent_status:
+            status_text = "\n\n" + macllm.chat_history.agent_status
+            status_color = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
+            status_font = NSFont.systemFontOfSize_(11.0)
+            status_attributes = {
+                NSForegroundColorAttributeName: status_color,
+                NSFontAttributeName: status_font
+            }
+            status_attr_str = NSAttributedString.alloc().initWithString_attributes_(status_text, status_attributes)
+            text_view.textStorage().appendAttributedString_(status_attr_str)
         
         # Calculate height from the rendered content
         layout_manager = text_view.layoutManager()

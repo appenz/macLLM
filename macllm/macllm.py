@@ -8,13 +8,14 @@
 import os
 import argparse
 import traceback
+import threading
 
 from macllm.core.shortcuts import ShortCut
 from macllm.ui import MacLLMUI  # noqa: F401
 
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
-from macllm.core.llm_service import generate as llm_generate
+from macllm.core.llm_service import get_model_for_speed
 from macllm.tags.base import TagPlugin
 
 from quickmachotkey import quickHotKey, mask
@@ -99,9 +100,10 @@ class MacLLM:
         # Initialize conversation history (multiple conversations)
         self.conversation_history = ConversationHistory()
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
+        self.chat_history.ui_update_callback = self._update_ui_from_callback
         
         # Initialize metadata for UI display (default speed is Normal)
-        self.llm_metadata = {'provider': 'OpenAI', 'model': 'gpt-5-chat-latest', 'tokens': 0}
+        self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'tokens': 0}
         self._prefix_index = []
 
     def handle_instructions(self, user_input):
@@ -116,45 +118,60 @@ class MacLLM:
             request = UserRequest(expanded_input)
             if not request.process_tags(self.plugins, self.chat_history, self.debug_log, self.debug_exception, self._prefix_index):
                 self.debug_log(f'Request #{self.req}: {user_input} - Abort on plugin failure', 1)
-                return None  # Abort on plugin failure
+                return None
 
-            # Step 3: Record user message (original and expanded)
-            self.chat_history.add_user_message(
-                display_content=user_input,
-                expanded_content=request.expanded_prompt,
-                context_refs=[]  # Context refs tracked separately in context_history
-            )
+            # Step 3: Record user message (as typed, for UI display)
+            self.chat_history.add_user_message(user_input)
+            self.debug_log(f'Request #{self.req}: user_input={user_input}', 1)
 
-            # Step 4: Get messages array for LLM
-            messages = self.chat_history.get_messages_for_llm()
-            self.debug_log(f'Request #{self.req}: messages={messages}', 1)
-
-            # Step 5: Select speed level
+            # Step 4: Select speed level
             if request.speed_level is not None:
                 self.chat_history.speed_level = request.speed_level
 
-            speed = (self.chat_history.speed_level or "normal").lower()
-            debug_logger = self.debug_log if self.debug else None
+            # Step 5: Ensure agent exists and update its model if speed changed
+            if self.chat_history.agent is None:
+                self.chat_history._create_agent()
+            elif request.speed_level is not None:
+                self.chat_history._create_agent()
 
-            # Step 6: Call LLM
-            out, metadata = llm_generate(messages, speed=speed, debug_logger=debug_logger)
+            # Step 6: Run agent on background thread
+            def run_agent():
+                try:
+                    self.chat_history.agent_status = ""
+                    self._update_ui_from_callback()
+                    
+                    result = self.chat_history.agent.run(request.expanded_prompt, max_steps=10)
+                    
+                    if isinstance(result, str):
+                        result = result.strip()
+                    
+                    if result:
+                        self.chat_history.add_assistant_message(result)
+                    else:
+                        self.chat_history.add_assistant_message("Error: No output from agent")
+                    
+                    self.chat_history.agent_status = ""
+                    self._update_ui_from_callback()
+                    
+                    self.debug_log(f'Output: {result}\n')
+                except Exception as e:
+                    self.debug_exception(e)
+                    self.chat_history.add_assistant_message(f"Error: {str(e)}")
+                    self.chat_history.agent_status = ""
+                    self._update_ui_from_callback()
             
-            # Update metadata for UI display
-            self.llm_metadata = metadata
+            thread = threading.Thread(target=run_agent, daemon=True)
+            thread.start()
             
-            if isinstance(out, str):
-                out = out.strip()
-
-            if out is not None:
-                self.chat_history.add_assistant_message(out)
-            else:
-                self.chat_history.add_assistant_message("Error: No output from LLM")
+            return None  # Async operation, no immediate return value
+            
         except Exception as e:
             self.debug_exception(e)
             return None
-
-        self.debug_log(f'Output: {out.strip() if out else ""}\n')
-        return out
+    
+    def _update_ui_from_callback(self):
+        if self.ui:
+            self.ui.request_update()
         
     def clipboard_changed(self):
         txt = self.ui.read_clipboard()

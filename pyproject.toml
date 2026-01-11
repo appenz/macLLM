@@ -22,3 +22,7 @@ addopts = "-m 'not external'"
 markers = [
     "external: tests that hit external services",
 ]
+filterwarnings = [
+    "ignore::UserWarning:pydantic.*",
+    "ignore:There is no current event loop:DeprecationWarning:litellm.*",
+]

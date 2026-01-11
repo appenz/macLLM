@@ -31,6 +31,17 @@ import signal
 import traceback
 from time import sleep
 
+# Helper for dispatching UI updates from background threads
+class _UIUpdater(NSObject):
+    target = None
+    
+    def run_(self, sender):
+        if _UIUpdater.target:
+            _UIUpdater.target.update_window()
+
+_ui_updater = _UIUpdater.alloc().init()
+
+
 # Custom panel for the quick entry window. This is neededto enable it to become 
 # key window and main window
 
@@ -238,6 +249,13 @@ class MacLLMUI:
         self.update_window()
         # Clear the input field for the next message
         InputFieldHandler.clear_input_field(self.input_field)
+
+    def request_update(self):
+        if NSThread.isMainThread():
+            self.update_window()
+        else:
+            _UIUpdater.target = self
+            _ui_updater.performSelectorOnMainThread_withObject_waitUntilDone_('run:', None, False)
 
     def update_window(self):
 
@@ -520,7 +538,7 @@ class MacLLMUI:
         try:
             messages = self.macllm.chat_history.get_displayable_messages()
             message = messages[self.history_index]
-            text = self.macllm.chat_history.get_display_content(message)
+            text = message['content']
             self.write_clipboard(text)
         except IndexError:
             pass
@@ -530,7 +548,7 @@ class MacLLMUI:
         try:
             messages = self.macllm.chat_history.get_displayable_messages()
             message = messages[self.history_index]
-            entry_text = self.macllm.chat_history.get_display_content(message)
+            entry_text = message['content']
             if hasattr(self, "input_field") and self.input_field:
                 InputFieldHandler.clear_input_field(self.input_field)
                 self.input_field.insertText_(entry_text)
