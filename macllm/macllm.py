@@ -103,7 +103,7 @@ class MacLLM:
         self.chat_history.ui_update_callback = self._update_ui_from_callback
         
         # Initialize metadata for UI display (default speed is Normal)
-        self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'tokens': 0}
+        self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'input_tokens': 0, 'output_tokens': 0}
         self._prefix_index = []
 
     def handle_instructions(self, user_input):
@@ -128,13 +128,20 @@ class MacLLM:
             if request.speed_level is not None:
                 self.chat_history.speed_level = request.speed_level
 
-            # Step 5: Ensure agent exists and update its model if speed changed
-            if self.chat_history.agent is None:
-                self.chat_history._create_agent()
-            elif request.speed_level is not None:
-                self.chat_history._create_agent()
+            # Step 5: Reset token count for this request
+            self.llm_metadata['input_tokens'] = 0
+            self.llm_metadata['output_tokens'] = 0
+            
+            # Step 6: Define token callback to update metadata and UI
+            def token_callback(input_tokens: int, output_tokens: int):
+                self.llm_metadata['input_tokens'] = input_tokens
+                self.llm_metadata['output_tokens'] = output_tokens
+                self._update_ui_from_callback()
 
-            # Step 6: Run agent on background thread
+            # Step 7: Recreate agent with fresh token callback for each request
+            self.chat_history._create_agent(token_callback=token_callback)
+
+            # Step 8: Run agent on background thread
             def run_agent():
                 try:
                     self.chat_history.agent_status = ""

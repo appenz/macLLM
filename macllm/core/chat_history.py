@@ -82,7 +82,7 @@ class Conversation:
         
         self._create_agent()
     
-    def _create_agent(self):
+    def _create_agent(self, token_callback=None):
         """Create agent instance. Called lazily or on reset."""
         from macllm.core.agent_service import create_agent
         
@@ -91,7 +91,7 @@ class Conversation:
             if self.ui_update_callback:
                 self.ui_update_callback()
         
-        self.agent = create_agent(speed=self.speed_level, status_callback=status_callback)
+        self.agent = create_agent(speed=self.speed_level, status_callback=status_callback, token_callback=token_callback)
 
 
 class ConversationHistory:

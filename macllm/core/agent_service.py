@@ -25,7 +25,10 @@ def extract_section(lines, start_pattern, stop_level):
     return section
 
 
-def create_step_callback(status_callback: Optional[Callable[[str], None]]):
+def create_step_callback(status_callback: Optional[Callable[[str], None]], token_callback: Optional[Callable[[int, int], None]] = None):
+    input_tokens = [0]
+    output_tokens = [0]
+    
     def on_step(step, agent):
         status_lines = []
         
@@ -42,6 +45,11 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]]):
                     plan[0] = "Plan:"
                     plan = [line.lstrip('# ') for line in plan]
                     status_lines.extend(plan)
+            
+            if step.token_usage and token_callback:
+                input_tokens[0] += step.token_usage.input_tokens
+                output_tokens[0] += step.token_usage.output_tokens
+                token_callback(input_tokens[0], output_tokens[0])
         
         elif isinstance(step, ActionStep):
             tool_calls = []
@@ -67,6 +75,11 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]]):
                             status_lines.append(f"- Tool Call: {name}({args_str})")
                     else:
                         status_lines.append(f"- Tool Call: {name}")
+            
+            if step.token_usage and token_callback:
+                input_tokens[0] += step.token_usage.input_tokens
+                output_tokens[0] += step.token_usage.output_tokens
+                token_callback(input_tokens[0], output_tokens[0])
         
         elif isinstance(step, TaskStep):
             status_lines.append("Task:")
@@ -79,7 +92,7 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]]):
     return on_step
 
 
-def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", status_callback: Optional[Callable[[str], None]] = None) -> ToolCallingAgent:
+def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", status_callback: Optional[Callable[[str], None]] = None, token_callback: Optional[Callable[[int], None]] = None) -> ToolCallingAgent:
     if model is None:
         model = MODELS.get(speed.lower(), MODELS['normal'])
         if model is None:
@@ -87,7 +100,7 @@ def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", st
     
     tools = [getattr(tools_module, name) for name in tools_module.__all__]
     
-    step_callback = create_step_callback(status_callback)
+    step_callback = create_step_callback(status_callback, token_callback)
     
     agent = ToolCallingAgent(
         tools=tools,

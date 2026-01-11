@@ -468,10 +468,11 @@ class MacLLMUI:
         if not hasattr(self, "top_bar_text_view"):
             return
 
-        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'tokens': 0})
+        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'input_tokens': 0, 'output_tokens': 0})
         provider = metadata.get('provider', 'Unknown')
         model = metadata.get('model', 'unknown')
-        tokens = metadata.get('tokens', 0)
+        input_tokens = metadata.get('input_tokens', 0)
+        output_tokens = metadata.get('output_tokens', 0)
 
         # Determine mode from conversation speed
         speed = getattr(self.macllm.chat_history, "speed_level", "normal") or "normal"
@@ -484,7 +485,7 @@ class MacLLMUI:
         # Create the full text with requested ordering
         line1 = f"{speed_display}"
         line2 = f"{model}"
-        line3 = f"{tokens} tkns"
+        line3 = f"{input_tokens} in / {output_tokens} out"
         txt = f"{line1}\n{line2}\n{line3}"
 
         para = NSMutableParagraphStyle.alloc().init()
