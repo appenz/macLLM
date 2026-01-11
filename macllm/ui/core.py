@@ -416,6 +416,9 @@ class MacLLMUI:
         scroll_view.setHasVerticalScroller_(need_scroll)
         scroll_view.setAutohidesScrollers_(True)
 
+        # Scroll to the bottom so the latest messages are visible
+        text_view.scrollRangeToVisible_((text_view.textStorage().length(), 0))
+
         # Update the top bar text with model and token information
         self.update_top_bar_text()
 
