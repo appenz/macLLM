@@ -23,7 +23,7 @@ class FileTag(TagPlugin):
     # at least *MIN_CHARS* characters after the leading "@".
     MIN_CHARS = 3
     EXTENSIONS = (".txt", ".md")
-    MAX_CONTEXT_LEN = 10 * 1024  # 10 KB cap identical to old PathTag
+    MAX_CONTEXT_LEN = 200 * 1024  # 10 KB cap identical to old PathTag
 
     # ------------------------------------------------------------------
     # Object lifecycle & in-memory index
