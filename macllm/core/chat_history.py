@@ -69,7 +69,7 @@ class Conversation:
         self.context_history.append(entry)
         return actual_name
     
-    def reset(self) -> None:
+    def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""
         self.messages = []
         self.context_history = []
@@ -80,11 +80,21 @@ class Conversation:
         
         self.add_assistant_message("How can I help you?")
         
+        if self.agent is not None:
+            self.agent.memory.steps = []
         self._create_agent()
+        
+        if clear_persisted:
+            from macllm.core.memory import clear_conversation
+            clear_conversation()
     
     def _create_agent(self, token_callback=None):
         """Create agent instance. Called lazily or on reset."""
         from macllm.core.agent_service import create_agent
+        
+        old_steps = None
+        if self.agent is not None:
+            old_steps = self.agent.memory.steps
         
         def status_callback(status_text: str):
             self.agent_status = status_text
@@ -92,6 +102,9 @@ class Conversation:
                 self.ui_update_callback()
         
         self.agent = create_agent(speed=self.speed_level, status_callback=status_callback, token_callback=token_callback)
+        
+        if old_steps is not None:
+            self.agent.memory.steps = old_steps
 
 
 class ConversationHistory:

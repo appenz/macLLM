@@ -16,6 +16,7 @@ from macllm.ui import MacLLMUI  # noqa: F401
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.core.llm_service import get_model_for_speed
+from macllm.core.memory import save_conversation, load_conversation
 from macllm.tags.base import TagPlugin
 
 from quickmachotkey import quickHotKey, mask
@@ -102,6 +103,8 @@ class MacLLM:
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         self.chat_history.ui_update_callback = self._update_ui_from_callback
         
+        load_conversation(self.chat_history)
+        
         # Initialize metadata for UI display (default speed is Normal)
         self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'input_tokens': 0, 'output_tokens': 0}
         self._prefix_index = []
@@ -147,7 +150,7 @@ class MacLLM:
                     self.chat_history.agent_status = ""
                     self._update_ui_from_callback()
                     
-                    result = self.chat_history.agent.run(request.expanded_prompt, max_steps=10)
+                    result = self.chat_history.agent.run(request.expanded_prompt, max_steps=10, reset=False)
                     
                     if isinstance(result, str):
                         result = result.strip()
@@ -157,6 +160,7 @@ class MacLLM:
                     else:
                         self.chat_history.add_assistant_message("Error: No output from agent")
                     
+                    save_conversation(self.chat_history)
                     self.chat_history.agent_status = ""
                     self._update_ui_from_callback()
                     
@@ -164,6 +168,7 @@ class MacLLM:
                 except Exception as e:
                     self.debug_exception(e)
                     self.chat_history.add_assistant_message(f"Error: {str(e)}")
+                    save_conversation(self.chat_history)
                     self.chat_history.agent_status = ""
                     self._update_ui_from_callback()
             

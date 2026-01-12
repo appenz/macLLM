@@ -168,7 +168,7 @@ class InputFieldDelegate(NSObject):
                             return True
                         if key == 'n':
                             # Reset chat history (custom shortcut)
-                            self.macllm_ui.macllm.chat_history.reset()
+                            self.macllm_ui.macllm.chat_history.reset(clear_persisted=True)
                             self.macllm_ui.update_window()
                             return True
                     # For any other Command-key shortcut, fall through to default handling
