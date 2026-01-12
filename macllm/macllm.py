@@ -64,7 +64,7 @@ class MacLLM:
 
     def debug_log(self, message: str, level: int = 0):
         """Structured debug logging with color-coded levels."""
-        if not self.debug:
+        if not self.args.debug:
             return
             
         colors = {
@@ -78,7 +78,7 @@ class MacLLM:
     
     def debug_exception(self, exception):
         """Log exceptions with structured formatting and full stack trace."""
-        if not self.debug:
+        if not self.args.debug:
             return
         
         exception_str = str(traceback.format_exc()).strip()
@@ -90,8 +90,8 @@ class MacLLM:
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
         print(f'To use via the clipboard, copy text starting with "@@"')
 
-    def __init__(self, debug=False):
-        self.debug = debug
+    def __init__(self, args=None):
+        self.args = args or argparse.Namespace(debug=False, show_window_on_start=False)
         self.ui = MacLLMUI()
         self.ui.macllm = self
         self.req = 0
@@ -199,13 +199,14 @@ def main():
     parser = argparse.ArgumentParser(description="macLLM - a simple LLM tool for the macOS clipboard")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--version", action="store_true", help="Print version and exit")
+    parser.add_argument("--show-window", action="store_true", dest="show_window_on_start", help="Open the window immediately on startup")
     args = parser.parse_args()
 
     if args.version:
         print(MacLLM.version)
         return
 
-    macLLM = MacLLM(debug=args.debug)
+    macLLM = MacLLM(args=args)
 
     if args.debug:
         macLLM.debug_log(f"Debug mode is enabled (v {MacLLM.version})", 2)
@@ -236,7 +237,8 @@ if __name__ == "__main__":
 # Helper for tests
 
 def create_macllm(debug: bool = False, start_ui: bool = False):
-    mac = MacLLM(debug=debug)
+    args = argparse.Namespace(debug=debug, show_window_on_start=False)
+    mac = MacLLM(args=args)
     mac.plugins = TagPlugin.load_plugins(mac)
     ShortCut.init_shortcuts(mac)
     if start_ui:

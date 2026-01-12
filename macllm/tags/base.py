@@ -51,7 +51,7 @@ class TagPlugin:
             except Exception as e:
                 print(f"Warning: Failed to instantiate plugin {plugin_cls.__name__}: {e}")
 
-        if macllm_instance.debug and plugin_names:
+        if macllm_instance.args.debug and plugin_names:
             macllm_instance.debug_log(f"Loaded tag plugins: {', '.join(plugin_names)}")
 
         return plugins

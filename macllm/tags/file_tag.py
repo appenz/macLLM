@@ -49,7 +49,7 @@ class FileTag(TagPlugin):
         dir_path = os.path.expandvars(os.path.expanduser(dir_path))
 
         if os.path.isdir(dir_path) is False:
-            if self.macllm.debug:
+            if self.macllm.args.debug:
                 self.macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
             return
 
@@ -61,7 +61,7 @@ class FileTag(TagPlugin):
         # Sort alphabetically by basename for deterministic ordering
         self._index.sort(key=lambda t: t[0])
 
-        if self.macllm.debug:
+        if self.macllm.args.debug:
             self.macllm.debug_log(
                 f"Indexed {len(self._index)} files from {dir_path}", 0
             )
@@ -106,7 +106,7 @@ class FileTag(TagPlugin):
         try:
             content = self._read_file(path_spec)
         except Exception as exc:  # pylint: disable=broad-except
-            if self.macllm.debug:
+            if self.macllm.args.debug:
                 self.macllm.debug_exception(exc)
             return tag  # leave unmodified so the user sees the failure
 

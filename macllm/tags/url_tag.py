@@ -14,7 +14,7 @@ class URLTag(TagPlugin):
         try:
             content = self._retrieve_url(url)
         except Exception as e:
-            if self.macllm.debug:
+            if self.macllm.args.debug:
                 self.macllm.debug_log(str(e), 2)
             return tag
 

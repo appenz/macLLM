@@ -97,6 +97,9 @@ class AppDelegate(NSObject):
 
     def options_(self, sender):
         print("Options clicked!")
+    
+    def openWindowOnStart_(self, timer):
+        self.macllm_ui.update_window()
 
     def applicationDidFinishLaunching_(self, notification):
         try:
@@ -114,6 +117,11 @@ class AppDelegate(NSObject):
             # Start tracking the clipboard
             self.pasteboard = NSPasteboard.generalPasteboard()
             self.macllm_ui.pb_change_count = self.pasteboard.changeCount()
+            
+            # Open window on startup if requested
+            if self.macllm_ui.macllm and getattr(self.macllm_ui.macllm.args, 'show_window_on_start', False):
+                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                    0.1, self, 'openWindowOnStart:', None, False)
 
         except Exception as e:
             # If we fail to initialize the status item, terminate the application and show stack trace

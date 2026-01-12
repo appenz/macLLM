@@ -132,11 +132,11 @@ class ShortCut:
                 files = [f for f in os.listdir(config_dir) if os.path.isfile(os.path.join(config_dir, f))]
                 for file in files:
                     config_file = os.path.join(config_dir, file)
-                    if macllm.debug:
+                    if macllm.args.debug:
                         print(f"Processing config file: {config_file}")
-                    cls.read_shortcuts_file(config_file, macllm.debug)
+                    cls.read_shortcuts_file(config_file, macllm.args.debug)
             except OSError:
-                if macllm.debug:
+                if macllm.args.debug:
                     print(f"Error accessing directory: {config_dir}")
 
 
