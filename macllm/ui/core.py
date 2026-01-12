@@ -386,7 +386,11 @@ class MacLLMUI:
 
             scroll_view.setHasVerticalScroller_(True)
             scroll_view.setHasHorizontalScroller_(False)
-            scroll_view.setAutohidesScrollers_(True)
+            scroll_view.setAutohidesScrollers_(False)
+            scroll_view.setScrollerStyle_(0)  # NSScrollerStyleLegacy
+            scroller = scroll_view.verticalScroller()
+            if scroller:
+                scroller.setHidden_(False)
             self.scroll_view = scroll_view
 
             text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
@@ -418,11 +422,12 @@ class MacLLMUI:
             if scroll_view.superview() is None:
                 text_container.addSubview_(scroll_view)
 
-        # Render content and decide if scrolling is needed
+        # Render content and show scrollbar when content significantly exceeds visible area
         rendered_height = MainTextHandler.set_text_content(self.macllm, text_view)
-        need_scroll = rendered_height > text_view.frame().size.height
+        visible_height = scroll_view.contentView().bounds().size.height
+        scroll_threshold = 20  # Buffer to avoid scrollbar for minor overflows
+        need_scroll = rendered_height > (visible_height + scroll_threshold)
         scroll_view.setHasVerticalScroller_(need_scroll)
-        scroll_view.setAutohidesScrollers_(True)
 
         # Scroll to the bottom so the latest messages are visible
         text_view.scrollRangeToVisible_((text_view.textStorage().length(), 0))
