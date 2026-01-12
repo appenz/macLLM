@@ -12,3 +12,5 @@ __pycache__/
 .env
 config/myshortcuts.toml
 
+# Screenshot test output
+macllm_test_screenshot.png
