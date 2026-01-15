@@ -6,6 +6,7 @@ from smolagents import ToolCallingAgent, LogLevel, PlanningStep, ActionStep, Tas
 from smolagents.models import LiteLLMModel
 from macllm.core.llm_service import MODELS
 from macllm import tools as tools_module
+from macllm.tools.web_search import reset_search_counter
 
 litellm.drop_params = True
 
@@ -67,7 +68,11 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]], token
                 for name, args in tool_calls:
                     if args:
                         if name == "web_search":
-                            status_lines.append(f"- Tool Call: web_search: '{args['query']}'")
+                            queries = args.get('queries', [])
+                            queries_str = ', '.join(f"'{q}'" for q in queries[:3])
+                            if len(queries) > 3:
+                                queries_str += f" (+{len(queries) - 3} more)"
+                            status_lines.append(f"- Tool Call: web_search: {queries_str}")
                         elif name == "final_answer":
                             status_lines.append(f"- final_answer: '{args['answer']}'")
                         else:
@@ -93,6 +98,9 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]], token
 
 
 def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", status_callback: Optional[Callable[[str], None]] = None, token_callback: Optional[Callable[[int], None]] = None) -> ToolCallingAgent:
+    # Reset search counter for new agent run
+    reset_search_counter()
+    
     if model is None:
         model = MODELS.get(speed.lower(), MODELS['normal'])
         if model is None:
