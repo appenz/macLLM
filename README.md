@@ -1,9 +1,9 @@
 # macLLM - Fast LLM Desktop Utility for macOS
 
-macLLM is a utility that makes it easy to work with LLMs from the macOS desktop. It is launched
-via a hotkey and can do things like:
-* Send a prompt to an LLM, e.g. "What state is Kansas City in?"
+macLLM is a local AI agent running on macOS. It is launched via a hotkey and can do things like:
+* Answer questions, e.g. "What state is Kansas City in?"
 * Fix spelling or find emojis for a specific topic
+* Use tools like web search to find information "What are the opening times for Cafe Borrone in Menlo Park today"
 * Work with files, e.g. "find the ship date in @~/Documents/Notes/team-meeting.md"
 * Index your notes (e.g. Obsidian) and auto-complete them for easy reference
 * Work with URLs, e.g. "summarize @https://github.com/appenz/macLLM/edit/main/README.md"
@@ -11,7 +11,9 @@ via a hotkey and can do things like:
 macLLM is:
 * Open source (Apache 2.0)
 * Written in 100% Python to be easily extensible
+* Makes it easy to switch the model you use
 * Has a native macOS Cocoa UI (written in Python)
+
 
 ![Example Image](./assets/example.png)
 
