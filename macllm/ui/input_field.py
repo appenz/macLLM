@@ -127,7 +127,11 @@ class InputFieldDelegate(NSObject):
                     # Otherwise, allow default movement
                     return False
                 elif commandSelector in ('insertNewline:'):
-                    # Send message
+                    current_event = NSApp().currentEvent()
+                    shift_pressed = current_event and (current_event.modifierFlags() & (1 << 17))
+                    if shift_pressed:
+                        self.text_view.insertText_("\n")
+                        return True
                     input_text = self._plain_text_from_view()
                     self.macllm_ui.handle_user_input(input_text)
                     return True
