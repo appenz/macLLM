@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+
+import threading
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+import txtai
 
 from .base import TagPlugin
 
@@ -14,6 +23,7 @@ class FileTag(TagPlugin):
 
     # Public constants
     PREFIX_CONFIG = "@IndexFiles"
+    PREFIX_REINDEX = "/reindex"
 
     # Prefixes that represent plain path tags (previously handled by PathTag)
     PATH_PREFIXES = ["@/", "@~", "@\"/", "@\"~"]
@@ -24,14 +34,26 @@ class FileTag(TagPlugin):
     MIN_CHARS = 3
     EXTENSIONS = (".txt", ".md")
     MAX_CONTEXT_LEN = 10 * 1024  # 10 KB cap identical to old PathTag
+    MAX_FULL_FILE_LEN = 10 * 1000
+    SEARCH_PREVIEW_LEN = 1000
+    SEARCH_RESULTS_COUNT = 5
+
+    # Class-level state for file index and embeddings
+    _macllm = None
+    _index: list[tuple[str, str]] = []
+    _embeddings: Optional[txtai.Embeddings] = None
+    _embedding_ready = threading.Event()
+    _embedding_lock = threading.Lock()
 
     # ------------------------------------------------------------------
-    # Object lifecycle & in-memory index
+    # Object lifecycle
     # ------------------------------------------------------------------
     def __init__(self, macllm):
         super().__init__(macllm)
-        # List of tuples (basename_lower, full_path)
-        self._index: list[tuple[str, str]] = []
+        FileTag._macllm = macllm
+        FileTag._index = []
+        FileTag._embeddings = None
+        FileTag._embedding_ready = threading.Event()
 
     # ------------------------------------------------------------------
     # TagPlugin interface – configuration tags
@@ -44,27 +66,21 @@ class FileTag(TagPlugin):
 
         *value* is expected to be a path string.  We walk the directory
         recursively and add eligible files to *self._index*."""
-        # Accept optional quotes and env vars
         dir_path = value.strip().strip('"')
         dir_path = os.path.expandvars(os.path.expanduser(dir_path))
 
         if os.path.isdir(dir_path) is False:
-            if self.macllm.args.debug:
-                self.macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
+            FileTag._macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
             return
 
         for fp in Path(dir_path).rglob("*"):
             if fp.is_file() and fp.suffix.lower() in self.EXTENSIONS:
                 basename = fp.name
-                self._index.append((basename.lower(), str(fp)))
+                FileTag._index.append((basename.lower(), str(fp)))
 
         # Sort alphabetically by basename for deterministic ordering
-        self._index.sort(key=lambda t: t[0])
-
-        if self.macllm.args.debug:
-            self.macllm.debug_log(
-                f"Indexed {len(self._index)} files from {dir_path}", 0
-            )
+        FileTag._index.sort(key=lambda t: t[0])
+        FileTag._macllm.debug_log(f"Indexed {len(FileTag._index)} files from {dir_path}", 0)
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion
@@ -75,7 +91,7 @@ class FileTag(TagPlugin):
         # other plugins (e.g. ClipboardTag) are not shadowed during
         # expansion.  We still use the generic symbol for autocomplete via
         # *match_any_autocomplete()*.
-        return self.PATH_PREFIXES
+        return self.PATH_PREFIXES + [self.PREFIX_REINDEX]
 
     # ------------------------------------------------------------------
     # Catch-all autocomplete flag
@@ -89,6 +105,10 @@ class FileTag(TagPlugin):
         """Read the referenced file (tag may be a plain path or an internal
         @file tag), add it to *conversation* context, and return a
         ``context:<handle>`` replacement string."""
+
+        if tag == self.PREFIX_REINDEX:
+            FileTag._start_reindex()
+            return ""
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -105,9 +125,8 @@ class FileTag(TagPlugin):
 
         try:
             content = self._read_file(path_spec)
-        except Exception as exc:  # pylint: disable=broad-except
-            if self.macllm.args.debug:
-                self.macllm.debug_exception(exc)
+        except Exception as exc:
+            FileTag._macllm.debug_exception(exc)
             return tag  # leave unmodified so the user sees the failure
 
         context_name = conversation.add_context(
@@ -142,7 +161,7 @@ class FileTag(TagPlugin):
             return []
 
         term_lc = search_term.lower()
-        matches = [fp for base, fp in self._index if term_lc in base]
+        matches = [fp for base, fp in FileTag._index if term_lc in base]
         matches.sort()
         raw_tags: list[str] = []
         for p in matches[:max_results]:
@@ -221,4 +240,75 @@ class FileTag(TagPlugin):
             content = f.read(self.MAX_CONTEXT_LEN)
             if "\0" in content:
                 raise ValueError("File appears to be binary")
-        return content 
+        return content
+
+    # ------------------------------------------------------------------
+    # Embedding search (class methods)
+    # ------------------------------------------------------------------
+    @classmethod
+    def start_embedding_build(cls):
+        if not cls._index:
+            cls._macllm.debug_log("No files indexed, skipping embedding build", 0)
+            return
+        thread = threading.Thread(target=cls._build_embeddings, daemon=True)
+        thread.start()
+
+    @classmethod
+    def _start_reindex(cls):
+        cls._embedding_ready.clear()
+        cls._macllm.debug_log("Reindexing embeddings...", 0)
+        cls.start_embedding_build()
+
+    @classmethod
+    def _build_embeddings(cls):
+        cls._macllm.debug_log(f"Building embeddings for {len(cls._index)} files...", 0)
+
+        docs = []
+        for idx, (_, filepath) in enumerate(cls._index):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read(cls.SEARCH_PREVIEW_LEN)
+                docs.append((idx, content, filepath))
+            except Exception:
+                docs.append((idx, "", filepath))
+
+        with cls._embedding_lock:
+            cls._embeddings = txtai.Embeddings(path="sentence-transformers/all-mpnet-base-v2")
+            cls._embeddings.index(docs)
+
+        cls._embedding_ready.set()
+        cls._macllm.debug_log("Embedding build complete", 0)
+
+    @classmethod
+    def search(cls, query: str, n: int = SEARCH_RESULTS_COUNT, timeout: float = 60.0) -> list[tuple[int, float, str, str, bool]]:
+        if not cls._embedding_ready.wait(timeout=timeout):
+            return []
+
+        with cls._embedding_lock:
+            if cls._embeddings is None:
+                return []
+            results = cls._embeddings.search(query, n)
+
+        output = []
+        for doc_id, score in results:
+            if doc_id < 0 or doc_id >= len(cls._index):
+                continue
+            _, filepath = cls._index[doc_id]
+            truncated = False
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    preview = f.read(cls.SEARCH_PREVIEW_LEN)
+                    truncated = f.read(1) != ""
+            except Exception:
+                preview = "(unable to read file)"
+            output.append((doc_id, score, filepath, preview, truncated))
+        return output
+
+    @classmethod
+    def get_file_content(cls, file_id: int) -> tuple[str, str]:
+        if file_id < 0 or file_id >= len(cls._index):
+            raise IndexError(f"Invalid file ID: {file_id}")
+        _, filepath = cls._index[file_id]
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read(cls.MAX_FULL_FILE_LEN)
+        return content, filepath

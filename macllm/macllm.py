@@ -227,6 +227,10 @@ def main():
     # Now initialise shortcuts – this will invoke *on_config_tag()* on any
     # plugin that registered configuration prefixes.
     ShortCut.init_shortcuts(macLLM)
+
+    # Start background embedding build for FileTag if it has indexed files
+    from macllm.tags.file_tag import FileTag
+    FileTag.start_embedding_build()
     
     macLLM.show_instructions()
     macLLM.ui.start(dont_run_app=False)

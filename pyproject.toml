@@ -14,6 +14,7 @@ dependencies = [
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
     "smolagents>=0.1.0",
+    "txtai>=9.3.0",
 ]
 
 
