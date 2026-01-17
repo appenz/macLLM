@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from smolagents import tool
 
 from macllm.tags.file_tag import FileTag
@@ -9,10 +11,10 @@ def search_files(query: str) -> str:
     Search indexed files using semantic similarity.
 
     Args:
-        query: The search query to find relevant files.
+        query: The search query to find relevant notes or personal files.
 
     Returns:
-        Top 5 matching files with file ID, path, and first 1000 characters of content.
+        Top 5 matching files with file ID, filename, and first 1000 characters of content.
     """
     results = FileTag.search(query)
     if not results:
@@ -20,8 +22,9 @@ def search_files(query: str) -> str:
 
     output_parts = []
     for file_id, score, filepath, preview, truncated in results:
+        filename = Path(filepath).name
         status = "(truncated)" if truncated else "(complete)"
-        output_parts.append(f"[File ID: {file_id}] {filepath} {status}\nScore: {score:.3f}\n{preview}\n")
+        output_parts.append(f"[File ID: {file_id}] {filename} {status}\nScore: {score:.3f}\n{preview}\n")
 
     return "\n---\n".join(output_parts)
 
@@ -39,7 +42,8 @@ def read_full_file(file_id: int) -> str:
     """
     try:
         content, filepath = FileTag.get_file_content(file_id)
-        return f"File: {filepath}\n\n{content}"
+        filename = Path(filepath).name
+        return f"File: {filename}\n\n{content}"
     except IndexError as e:
         return f"Error: {e}"
     except Exception as e:

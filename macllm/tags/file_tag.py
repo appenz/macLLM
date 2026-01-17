@@ -266,11 +266,16 @@ class FileTag(TagPlugin):
         docs = []
         for idx, (_, filepath) in enumerate(cls._index):
             try:
+                filename = Path(filepath).name
                 with open(filepath, "r", encoding="utf-8") as f:
                     content = f.read(cls.SEARCH_PREVIEW_LEN)
-                docs.append((idx, content, filepath))
-            except Exception:
-                docs.append((idx, "", filepath))
+                # Prepend filename to content so it's searchable
+                indexed_content = f"{filename}\n{content}"
+                docs.append((idx, indexed_content, filepath))
+            except Exception as e:
+                # Skip files that can't be read - no point indexing them if content is unavailable
+                cls._macllm.debug_log(f"Skipping unreadable file: {filepath} ({e})", 1)
+                continue
 
         with cls._embedding_lock:
             cls._embeddings = txtai.Embeddings(path="sentence-transformers/all-mpnet-base-v2")
