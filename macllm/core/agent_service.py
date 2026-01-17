@@ -114,7 +114,7 @@ def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", st
         tools=tools,
         model=model,
         verbosity_level=LogLevel.ERROR,
-        planning_interval=1,
+        planning_interval=3,
         step_callbacks={
             PlanningStep: step_callback,
             ActionStep: step_callback,

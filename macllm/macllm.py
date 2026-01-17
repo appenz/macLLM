@@ -33,6 +33,8 @@ SYSTEM_PROMPT = """You are a helpful assistant.
 - If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
 - If asked to just look at a context, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
+- Personal, non-public information is often found in the users files (see tool)
+- If the use refers to "notes" or "files", use the file_search tool to find relevant files.
 Conversation history follows below."""
 
 # Class defining ANSI color codes for terminal output
