@@ -1,10 +1,17 @@
 import os
+import litellm
 from litellm import completion
 from smolagents.models import LiteLLMModel
+
+
+def enable_litellm_debug():
+    """Enable LiteLLM debug logging for troubleshooting API calls."""
+    litellm._turn_on_debug()
 
 _inception_api_key = os.getenv("INCEPTION_API_KEY")
 _inception_api_base = "https://api.inceptionlabs.ai/v1"
 _openai_api_key = os.getenv("OPENAI_API_KEY")
+_gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 def _get_provider_from_config(model_id: str, api_base: str = None) -> str:
     """Determine provider name from model configuration."""
@@ -14,6 +21,8 @@ def _get_provider_from_config(model_id: str, api_base: str = None) -> str:
         return "OpenAI"
     if model_id.startswith("claude-") or model_id.startswith("anthropic/"):
         return "Anthropic"
+    if model_id.startswith("gemini/"):
+        return "Gemini"
     return "Unknown"
 
 MODELS = {
@@ -23,10 +32,9 @@ MODELS = {
         api_base=_inception_api_base
     ) if _inception_api_key else None,
     'normal': LiteLLMModel(
-        model_id='gpt-4o',
-        api_key=_openai_api_key,
-        api_base='https://api.openai.com/v1'
-    ) if _openai_api_key else None,
+        model_id='gemini/gemini-3-flash-preview',
+        api_key=_gemini_api_key,
+    ) if _gemini_api_key else None,
     'slow': LiteLLMModel(
         model_id='gpt-5',
         api_key=_openai_api_key,

@@ -15,7 +15,7 @@ from macllm.ui import MacLLMUI  # noqa: F401
 
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
-from macllm.core.llm_service import get_model_for_speed
+from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug
 from macllm.core.memory import save_conversation, load_conversation
 from macllm.tags.base import TagPlugin
 
@@ -200,6 +200,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="macLLM - a simple LLM tool for the macOS clipboard")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--debuglitellm", action="store_true", help="Enable verbose LiteLLM debug logging")
     parser.add_argument("--version", action="store_true", help="Print version and exit")
     parser.add_argument("--show-window", action="store_true", dest="show_window_on_start", help="Open the window immediately on startup")
     args = parser.parse_args()
@@ -212,6 +213,11 @@ def main():
 
     if args.debug:
         macLLM.debug_log(f"Debug mode is enabled (v {MacLLM.version})", 2)
+    
+    if args.debuglitellm:
+        enable_litellm_debug()
+        if args.debug:
+            macLLM.debug_log("LiteLLM debug logging enabled", 2)
 
     # Load plugins first so that configuration tags found in shortcut files
     # can be handled by their respective plugins during shortcut parsing.
