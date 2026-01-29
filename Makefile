@@ -17,6 +17,9 @@ test:
 test-external:
 	$(env_vars) $(uv) run --env-file .env python -m pytest -v -m external
 
+test-windowlist:
+	$(env_vars) $(uv) run test/manual_tests/screenshot.py
+
 screenshot:
 	$(env_vars) $(uv) run -m --env-file .env macllm --show-window &
 	sleep 3
