@@ -6,13 +6,25 @@ import pytest
 
 from macllm.tools.time import get_current_time
 from macllm.core.agent_service import create_agent
+from macllm.core.agent_status import AgentStatusManager
+
+
+class DummyApp:
+    def __init__(self):
+        self.status_manager = AgentStatusManager()
 
 
 def test_get_current_time():
-    result = get_current_time()
-    parsed = datetime.strptime(result, "%Y-%m-%d %H:%M:%S")
-    now = datetime.now()
-    assert abs((now - parsed).total_seconds()) < 2
+    from macllm.macllm import MacLLM
+    
+    MacLLM._instance = DummyApp()
+    try:
+        result = get_current_time()
+        parsed = datetime.strptime(result, "%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
+        assert abs((now - parsed).total_seconds()) < 2
+    finally:
+        MacLLM._instance = None
 
 
 @pytest.mark.external

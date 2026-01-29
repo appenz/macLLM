@@ -1,27 +1,42 @@
 import os
+import time
 from pathlib import Path
 
 from smolagents import tool
 
 from macllm.tags.file_tag import FileTag
 
+_tool_call_counter = {"file_append": 0, "file_create": 0}
 
-def _write_file(file_identifier: str, text: str, must_exist: bool) -> str:
+
+def _write_file(file_identifier: str, text: str, must_exist: bool, tool_name: str) -> str:
     """Core implementation for file_append and file_create."""
+    from macllm.macllm import MacLLM
+    
+    # Register tool call
+    _tool_call_counter[tool_name] += 1
+    tool_id = f"{tool_name}_{_tool_call_counter[tool_name]}_{int(time.time() * 1000)}"
+    status = MacLLM.get_status_manager()
+    
     filepath = _resolve_file_path(file_identifier)
     if filepath is None:
+        error_msg = f"Invalid: {file_identifier}"
+        status.fail_tool_call(tool_id, error_msg)
         return f"Error: Cannot write to '{file_identifier}'. Must be a valid file ID, a filename for an indexed directory, or a path referenced in the conversation."
 
     file_exists = os.path.exists(filepath)
 
     if must_exist and not file_exists:
+        status.fail_tool_call(tool_id, "File not found")
         return f"Error: File does not exist: {filepath}. Use file_create to create new files."
     if not must_exist and file_exists:
+        status.fail_tool_call(tool_id, "File exists")
         return f"Error: File already exists: {filepath}. Use file_append to add content to existing files."
 
     try:
         parent = Path(filepath).parent
         if not parent.exists():
+            status.fail_tool_call(tool_id, "Dir not found")
             return f"Error: Directory does not exist: {parent}"
 
         file_has_content = file_exists and os.path.getsize(filepath) > 0
@@ -36,11 +51,15 @@ def _write_file(file_identifier: str, text: str, must_exist: bool) -> str:
             FileTag._index.sort(key=lambda t: t[0])
 
         action = "appended to" if file_exists else "created"
+        filename = Path(filepath).name
+        status.complete_tool_call(tool_id, filename)
         return f"Successfully {action}: {filepath}"
 
     except PermissionError:
+        status.fail_tool_call(tool_id, "Permission denied")
         return f"Error: Permission denied writing to: {filepath}"
     except Exception as e:
+        status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error writing to file: {e}"
 
 
@@ -56,7 +75,7 @@ def file_append(file_identifier: str, text: str) -> str:
     Returns:
         Success message with the file path, or an error description.
     """
-    return _write_file(file_identifier, text, must_exist=True)
+    return _write_file(file_identifier, text, must_exist=True, tool_name="file_append")
 
 
 @tool
@@ -71,7 +90,7 @@ def file_create(file_identifier: str, text: str) -> str:
     Returns:
         Success message with the file path, or an error description.
     """
-    return _write_file(file_identifier, text, must_exist=False)
+    return _write_file(file_identifier, text, must_exist=False, tool_name="file_create")
 
 
 def _resolve_file_path(file_identifier: str) -> str | None:

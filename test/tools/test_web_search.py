@@ -4,6 +4,21 @@ import sys
 import pytest
 
 from macllm.tools.web_search import web_search, reset_search_counter, _state
+from macllm.core.agent_status import AgentStatusManager
+
+
+class DummyApp:
+    def __init__(self):
+        self.status_manager = AgentStatusManager()
+
+
+@pytest.fixture(autouse=True)
+def setup_macllm():
+    """Set up MacLLM._instance for all tests in this module."""
+    from macllm.macllm import MacLLM
+    MacLLM._instance = DummyApp()
+    yield
+    MacLLM._instance = None
 
 
 def test_reset_search_counter():

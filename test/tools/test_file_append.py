@@ -3,6 +3,7 @@ import os
 
 from macllm.tools.file_append import file_append, file_create, _resolve_file_path
 from macllm.tags.file_tag import FileTag
+from macllm.core.agent_status import AgentStatusManager
 
 
 class DummyArgs:
@@ -25,6 +26,7 @@ class DummyApp:
 
     def __init__(self):
         self.chat_history = DummyConversation()
+        self.status_manager = AgentStatusManager()
 
     def debug_log(self, *args, **kwargs):
         pass
@@ -39,10 +41,14 @@ class DummyApp:
 @pytest.fixture
 def setup_file_tag(tmp_path):
     """Set up FileTag with indexed directory and files."""
+    from macllm.macllm import MacLLM
+    
     test_file = tmp_path / "existing.md"
     test_file.write_text("Original content")
 
-    FileTag._macllm = DummyApp()
+    dummy_app = DummyApp()
+    FileTag._macllm = dummy_app
+    MacLLM._instance = dummy_app  # For status manager access
     FileTag._indexed_directories = [str(tmp_path)]
     FileTag._index = [("existing.md", str(test_file))]
 
@@ -52,6 +58,7 @@ def setup_file_tag(tmp_path):
     FileTag._index = []
     FileTag._indexed_directories = []
     FileTag._macllm = None
+    MacLLM._instance = None
 
 
 # ===== file_append tests =====

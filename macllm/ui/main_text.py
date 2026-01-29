@@ -270,8 +270,10 @@ class MainTextHandler:
                     )
 
         # Add agent status if present (shown at bottom during agent execution)
-        if hasattr(macllm.chat_history, 'agent_status') and macllm.chat_history.agent_status:
-            status_text = "\n\n" + macllm.chat_history.agent_status
+        from macllm.macllm import MacLLM
+        status_text = MacLLM.get_status_manager().render()
+        if status_text:
+            status_text = "\n\n" + status_text
             status_color = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
             status_font = NSFont.systemFontOfSize_(11.0)
             status_attributes = {

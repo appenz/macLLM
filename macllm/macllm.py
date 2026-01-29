@@ -17,6 +17,7 @@ from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug
 from macllm.core.memory import save_conversation, load_conversation
+from macllm.core.agent_status import AgentStatusManager
 from macllm.tags.base import TagPlugin
 
 from quickmachotkey import quickHotKey, mask
@@ -70,6 +71,11 @@ class MacLLM:
 
     version = "0.2.0"
 
+    @classmethod
+    def get_status_manager(cls) -> AgentStatusManager:
+        """Get the current agent status manager."""
+        return cls._instance.status_manager
+
     def debug_log(self, message: str, level: int = 0):
         """Structured debug logging with color-coded levels."""
         if not self.args.debug:
@@ -117,6 +123,9 @@ class MacLLM:
         self.req = 0
 
         self.ui.clipboardCallback = self.clipboard_changed
+        
+        # Initialize agent status manager for displaying progress
+        self.status_manager = AgentStatusManager(ui_update_callback=self._update_ui_from_callback)
         
         # Initialize conversation history (multiple conversations)
         self.conversation_history = ConversationHistory()
@@ -167,8 +176,7 @@ class MacLLM:
             # Step 8: Run agent on background thread
             def run_agent():
                 try:
-                    self.chat_history.agent_status = ""
-                    self._update_ui_from_callback()
+                    self.status_manager.reset()
                     
                     result = self.chat_history.agent.run(request.expanded_prompt, max_steps=10, reset=False)
                     
@@ -181,16 +189,14 @@ class MacLLM:
                         self.chat_history.add_assistant_message("Error: No output from agent")
                     
                     save_conversation(self.chat_history)
-                    self.chat_history.agent_status = ""
-                    self._update_ui_from_callback()
+                    self.status_manager.reset()
                     
                     self.debug_log(f'Output: {result}\n')
                 except Exception as e:
                     self.debug_exception(e)
                     self.chat_history.add_assistant_message(f"Error: {str(e)}")
                     save_conversation(self.chat_history)
-                    self.chat_history.agent_status = ""
-                    self._update_ui_from_callback()
+                    self.status_manager.reset()
             
             thread = threading.Thread(target=run_agent, daemon=True)
             thread.start()

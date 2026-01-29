@@ -1,4 +1,3 @@
-import os
 import re
 from typing import Optional, Callable
 import litellm
@@ -12,6 +11,7 @@ litellm.drop_params = True
 
 
 def extract_section(lines, start_pattern, stop_level):
+    """Extract a section from plan text based on markdown headers."""
     section, collecting = [], False
     for line in lines:
         if line.startswith(stop_level) and not line.startswith(stop_level + '#'):
@@ -26,26 +26,38 @@ def extract_section(lines, start_pattern, stop_level):
     return section
 
 
-def create_step_callback(status_callback: Optional[Callable[[str], None]], token_callback: Optional[Callable[[int, int], None]] = None):
+def create_step_callback(token_callback: Optional[Callable[[int, int], None]] = None):
+    """Create a callback for smolagents step events.
+    
+    Updates AgentStatusManager with plan, facts, and tool call information.
+    """
     input_tokens = [0]
     output_tokens = [0]
     
     def on_step(step, agent):
-        status_lines = []
+        from macllm.macllm import MacLLM
+        status_manager = MacLLM.get_status_manager()
         
         if isinstance(step, PlanningStep):
             if step.plan:
                 lines = step.plan.split('\n')
-                progress = extract_section(lines, r'Facts.*learned', '###')
-                plan = extract_section(lines, r'2\.\s*Plan', '##')
                 
-                if progress:
-                    progress[0] = "Facts learned:"
-                    status_lines.extend(progress)
-                if plan:
-                    plan[0] = "Plan:"
-                    plan = [line.lstrip('# ') for line in plan]
-                    status_lines.extend(plan)
+                # Extract facts
+                facts_lines = extract_section(lines, r'Facts.*learned', '###')
+                if facts_lines:
+                    facts_lines[0] = ""  # Remove header
+                    facts_text = '\n'.join(line for line in facts_lines if line.strip())
+                    if facts_text:
+                        status_manager.set_facts(facts_text)
+                
+                # Extract plan
+                plan_lines = extract_section(lines, r'2\.\s*Plan', '##')
+                if plan_lines:
+                    plan_lines[0] = ""  # Remove header
+                    plan_lines = [line.lstrip('# ') for line in plan_lines]
+                    plan_text = '\n'.join(line for line in plan_lines if line.strip())
+                    if plan_text:
+                        status_manager.set_plan(plan_text)
             
             if step.token_usage and token_callback:
                 input_tokens[0] += step.token_usage.input_tokens
@@ -53,37 +65,8 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]], token
                 token_callback(input_tokens[0], output_tokens[0])
         
         elif isinstance(step, ActionStep):
-            tool_calls = []
-            if step.tool_calls:
-                tool_calls = [(tc.name, tc.arguments) for tc in step.tool_calls]
-            elif step.model_output_message and step.model_output_message.tool_calls:
-                tool_calls = [
-                    (tc.function.name, tc.function.arguments) if hasattr(tc, 'function') 
-                    else (str(tc), None)
-                    for tc in step.model_output_message.tool_calls
-                ]
-            
-            if tool_calls:
-                status_lines.append("Using tools:")
-                for name, args in tool_calls:
-                    if args:
-                        if name == "web_search":
-                            queries = args.get('queries', [])
-                            queries_str = ', '.join(f"'{q}'" for q in queries[:3])
-                            if len(queries) > 3:
-                                queries_str += f" (+{len(queries) - 3} more)"
-                            status_lines.append(f"- Tool Call: web_search: {queries_str}")
-                        elif name == "final_answer":
-                            status_lines.append(f"- final_answer: '{args['answer']}'")
-                        else:
-                            args_str = str(args)[:60]
-                            status_lines.append(f"- Tool Call: {name}({args_str})")
-                    else:
-                        status_lines.append(f"- Tool Call: {name}")
-                    
-                    from macllm.macllm import MacLLM
-                    args_str = str(args)[:80] if args else ""
-                    MacLLM._instance.debug_log(f"Tool: {name}({args_str})", 3)
+            # Tool status updates are handled by the tools themselves
+            # via MacLLM.get_status_manager().start_tool_call() and complete_tool_call()
             
             if step.token_usage and token_callback:
                 input_tokens[0] += step.token_usage.input_tokens
@@ -91,17 +74,14 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]], token
                 token_callback(input_tokens[0], output_tokens[0])
         
         elif isinstance(step, TaskStep):
-            status_lines.append("Task:")
-            status_lines.append(str(step))
-        
-        if status_lines and status_callback:
-            status_text = '\n'.join(status_lines)
-            status_callback(status_text)
+            # TaskStep handling - could be extended in future
+            pass
     
     return on_step
 
 
-def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", status_callback: Optional[Callable[[str], None]] = None, token_callback: Optional[Callable[[int], None]] = None) -> ToolCallingAgent:
+def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", token_callback: Optional[Callable[[int], None]] = None) -> ToolCallingAgent:
+    """Create a smolagents ToolCallingAgent with configured tools and callbacks."""
     # Reset search counter for new agent run
     reset_search_counter()
     
@@ -112,7 +92,7 @@ def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", st
     
     tools = [getattr(tools_module, name) for name in tools_module.__all__]
     
-    step_callback = create_step_callback(status_callback, token_callback)
+    step_callback = create_step_callback(token_callback)
     
     from macllm.macllm import SYSTEM_PROMPT
     agent = ToolCallingAgent(

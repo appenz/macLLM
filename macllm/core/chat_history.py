@@ -5,7 +5,6 @@ from macllm import macllm
 class Conversation:
     def __init__(self):
         self.agent = None
-        self.agent_status = ""
         self.ui_update_callback = None
         self.reset()
     
@@ -81,7 +80,6 @@ class Conversation:
         self.messages = []
         self.context_history = []
         self.speed_level = "normal"
-        self.agent_status = ""
         
         self.add_system_message(macllm.SYSTEM_PROMPT)
         
@@ -103,12 +101,7 @@ class Conversation:
         if self.agent is not None:
             old_steps = self.agent.memory.steps
         
-        def status_callback(status_text: str):
-            self.agent_status = status_text
-            if self.ui_update_callback:
-                self.ui_update_callback()
-        
-        self.agent = create_agent(speed=self.speed_level, status_callback=status_callback, token_callback=token_callback)
+        self.agent = create_agent(speed=self.speed_level, token_callback=token_callback)
         
         if old_steps is not None:
             self.agent.memory.steps = old_steps
