@@ -205,6 +205,12 @@ class InputFieldDelegate(NSObject):
         while start > 0:
             ch = full_text[start - 1]
             if ch == '"':
+                # Check if this is an opening quote for a tag (preceded by @ or /)
+                # If so, include the tag prefix and stop - don't toggle in_quotes
+                # which would incorrectly extend past whitespace before the tag.
+                if start >= 2 and full_text[start - 2] in ('@', '/'):
+                    start -= 2  # include both @ (or /) and the opening quote
+                    break
                 in_quotes = not in_quotes
                 start -= 1
                 continue
