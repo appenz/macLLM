@@ -80,6 +80,10 @@ def create_step_callback(status_callback: Optional[Callable[[str], None]], token
                             status_lines.append(f"- Tool Call: {name}({args_str})")
                     else:
                         status_lines.append(f"- Tool Call: {name}")
+                    
+                    from macllm.macllm import MacLLM
+                    args_str = str(args)[:80] if args else ""
+                    MacLLM._instance.debug_log(f"Tool: {name}({args_str})", 3)
             
             if step.token_usage and token_callback:
                 input_tokens[0] += step.token_usage.input_tokens
@@ -110,9 +114,11 @@ def create_agent(model: Optional[LiteLLMModel] = None, speed: str = "normal", st
     
     step_callback = create_step_callback(status_callback, token_callback)
     
+    from macllm.macllm import SYSTEM_PROMPT
     agent = ToolCallingAgent(
         tools=tools,
         model=model,
+        instructions=SYSTEM_PROMPT,
         verbosity_level=LogLevel.ERROR,
         planning_interval=3,
         step_callbacks={

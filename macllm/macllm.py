@@ -34,8 +34,12 @@ SYSTEM_PROMPT = """You are a helpful assistant.
 - If asked to just look at a context, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
 - Personal, non-public information is often found in the users files (see tool)
-- If the use refers to "notes" or "files", use the file_search tool to find relevant files.
-Conversation history follows below."""
+- If the user refers to "notes" he means the local files. Use tools to interact with them.
+- If you can't find a file right away, always ask for instructions.
+- Never create a file without the user's explicit instructions.
+- If a user asks you to append to a file, you may NEVER create a file with that name. Instead ask the user for instructions.
+
+"""
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -43,6 +47,7 @@ class color:
    GREEN = '\033[92m'
    YELLOW = '\033[93m'
    BLUE = '\033[94m'
+   ORANGE = '\033[38;5;208m'
    BOLD = '\033[1m'
    GREY = '\033[90m'
    UNDERLINE = '\033[4m'
@@ -58,6 +63,7 @@ def handler():
     macLLM.ui.hotkey_pressed()
 
 class MacLLM:
+    _instance = None  # Singleton reference for global access
 
     # Watch the clipboard for the trigger string "@@" and if you find it run through GPT
     # and write the result back to the clipboard
@@ -72,7 +78,8 @@ class MacLLM:
         colors = {
             0: color.GREY,    # Grey for general info
             1: color.BOLD,    # Black/bold for important info
-            2: color.RED      # Red for errors/warnings
+            2: color.RED,     # Red for errors/warnings
+            3: color.ORANGE   # Orange for tool calls
         }
         
         color_code = colors.get(level, color.GREY)
@@ -88,11 +95,22 @@ class MacLLM:
         print(f"{color.GREY}{exception_str}{color.END}")
         print(f"{color.GREY}---{color.END}")
 
+    def check_path_in_active_conversations(self, path: str) -> bool:
+        """Check if a path was explicitly referenced in any active conversation.
+        
+        Currently checks only the current conversation, but can be extended
+        to check multiple parallel conversations in the future.
+        """
+        if self.chat_history and self.chat_history.has_path_in_context(path):
+            return True
+        return False
+
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
         print(f'To use via the clipboard, copy text starting with "@@"')
 
     def __init__(self, args=None):
+        MacLLM._instance = self
         self.args = args or argparse.Namespace(debug=False, show_window_on_start=False)
         self.ui = MacLLMUI()
         self.ui.macllm = self
@@ -236,8 +254,9 @@ def main():
     # plugin that registered configuration prefixes.
     ShortCut.init_shortcuts(macLLM)
 
-    # Start background embedding build for FileTag if it has indexed files
+    # Build file index from collected directories, then start embedding build
     from macllm.tags.file_tag import FileTag
+    FileTag.build_index()
     FileTag.start_embedding_build()
     
     macLLM.show_instructions()
@@ -253,6 +272,8 @@ def create_macllm(debug: bool = False, start_ui: bool = False):
     mac = MacLLM(args=args)
     mac.plugins = TagPlugin.load_plugins(mac)
     ShortCut.init_shortcuts(mac)
+    from macllm.tags.file_tag import FileTag
+    FileTag.build_index()
     if start_ui:
         mac.ui.start(dont_run_app=True)
     return mac

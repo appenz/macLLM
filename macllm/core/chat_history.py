@@ -68,6 +68,13 @@ class Conversation:
         }
         self.context_history.append(entry)
         return actual_name
+
+    def has_path_in_context(self, path: str) -> bool:
+        """Check if a file path was explicitly referenced in this conversation's context."""
+        for ctx in self.context_history:
+            if ctx.get("type") == "path" and ctx.get("source") == path:
+                return True
+        return False
     
     def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""

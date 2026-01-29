@@ -41,6 +41,7 @@ class FileTag(TagPlugin):
     # Class-level state for file index and embeddings
     _macllm = None
     _index: list[tuple[str, str]] = []
+    _indexed_directories: list[str] = []
     _embeddings: Optional[txtai.Embeddings] = None
     _embedding_ready = threading.Event()
     _embedding_lock = threading.Lock()
@@ -52,6 +53,7 @@ class FileTag(TagPlugin):
         super().__init__(macllm)
         FileTag._macllm = macllm
         FileTag._index = []
+        FileTag._indexed_directories = []
         FileTag._embeddings = None
         FileTag._embedding_ready = threading.Event()
 
@@ -64,8 +66,8 @@ class FileTag(TagPlugin):
     def on_config_tag(self, tag: str, value: str):  # noqa: D401
         """Called during shortcut loading for each `@IndexFiles` entry.
 
-        *value* is expected to be a path string.  We walk the directory
-        recursively and add eligible files to *self._index*."""
+        *value* is expected to be a path string. We collect the directory
+        for later indexing via build_index()."""
         dir_path = value.strip().strip('"')
         dir_path = os.path.expandvars(os.path.expanduser(dir_path))
 
@@ -73,14 +75,23 @@ class FileTag(TagPlugin):
             FileTag._macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
             return
 
-        for fp in Path(dir_path).rglob("*"):
-            if fp.is_file() and fp.suffix.lower() in self.EXTENSIONS:
-                basename = fp.name
-                FileTag._index.append((basename.lower(), str(fp)))
+        # Collect directory for later indexing
+        if dir_path not in FileTag._indexed_directories:
+            FileTag._indexed_directories.append(dir_path)
+
+    @classmethod
+    def build_index(cls):
+        """Walk all indexed directories and build the file index."""
+        cls._index = []
+        for dir_path in cls._indexed_directories:
+            for fp in Path(dir_path).rglob("*"):
+                if fp.is_file() and fp.suffix.lower() in cls.EXTENSIONS:
+                    cls._index.append((fp.name.lower(), str(fp)))
 
         # Sort alphabetically by basename for deterministic ordering
-        FileTag._index.sort(key=lambda t: t[0])
-        FileTag._macllm.debug_log(f"Indexed {len(FileTag._index)} files from {dir_path}", 0)
+        cls._index.sort(key=lambda t: t[0])
+        if cls._macllm:
+            cls._macllm.debug_log(f"Indexed {len(cls._index)} files from {len(cls._indexed_directories)} directories", 0)
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion
@@ -136,7 +147,7 @@ class FileTag(TagPlugin):
             content,
             icon="📁"
         )
-        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---"
+        return f"\n\n--- context:{context_name} (path: {path_spec}) ---\n{content}\n--- end context:{context_name} ---"
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks
@@ -256,7 +267,8 @@ class FileTag(TagPlugin):
     @classmethod
     def _start_reindex(cls):
         cls._embedding_ready.clear()
-        cls._macllm.debug_log("Reindexing embeddings...", 0)
+        cls._macllm.debug_log("Reindexing...", 0)
+        cls.build_index()
         cls.start_embedding_build()
 
     @classmethod

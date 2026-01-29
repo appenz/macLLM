@@ -14,3 +14,4 @@ config/myshortcuts.toml
 
 # Screenshot test output
 macllm_test_screenshot.png
+.cursor/debug.log
