@@ -12,16 +12,20 @@ litellm.drop_params = True
 
 def extract_section(lines, start_pattern, stop_level):
     """Extract a section from plan text based on markdown headers."""
-    section, collecting = [], False
+    section, collecting, has_content = [], False, False
     for line in lines:
         if line.startswith(stop_level) and not line.startswith(stop_level + '#'):
             if re.search(start_pattern, line, re.IGNORECASE):
-                collecting, section = True, [line]
+                collecting, section, has_content = True, [line], False
             elif collecting:
                 break
         elif collecting:
             if not line.strip():
-                break
+                # Skip empty lines before content, break on empty line after content
+                if has_content:
+                    break
+                continue
+            has_content = True
             section.append(line)
     return section
 
