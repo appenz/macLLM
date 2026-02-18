@@ -38,6 +38,8 @@ class FileTag(TagPlugin):
     SEARCH_PREVIEW_LEN = 1000
     SEARCH_RESULTS_COUNT = 5
 
+    REINDEX_INTERVAL = 5 * 60  # seconds between periodic re-indexes
+
     # Class-level state for file index and embeddings
     _macllm = None
     _index: list[tuple[str, str]] = []
@@ -45,6 +47,7 @@ class FileTag(TagPlugin):
     _embeddings: Optional[txtai.Embeddings] = None
     _embedding_ready = threading.Event()
     _embedding_lock = threading.Lock()
+    _reindex_event = threading.Event()
 
     # ------------------------------------------------------------------
     # Object lifecycle
@@ -56,6 +59,7 @@ class FileTag(TagPlugin):
         FileTag._indexed_directories = []
         FileTag._embeddings = None
         FileTag._embedding_ready = threading.Event()
+        FileTag._reindex_event = threading.Event()
 
     # ------------------------------------------------------------------
     # TagPlugin interface – configuration tags
@@ -257,19 +261,29 @@ class FileTag(TagPlugin):
     # Embedding search (class methods)
     # ------------------------------------------------------------------
     @classmethod
-    def start_embedding_build(cls):
-        if not cls._index:
-            cls._macllm.debug_log("No files indexed, skipping embedding build", 0)
-            return
-        thread = threading.Thread(target=cls._build_embeddings, daemon=True)
+    def start_index_loop(cls, interval: float = None):
+        """Start a daemon thread that periodically rebuilds the file index
+        and embeddings.  The first cycle runs immediately."""
+        if interval is None:
+            interval = cls.REINDEX_INTERVAL
+        thread = threading.Thread(target=cls._index_loop, args=(interval,), daemon=True)
         thread.start()
 
     @classmethod
+    def _index_loop(cls, interval: float):
+        while True:
+            cls.build_index()
+            if cls._index:
+                cls._build_embeddings()
+            else:
+                cls._embedding_ready.set()
+            cls._reindex_event.wait(timeout=interval)
+            cls._reindex_event.clear()
+
+    @classmethod
     def _start_reindex(cls):
-        cls._embedding_ready.clear()
         cls._macllm.debug_log("Reindexing...", 0)
-        cls.build_index()
-        cls.start_embedding_build()
+        cls._reindex_event.set()
 
     @classmethod
     def _build_embeddings(cls):

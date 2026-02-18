@@ -260,10 +260,9 @@ def main():
     # plugin that registered configuration prefixes.
     ShortCut.init_shortcuts(macLLM)
 
-    # Build file index from collected directories, then start embedding build
+    # Start periodic file index + embedding rebuild (first cycle runs immediately)
     from macllm.tags.file_tag import FileTag
-    FileTag.build_index()
-    FileTag.start_embedding_build()
+    FileTag.start_index_loop()
     
     macLLM.show_instructions()
     macLLM.ui.start(dont_run_app=False)

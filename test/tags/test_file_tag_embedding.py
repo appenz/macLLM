@@ -38,6 +38,7 @@ def file_tag_with_files(tmp_path):
     FileTag._indexed_directories = []
     FileTag._embeddings = None
     FileTag._embedding_ready = threading.Event()
+    FileTag._reindex_event = threading.Event()
 
 
 def test_index_populated_after_config_tag(file_tag_with_files):
@@ -66,12 +67,12 @@ def test_build_embeddings_sets_ready_flag(file_tag_with_files):
     mock_embeddings.index.assert_called_once()
 
 
-def test_start_embedding_build_spawns_thread(file_tag_with_files):
+def test_start_index_loop_builds_embeddings(file_tag_with_files):
     tag, _ = file_tag_with_files
 
     mock_embeddings = MagicMock()
     with patch("macllm.tags.file_tag.txtai.Embeddings", return_value=mock_embeddings):
-        FileTag.start_embedding_build()
+        FileTag.start_index_loop(interval=9999)
         FileTag._embedding_ready.wait(timeout=5.0)
 
     assert FileTag._embedding_ready.is_set()
@@ -133,26 +134,23 @@ def test_get_file_content_invalid_id(file_tag_with_files):
         FileTag.get_file_content(999)
 
 
-def test_reindex_clears_ready_flag(file_tag_with_files):
+def test_reindex_sets_event(file_tag_with_files):
     tag, _ = file_tag_with_files
-    FileTag._embedding_ready.set()
+    FileTag._reindex_event.clear()
 
-    with patch.object(FileTag, "start_embedding_build"):
-        FileTag._start_reindex()
+    FileTag._start_reindex()
 
-    assert not FileTag._embedding_ready.is_set()
+    assert FileTag._reindex_event.is_set()
 
 
 def test_expand_reindex_triggers_rebuild(file_tag_with_files):
     tag, _ = file_tag_with_files
-    FileTag._embedding_ready.set()
+    FileTag._reindex_event.clear()
 
-    with patch.object(FileTag, "start_embedding_build") as mock_build:
-        result = tag.expand("/reindex", None, None)
+    result = tag.expand("/reindex", None, None)
 
     assert result == ""
-    mock_build.assert_called_once()
-    assert not FileTag._embedding_ready.is_set()
+    assert FileTag._reindex_event.is_set()
 
 
 def test_get_prefixes_includes_reindex(file_tag_with_files):
