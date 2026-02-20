@@ -19,6 +19,7 @@ class UserRequest:
         self.context = ""                       # Additional context to append
         self.needs_image = False                # Whether image generation is needed
         self.speed_level = None                 # Speed preference for this request if provided
+        self.agent_name = None                  # Agent type for this request (set by @agent: tag)
     
     @classmethod
     def find_shortcuts(cls, text: str) -> list[tuple[int, int, str]]:

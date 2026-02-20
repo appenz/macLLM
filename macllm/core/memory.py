@@ -19,7 +19,8 @@ def save_conversation(conversation) -> bool:
     try:
         data = {
             'steps': conversation.agent.memory.steps,
-            'messages': conversation.messages
+            'messages': conversation.messages,
+            'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
         }
         with open(get_latest_path(), 'wb') as f:
             pickle.dump(data, f)
@@ -38,6 +39,15 @@ def load_conversation(conversation) -> bool:
         with open(path, 'rb') as f:
             data = pickle.load(f)
         if isinstance(data, dict):
+            # Restore agent class from saved name (old pickles default to "default")
+            agent_name = data.get('agent_name', 'default')
+            try:
+                from macllm.agents import get_agent_class
+                conversation.agent_cls = get_agent_class(agent_name)
+                conversation._create_agent()
+            except KeyError:
+                pass
+
             conversation.agent.memory.steps = data.get('steps', [])
             conversation.messages = data.get('messages', [])
         else:

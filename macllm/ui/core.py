@@ -487,7 +487,10 @@ class MacLLMUI:
         input_tokens = metadata.get('input_tokens', 0)
         output_tokens = metadata.get('output_tokens', 0)
 
-        # Determine mode from conversation speed
+        # Determine agent and speed for display
+        agent_cls = getattr(self.macllm.chat_history, "agent_cls", None)
+        agent_display = agent_cls.macllm_name.capitalize() if agent_cls else "Default"
+
         speed = getattr(self.macllm.chat_history, "speed_level", "normal") or "normal"
         speed_display = {
             "fast": "Fast",
@@ -495,8 +498,7 @@ class MacLLMUI:
             "slow": "Think",
         }.get(speed.lower(), "Normal")
 
-        # Create the full text with requested ordering
-        line1 = f"{speed_display}"
+        line1 = f"{agent_display} / {speed_display}"
         line2 = f"{model}"
         line3 = f"{input_tokens} in / {output_tokens} out"
         txt = f"{line1}\n{line2}\n{line3}"

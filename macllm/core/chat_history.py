@@ -1,10 +1,10 @@
 from typing import List, Dict, Optional, Union
-from macllm import macllm
 
 
 class Conversation:
     def __init__(self):
         self.agent = None
+        self.agent_cls = None  # set lazily in reset() or by caller
         self.ui_update_callback = None
         self.reset()
     
@@ -75,13 +75,19 @@ class Conversation:
                 return True
         return False
     
+    def _get_agent_cls(self):
+        if self.agent_cls is None:
+            from macllm.agents import get_default_agent_class
+            self.agent_cls = get_default_agent_class()
+        return self.agent_cls
+
     def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""
         self.messages = []
         self.context_history = []
         self.speed_level = "normal"
-        
-        self.add_system_message(macllm.SYSTEM_PROMPT)
+
+        self._get_agent_cls()
         
         self.add_assistant_message("How can I help you?")
         
@@ -94,14 +100,22 @@ class Conversation:
             clear_conversation()
     
     def _create_agent(self, token_callback=None):
-        """Create agent instance. Called lazily or on reset."""
+        """Create agent instance using the current agent class.
+
+        Routes through :func:`agent_service.create_agent` so tests can
+        monkeypatch a single function to inject mock agents.
+        """
         from macllm.core.agent_service import create_agent
-        
+
         old_steps = None
         if self.agent is not None:
             old_steps = self.agent.memory.steps
         
-        self.agent = create_agent(speed=self.speed_level, token_callback=token_callback)
+        self.agent = create_agent(
+            agent_cls=self._get_agent_cls(),
+            speed=self.speed_level,
+            token_callback=token_callback,
+        )
         
         if old_steps is not None:
             self.agent.memory.steps = old_steps

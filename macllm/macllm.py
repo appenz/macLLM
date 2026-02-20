@@ -28,19 +28,10 @@ macLLM = None
 start_token = "@@"
 alias_token = "@"
 
-SYSTEM_PROMPT = """You are a helpful assistant.
-- If the request refers to a context:... this is a reference to a context block.
-- In most cases, you dont need to mention the context explicitly.
-- If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
-- If asked to just look at a context, just acknowledge it. A question will follow later.
-- If the user's request is not clear, ask for clarification.
-- Personal, non-public information is often found in the users files (see tool)
-- If the user refers to "notes" he means the local files. Use tools to interact with them.
-- If you can't find a file right away, always ask for instructions.
-- Never create a file without the user's explicit instructions.
-- If a user asks you to append to a file, you may NEVER create a file with that name. Instead ask the user for instructions.
+from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
 
-"""
+# Backward-compat alias
+SYSTEM_PROMPT = CUSTOM_INSTRUCTIONS
 
 # Class defining ANSI color codes for terminal output
 class color:
@@ -156,7 +147,10 @@ class MacLLM:
             self.chat_history.add_user_message(user_input)
             self.debug_log(f'Request #{self.req}: user_input={user_input}', 1)
 
-            # Step 4: Select speed level
+            # Step 4: Select agent and speed level
+            if request.agent_name is not None:
+                from macllm.agents import get_agent_class
+                self.chat_history.agent_cls = get_agent_class(request.agent_name)
             if request.speed_level is not None:
                 self.chat_history.speed_level = request.speed_level
 
