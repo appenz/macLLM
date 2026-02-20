@@ -286,6 +286,24 @@ class FileTag(TagPlugin):
         cls._reindex_event.set()
 
     @classmethod
+    def _load_embedding_model(cls) -> txtai.Embeddings:
+        """Load the sentence-transformer model.
+
+        Attempts one normal load (which may check for updates or download the
+        model on the very first run).  If that fails (e.g. network is down),
+        retries in offline/cache-only mode.  After loading, locks the process
+        to offline so the periodic reindex never triggers network requests.
+        """
+        model_path = "sentence-transformers/all-mpnet-base-v2"
+        try:
+            embeddings = txtai.Embeddings(path=model_path)
+        except Exception:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            embeddings = txtai.Embeddings(path=model_path)
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        return embeddings
+
+    @classmethod
     def _build_embeddings(cls):
         cls._macllm.debug_log(f"Building embeddings for {len(cls._index)} files...", 0)
 
@@ -304,7 +322,8 @@ class FileTag(TagPlugin):
                 continue
 
         with cls._embedding_lock:
-            cls._embeddings = txtai.Embeddings(path="sentence-transformers/all-mpnet-base-v2")
+            if cls._embeddings is None:
+                cls._embeddings = cls._load_embedding_model()
             cls._embeddings.index(docs)
 
         cls._embedding_ready.set()
