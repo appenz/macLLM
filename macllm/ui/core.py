@@ -7,7 +7,7 @@ from Foundation import NSThread
 
 from Cocoa import NSApplication, NSStatusBar, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
-from Cocoa import NSPasteboard, NSStringPboardType
+from Cocoa import NSPasteboard, NSStringPboardType, NSPasteboardTypePNG, NSPasteboardTypeTIFF
 
 from Cocoa import NSPanel, NSScreen, NSPanel, NSBorderlessWindowMask, NSImageView
 from Cocoa import NSBorderlessWindowMask
@@ -238,6 +238,17 @@ class MacLLMUI:
     def read_clipboard(self):
         content = self.delegate.pasteboard.stringForType_(NSStringPboardType)
         return content
+
+    def read_clipboard_image(self):
+        """Read image data from the pasteboard, returning a PIL Image or None."""
+        pb = self.delegate.pasteboard
+        for ptype in (NSPasteboardTypePNG, NSPasteboardTypeTIFF):
+            data = pb.dataForType_(ptype)
+            if data:
+                from PIL import Image
+                import io
+                return Image.open(io.BytesIO(bytes(data)))
+        return None
 
     def write_clipboard(self, content):
         self.delegate.pasteboard.declareTypes_owner_([NSStringPboardType], None)

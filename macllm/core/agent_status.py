@@ -32,17 +32,11 @@ class AgentStatusManager:
     def reset(self) -> None:
         """Clear all state for a new agent run."""
         self.plan = ""
-        self.facts = ""
         self.tool_calls: list[ToolCallEntry] = []
     
     def set_plan(self, plan: str) -> None:
         """Update the current plan."""
         self.plan = plan
-        self._notify()
-    
-    def set_facts(self, facts: str) -> None:
-        """Update the facts learned."""
-        self.facts = facts
         self._notify()
     
     def start_tool_call(self, id: str, name: str, args: dict) -> None:
@@ -108,9 +102,6 @@ class AgentStatusManager:
         
         if self.plan:
             sections.append(f"--- Plan ---\n{self.plan}")
-        
-        if self.facts:
-            sections.append(f"--- Facts Learned ---\n{self.facts}")
         
         if self.tool_calls:
             lines = ["--- Tool Calls ---"]

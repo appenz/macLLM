@@ -163,6 +163,50 @@ class MainTextHandler:
         return result
 
     @staticmethod
+    def _render_agent_status(text_view, status_mgr):
+        """Render agent plan and tool calls with rich formatting."""
+        from Foundation import NSMutableAttributedString
+        ts = text_view.textStorage()
+
+        muted = NSColor.colorWithCalibratedWhite_alpha_(0.50, 1.0)
+        light = NSColor.colorWithCalibratedWhite_alpha_(0.62, 1.0)
+        green = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.30, 0.69, 0.31, 1.0)
+        red   = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.84, 0.24, 0.24, 1.0)
+
+        font_sm      = NSFont.systemFontOfSize_(11.0)
+        font_sm_bold = NSFont.boldSystemFontOfSize_(11.0)
+
+        def _append(text, color, font=font_sm):
+            a = NSAttributedString.alloc().initWithString_attributes_(
+                text, {NSForegroundColorAttributeName: color, NSFontAttributeName: font})
+            ts.appendAttributedString_(a)
+
+        _append("\n\n", muted)
+
+        if status_mgr.plan:
+            _append("Plan\n", muted, font_sm_bold)
+            for line in status_mgr.plan.split('\n'):
+                _append(f"  {line}\n", light)
+
+        if status_mgr.tool_calls:
+            if status_mgr.plan:
+                _append("\n", muted)
+            _append("Steps\n", muted, font_sm_bold)
+            for entry in status_mgr.tool_calls:
+                if entry.status == "success":
+                    _append("  ✓ ", green, font_sm_bold)
+                elif entry.status == "running":
+                    _append("  ⟳ ", muted, font_sm_bold)
+                else:
+                    _append("  ✗ ", red, font_sm_bold)
+                _append(f"{entry.name}", muted)
+                if entry.args_summary:
+                    _append(f"({entry.args_summary})", light)
+                if entry.status == "error" and entry.result_summary:
+                    _append(f" — {entry.result_summary}", red)
+                _append("\n", muted)
+
+    @staticmethod
     def calculate_minimum_text_height(macllm):
         """Calculate the minimum height needed to display the initial text content."""
         # If a text area already exists, use it; otherwise create a temporary one for measurement
@@ -271,17 +315,9 @@ class MainTextHandler:
 
         # Add agent status if present (shown at bottom during agent execution)
         from macllm.macllm import MacLLM
-        status_text = MacLLM.get_status_manager().render()
-        if status_text:
-            status_text = "\n\n" + status_text
-            status_color = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
-            status_font = NSFont.systemFontOfSize_(11.0)
-            status_attributes = {
-                NSForegroundColorAttributeName: status_color,
-                NSFontAttributeName: status_font
-            }
-            status_attr_str = NSAttributedString.alloc().initWithString_attributes_(status_text, status_attributes)
-            text_view.textStorage().appendAttributedString_(status_attr_str)
+        status_mgr = MacLLM.get_status_manager()
+        if status_mgr.plan or status_mgr.tool_calls:
+            MainTextHandler._render_agent_status(text_view, status_mgr)
         
         # Calculate height from the rendered content
         layout_manager = text_view.layoutManager()

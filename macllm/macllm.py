@@ -172,7 +172,10 @@ class MacLLM:
                 try:
                     self.status_manager.reset()
                     
-                    result = self.chat_history.agent.run(request.expanded_prompt, max_steps=10, reset=False)
+                    run_kwargs = dict(max_steps=10, reset=False)
+                    if request.images:
+                        run_kwargs["images"] = request.images
+                    result = self.chat_history.agent.run(request.expanded_prompt, **run_kwargs)
                     
                     if isinstance(result, str):
                         result = result.strip()

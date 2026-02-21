@@ -120,28 +120,40 @@ system_prompt: |-
 planning:
   initial_plan : |-
     You are a world expert at analyzing a situation to derive facts, and plan accordingly towards solving a task.
-    Below I will present you a task. You will need to 1. build a survey of facts known or needed to solve the task, then 2. make a plan of action to solve the task.
 
-    ## 1. Facts survey
-    You will build a comprehensive preparatory survey of which facts we have at our disposal and which ones we still need.
-    These "facts" will typically be specific names, dates, values, etc. Your answer should use the below headings:
-    ### 1.1. Facts given in the task
-    List here the specific facts given in the task that could help you (there might be nothing here).
+    For the given task, develop a step-by-step high-level plan. How much detail you need corresponds to the complexity of the task.
+    If the user doesn't ask you to do research and the question is extremely simple, you can answer directly.
+    So for example, if the user asks you "What is the capital of France?", you can answer directly "Paris"
+    For anything more complex or if the user asks you to do research, you will need to develop a plan.
+    The plan should be high-level but each step. DO NOT DETAIL INDIVIDUAL TOOL CALLS, just describe the step in natural language.
+    The Plan always starts with ### Plan:, each step is numbered and ends with '<end_plan>' tag.
+    Here are examples of a plan:
 
-    ### 1.2. Facts to look up
-    List here any facts that we may need to look up.
-    Also list where to find each of these, for instance a website, a file... - maybe the task contains some sources that you should re-use here.
+    ---
+    Task: "Can a Cessna 172S fly over Kilimanjaro?"
+    
+    ### Plan:
+    1. Perform a web search for the height of Kilimanjaro
+    2. Perform a web search for the ceiling of a Cessna 172S
+    3. Provide a final answer based on the results
+    <end_plan>
+    ---
+    Task: "Find Bob's phone number from my notes"
 
-    ### 1.3. Facts to derive
-    List here anything that we want to derive from the above by logical reasoning, for instance computation or simulation.
+    ### Plan:
+    1. Search files for "bob phone number" or similar keywords
+    2. Provide a final answer based on the results
+    <end_plan>
+    ---
+    Task: "Write a reply to the email in @clipboard using my rejection template and sending it via email"
 
-    Don't make any assumptions. For each item, provide a thorough reasoning. Do not add anything else on top of three headings above.
-
-    ## 2. Plan
-    Then for the given task, develop a step-by-step high-level plan taking into account the above inputs and list of facts.
-    This plan should involve individual tasks based on the available tools, that if executed correctly will yield the correct answer.
-    Do not skip steps, do not add any superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
-    After writing the final step of the plan, write the '<end_plan>' tag and stop there.
+    ### Plan:
+    1. Read the email in @clipboard
+    2. Search files for the "rejectiontemplate
+    3. Write the reply using the template
+    4. Send the reply via email
+    <end_plan>
+    ---
 
     You can leverage these tools:
     {%- for tool in tools.values() %}
@@ -165,7 +177,7 @@ planning:
     ```
     {{task}}
     ```
-    First in part 1, write the facts survey, then in part 2, write your plan.
+    Now, write your plan.
   update_plan_pre_messages: |-
     You are a world expert at analyzing a situation, and plan accordingly towards solving a task.
     You have been given the following task:
@@ -174,23 +186,26 @@ planning:
     ```
 
     Below you will find a history of attempts made to solve this task.
-    You will first have to produce a survey of known and unknown facts, then propose a step-by-step high-level plan to solve the task.
+    You have to propose a step-by-step high-level plan to solve the task.
     If the previous tries so far have met some success, your updated plan can build on these results.
     If you are stalled, you can make a completely new plan starting from scratch.
 
     Find the task and history below:
   update_plan_post_messages: |-
-    Now write your updated facts below, taking into account the above history:
-    ## 1. Updated facts survey
-    ### 1.1. Facts given in the task
-    ### 1.2. Facts that we have learned
-    ### 1.3. Facts still to look up
-    ### 1.4. Facts still to derive
+    Now write an update plan based on the facts that you have learned so far. 
+    Mark the steps that are done with ✅ and add a short description of the result.
+    For example:
+ 
+    ---
+    ### Plan:
+    1. Perform a web search for the height of Kilimanjaro ✅
+       - Approximately 5895 meters
+    2. Perform a web search for the ceiling of a Cessna 172S ✅
+       - Service ceiling is 14,000 feet ASL
+    3. Provide a final answer based on the results 
+    <end_plan>
+    ---
 
-    Then write a step-by-step high-level plan to solve the task above.
-    ## 2. Plan
-    ### 2. 1. ...
-    Etc.
     This plan should involve individual tasks based on the available tools, that if executed correctly will yield the correct answer.
     Beware that you have {remaining_steps} steps remaining.
     Do not skip steps, do not add any superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
