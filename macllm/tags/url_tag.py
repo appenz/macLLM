@@ -30,7 +30,6 @@ class URLTag(TagPlugin):
     # Helpers
     # ------------------------------------------------------------------
     def _retrieve_url(self, url: str) -> str:
-        # Basic url validation
         result = urlparse(url)
         if not all([result.scheme, result.netloc]):
             raise ValueError("Invalid URL format")
