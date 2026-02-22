@@ -1,6 +1,5 @@
 from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSBackgroundColorAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
-from .main_text_helpers import is_markdown
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.core.shortcuts import ShortCut
 
@@ -68,7 +67,7 @@ class MainTextHandler:
             # Handle bullets
             if line.strip().startswith(('* ', '- ')):
                 # Remove the bullet marker and get content
-                content = line.strip()[2:]  # Remove first 2 chars (* or - plus space)
+                content = line.strip()[2:].lstrip()
                 bullet_char = '•'
                 
                 # Calculate indentation (count leading spaces/tabs)
@@ -254,64 +253,36 @@ class MainTextHandler:
                 prefix = "User: "
             else:  # assistant
                 color = assistant_color
-                if is_markdown(text):
-                    prefix = None
-                else:
-                    prefix = "Assistant: "
-            
+                prefix = None
 
             # Append the colored prefix first (e.g., "User: ")
             if prefix:
                 MainTextHandler.append_colored_text(text_view, prefix, color)
             
-            # Add message content and optional separator + highlight
+            # Render message content
+            if role == 'user':
+                font = NSFont.systemFontOfSize_(13.0)
+                shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
+                plugins = getattr(macllm, 'plugins', [])
+                attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
+                text_view.textStorage().appendAttributedString_(attr)
+            else:
+                MainTextHandler.append_markdown(text_view, text, color)
+
+            # Apply highlight
+            end_pos = text_view.textStorage().length()
+            if highlight_index is not None and i == highlight_index:
+                highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+                text_view.textStorage().addAttributes_range_(
+                    {NSBackgroundColorAttributeName: highlight_color},
+                    (start_pos, end_pos - start_pos)
+                )
+
+            # Add separator between messages (not after the last one)
             if i < len(messages) - 1:
-                if role == 'user':
-                    font = NSFont.systemFontOfSize_(13.0)
-                    shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
-                    plugins = getattr(macllm, 'plugins', [])
-                    attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
-                    text_view.textStorage().appendAttributedString_(attr)
-                else:
-                    if is_markdown(text):
-                        MainTextHandler.append_markdown(text_view, text, color)
-                    else:
-                        MainTextHandler.append_colored_text(text_view, text, color)
-
-                # Apply highlight (exclude upcoming separator)
-                end_pos = text_view.textStorage().length()
-                if highlight_index is not None and i == highlight_index:
-                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
-                    text_view.textStorage().addAttributes_range_(
-                        {NSBackgroundColorAttributeName: highlight_color},
-                        (start_pos, end_pos - start_pos)
-                    )
-
-                # Add centered separator with paragraph breaks
                 separator_text = "\n" + "─"*47 + "\n"
                 separator_attributed_text = NSAttributedString.alloc().initWithString_attributes_(separator_text, MainTextHandler._separator_attributes)
                 text_view.textStorage().appendAttributedString_(separator_attributed_text)
-            else:
-                if role == 'user':
-                    font = NSFont.systemFontOfSize_(13.0)
-                    shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
-                    plugins = getattr(macllm, 'plugins', [])
-                    attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
-                    text_view.textStorage().appendAttributedString_(attr)
-                else:
-                    if is_markdown(text):
-                        MainTextHandler.append_markdown(text_view, text, color)
-                    else:
-                        MainTextHandler.append_colored_text(text_view, text, color)
-
-                # Apply highlight for the last message
-                end_pos = text_view.textStorage().length()
-                if highlight_index is not None and i == highlight_index:
-                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
-                    text_view.textStorage().addAttributes_range_(
-                        {NSBackgroundColorAttributeName: highlight_color},
-                        (start_pos, end_pos - start_pos)
-                    )
 
         # Add agent status if present (shown at bottom during agent execution)
         from macllm.macllm import MacLLM
