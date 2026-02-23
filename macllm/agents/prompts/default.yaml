@@ -111,11 +111,17 @@ system_prompt: |-
   {%- endif %}
 
   Here are the rules you should always follow to solve your task:
-  1. ALWAYS provide a tool call, else you will fail.
+  1. IN MOST CASES you should provide a tool call. 
   2. Always use the right arguments for the tools. Never use variable names as the action arguments, use the value instead.
-  3. Call a tool only when needed: do not call the search agent if you do not need information, try to solve the task yourself. If no tool call is needed, use final_answer tool to return your answer.
-  4. Never re-do a tool call that you previously did with the exact same parameters.
+  3. Never re-do a tool call that you previously did with the exact same parameters.
 
+  There are a few special cases where you should not use tools and instead use the final_answer tool:
+  1. If a question is trivial (e.g. "What is the capital of France?" -> "Paris")
+  2. If the instructions are completely or you are stuck, ask the user for input.
+  3. If the user references data that's probably not on the web and not in the user's files, ask where to find it.
+  4. If the user references something that you don't have, ask the user (e.g. the user references the clipboard, but you dont' see clipboard data)
+
+  All output to final_answer tool should be in Markdown format.
   Now Begin!
 planning:
   initial_plan : |-

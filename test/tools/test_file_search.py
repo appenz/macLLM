@@ -39,6 +39,7 @@ def file_tag_with_index(tmp_path):
         ("doc1.md", str(test_file1)),
         ("doc2.md", str(test_file2)),
     ]
+    FileTag._filepath_to_idx = {str(test_file1): 0, str(test_file2): 1}
     FileTag._embedding_ready.set()
 
     mock_embeddings = MagicMock()
@@ -48,6 +49,7 @@ def file_tag_with_index(tmp_path):
     yield tmp_path
 
     FileTag._index = []
+    FileTag._filepath_to_idx = {}
     FileTag._embeddings = None
     FileTag._embedding_ready.clear()
     MacLLM._instance = None
@@ -113,6 +115,7 @@ def test_search_files_shows_truncated_indicator(tmp_path):
     FileTag._macllm = dummy_app
     MacLLM._instance = dummy_app
     FileTag._index = [("long.md", str(long_file))]
+    FileTag._filepath_to_idx = {str(long_file): 0}
     FileTag._embedding_ready.set()
 
     mock_embeddings = MagicMock()
@@ -123,6 +126,7 @@ def test_search_files_shows_truncated_indicator(tmp_path):
     assert "(truncated)" in result
 
     FileTag._index = []
+    FileTag._filepath_to_idx = {}
     FileTag._embeddings = None
     FileTag._embedding_ready.clear()
     MacLLM._instance = None

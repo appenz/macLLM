@@ -1,38 +1,32 @@
 # Agent Status Display
 
-During agent execution, macLLM displays real-time status information to the user. This document describes the three-section status display and the `AgentStatusManager` API.
+During agent execution, macLLM displays real-time status information to the user. This document describes the two-section status display and the `AgentStatusManager` API.
 
 ## Display Format
 
-The status display shows three sections at the bottom of the conversation during agent execution:
+The status display shows two sections at the bottom of the conversation during agent execution:
 
 ```
---- Plan ---
-1. Search for relevant information
-2. Analyze the results
-3. Provide a summary
+Plan
+  1. Search for relevant information
+  2. Analyze the results
+  3. Provide a summary
 
---- Facts Learned ---
-- The API returns JSON format
-- Rate limit is 100 requests/hour
-
---- Tool Calls ---
-[OK] web_search("python async")
-[OK] web_search("asyncio best practices")
-[..] file_append("/tmp/notes.txt")
-[ERR] web_search("invalid query") - API rate limit exceeded
+Steps
+  ✓ web_search("python async")
+  ✓ web_search("asyncio best practices")
+  ⟳ file_append("/tmp/notes.txt")
+  ✗ web_search("invalid query") — API rate limit exceeded
 ```
 
 ### Section Details
 
 **Plan**: The current execution plan from the agent's planning step. Updated when the agent replans.
 
-**Facts Learned**: Facts extracted during planning. Accumulates across planning steps.
-
-**Tool Calls**: Log of all tool invocations with status indicators:
-- `[..]` - Running (tool execution in progress)
-- `[OK]` - Success (tool completed successfully)
-- `[ERR]` - Error (tool failed, shows error summary)
+**Steps**: Log of all tool invocations with status indicators:
+- `⟳` - Running (tool execution in progress)
+- `✓` - Success (tool completed successfully)
+- `✗` - Error (tool failed, shows error summary)
 
 ## AgentStatusManager API
 
@@ -48,6 +42,7 @@ class ToolCallEntry:
     args_summary: str          # Short summary of arguments
     status: Literal["running", "success", "error"]
     result_summary: str = ""   # Brief result or error message
+    started_at: float          # Timestamp from time.time()
 ```
 
 ### AgentStatusManager
@@ -55,12 +50,10 @@ class ToolCallEntry:
 ```python
 class AgentStatusManager:
     plan: str                      # Current plan text
-    facts: str                     # Accumulated facts
     tool_calls: list[ToolCallEntry]
     ui_update_callback: Callable   # Called after any update
     
     def set_plan(self, plan: str) -> None
-    def set_facts(self, facts: str) -> None
     def start_tool_call(self, id: str, name: str, args: dict) -> None
     def complete_tool_call(self, id: str, result: str = "") -> None
     def fail_tool_call(self, id: str, error: str) -> None
@@ -86,7 +79,7 @@ MacLLM.get_status_manager().complete_tool_call(tool_id, result)
 
 The step callback in `create_step_callback()` handles:
 
-- **PlanningStep**: Calls `set_plan()` and `set_facts()` with extracted content
+- **PlanningStep**: Calls `set_plan()` with extracted content
 - **ActionStep**: Calls `start_tool_call()` for each tool in `step.tool_calls`
 
 ### Tools
@@ -131,7 +124,7 @@ The status manager handles both patterns - if `complete_tool_call()` is called w
 ```
 smolagents step callback
     │
-    ├─► PlanningStep ─► set_plan(), set_facts()
+    ├─► PlanningStep ─► set_plan()
     │
     └─► ActionStep ─► start_tool_call() for each tool
                           │

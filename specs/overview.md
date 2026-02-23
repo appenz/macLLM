@@ -21,15 +21,21 @@ A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (
     - `user_request.py`: `UserRequest` class for processing @tags
     - `shortcuts.py`: Slash-based user-defined shortcuts loaded from TOML config files (e.g. `/travelinfo`)
     - `llm_service.py`: LLM integration via LiteLLM library
-- **Tags** (`tags/`): Plugin system for @tag expansion (e.g. `@clipboard`, `@file`, `@speed`)
+    - `agent_service.py`: Agent factory (`create_agent()`) and step callbacks
+    - `agent_status.py`: `AgentStatusManager` for live plan/tool-call display
+    - `memory.py`: Conversation persistence (save/load/clear)
+- **Tags** (`tags/`): Plugin system for @tag and /command expansion (e.g. `@clipboard`, `@file`, `/fast`, `@agent:`)
+- **Agents** (`agents/`): Agent architecture built on smolagents (see `specs/agents.md`)
+- **Tools** (`tools/`): Agent tool implementations (`web_search`, `search_files`, `read_full_file`, `file_append`, `file_create`, `get_current_time`)
+- **Markdown** (`markdown/`): Markdown-to-`NSAttributedString` rendering for assistant messages
 
 ## LLM Integration
 
 MacLLM uses [LiteLLM](https://docs.litellm.ai/) as a unified interface to multiple LLM providers. This allows switching between providers (OpenAI, Anthropic, local models, etc.) without code changes.
 
-Speed levels (`/fast`, `/normal`, `/slow`) map to specific LiteLLM model strings configured in `llm_service.py`.
+Speed commands (`/fast`, `/slow`, `/think`) map to specific LiteLLM model strings configured in `llm_service.py`.
 
-See `specs/history.md` for details on the message structure and display metadata.
+See `specs/history.md` for details on the message structure.
 
 ## Platform
 

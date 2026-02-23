@@ -7,6 +7,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["LOKY_MAX_CPU_COUNT"] = "1"
 
+import json
 import threading
 from pathlib import Path
 from typing import List, Optional
@@ -39,6 +40,7 @@ class FileTag(TagPlugin):
     SEARCH_RESULTS_COUNT = 5
 
     REINDEX_INTERVAL = 5 * 60  # seconds between periodic re-indexes
+    CACHE_SUBDIR = "embeddings"
 
     # Class-level state for file index and embeddings
     _macllm = None
@@ -48,6 +50,9 @@ class FileTag(TagPlugin):
     _embedding_ready = threading.Event()
     _embedding_lock = threading.Lock()
     _reindex_event = threading.Event()
+    _file_mtimes: dict[str, float] = {}
+    _filepath_to_idx: dict[str, int] = {}
+    _first_build_done: bool = False
 
     # ------------------------------------------------------------------
     # Object lifecycle
@@ -60,6 +65,9 @@ class FileTag(TagPlugin):
         FileTag._embeddings = None
         FileTag._embedding_ready = threading.Event()
         FileTag._reindex_event = threading.Event()
+        FileTag._file_mtimes = {}
+        FileTag._filepath_to_idx = {}
+        FileTag._first_build_done = False
 
     # ------------------------------------------------------------------
     # TagPlugin interface – configuration tags
@@ -94,6 +102,7 @@ class FileTag(TagPlugin):
 
         # Sort alphabetically by basename for deterministic ordering
         cls._index.sort(key=lambda t: t[0])
+        cls._filepath_to_idx = {fp: idx for idx, (_, fp) in enumerate(cls._index)}
         if cls._macllm:
             cls._macllm.debug_log(f"Indexed {len(cls._index)} files from {len(cls._indexed_directories)} directories", 0)
 
@@ -304,30 +313,126 @@ class FileTag(TagPlugin):
         return embeddings
 
     @classmethod
-    def _build_embeddings(cls):
-        cls._macllm.debug_log(f"Building embeddings for {len(cls._index)} files...", 0)
+    def _cache_dir(cls) -> Path:
+        from macllm.core.memory import get_storage_dir
+        return get_storage_dir() / cls.CACHE_SUBDIR
 
+    @classmethod
+    def _save_cache(cls):
+        try:
+            cache_dir = cls._cache_dir()
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with cls._embedding_lock:
+                if cls._embeddings is not None:
+                    cls._embeddings.save(str(cache_dir))
+            with open(cache_dir / "mtimes.json", "w") as f:
+                json.dump(cls._file_mtimes, f)
+        except Exception as e:
+            if cls._macllm:
+                cls._macllm.debug_log(f"Failed to save embedding cache: {e}", 1)
+
+    @classmethod
+    def _load_cache(cls) -> bool:
+        """Attempt to restore embeddings from disk cache.
+
+        Returns ``True`` if the cache was loaded successfully, populating
+        ``_embeddings``, ``_file_mtimes``, and setting ``_first_build_done``.
+        On any failure the state is left clean so a full rebuild can proceed.
+        """
+        cache_dir = cls._cache_dir()
+        mtimes_path = cache_dir / "mtimes.json"
+        if not mtimes_path.exists():
+            return False
+        try:
+            with open(mtimes_path, "r") as f:
+                cls._file_mtimes = json.load(f)
+            embeddings = cls._load_embedding_model()
+            embeddings.load(str(cache_dir))
+            cls._embeddings = embeddings
+            cls._first_build_done = True
+            cls._macllm.debug_log(
+                f"Loaded embedding cache ({len(cls._file_mtimes)} files)", 0
+            )
+            return True
+        except Exception as e:
+            cls._macllm.debug_log(f"Cache load failed, rebuilding: {e}", 1)
+            cls._file_mtimes = {}
+            cls._embeddings = None
+            cls._first_build_done = False
+            return False
+
+    @classmethod
+    def _prepare_docs(cls, filepaths: list[str]) -> list[tuple]:
+        """Build txtai document tuples for the given filepaths.
+
+        Each tuple is ``(filepath, indexed_content, None)`` where *filepath*
+        is used as a stable document ID.
+        """
         docs = []
-        for idx, (_, filepath) in enumerate(cls._index):
+        for filepath in filepaths:
             try:
                 filename = Path(filepath).name
                 with open(filepath, "r", encoding="utf-8") as f:
                     content = f.read(cls.SEARCH_PREVIEW_LEN)
-                # Prepend filename to content so it's searchable
                 indexed_content = f"{filename}\n{content}"
-                docs.append((idx, indexed_content, filepath))
+                docs.append((filepath, indexed_content, None))
             except Exception as e:
-                # Skip files that can't be read - no point indexing them if content is unavailable
                 cls._macllm.debug_log(f"Skipping unreadable file: {filepath} ({e})", 1)
+        return docs
+
+    @classmethod
+    def _build_embeddings(cls):
+        if not cls._first_build_done:
+            cls._load_cache()
+
+        current_mtimes: dict[str, float] = {}
+        for _, filepath in cls._index:
+            try:
+                current_mtimes[filepath] = os.path.getmtime(filepath)
+            except OSError:
                 continue
+
+        new_files = [fp for fp in current_mtimes if fp not in cls._file_mtimes]
+        changed_files = [
+            fp for fp in current_mtimes
+            if fp in cls._file_mtimes and cls._file_mtimes[fp] != current_mtimes[fp]
+        ]
+        deleted_files = [fp for fp in cls._file_mtimes if fp not in current_mtimes]
+
+        if not new_files and not changed_files and not deleted_files and cls._first_build_done:
+            cls._embedding_ready.set()
+            return
+
+        n_new, n_changed, n_deleted = len(new_files), len(changed_files), len(deleted_files)
+        n_unchanged = len(current_mtimes) - n_new - n_changed
+        cls._macllm.debug_log(
+            f"Embedding update: {n_new} new, {n_changed} changed, "
+            f"{n_deleted} deleted, {n_unchanged} unchanged",
+            0,
+        )
 
         with cls._embedding_lock:
             if cls._embeddings is None:
                 cls._embeddings = cls._load_embedding_model()
-            cls._embeddings.index(docs)
 
+            if not cls._first_build_done:
+                docs = cls._prepare_docs(list(current_mtimes.keys()))
+                if docs:
+                    cls._embeddings.index(docs)
+                cls._first_build_done = True
+            else:
+                if deleted_files:
+                    cls._embeddings.delete(deleted_files)
+                files_to_upsert = new_files + changed_files
+                if files_to_upsert:
+                    docs = cls._prepare_docs(files_to_upsert)
+                    if docs:
+                        cls._embeddings.upsert(docs)
+
+        cls._file_mtimes = current_mtimes
         cls._embedding_ready.set()
         cls._macllm.debug_log("Embedding build complete", 0)
+        cls._save_cache()
 
     @classmethod
     def search(cls, query: str, n: int = SEARCH_RESULTS_COUNT, timeout: float = 60.0) -> list[tuple[int, float, str, str, bool]]:
@@ -341,9 +446,15 @@ class FileTag(TagPlugin):
 
         output = []
         for doc_id, score in results:
-            if doc_id < 0 or doc_id >= len(cls._index):
+            if isinstance(doc_id, str):
+                filepath = doc_id
+            elif 0 <= doc_id < len(cls._index):
+                filepath = cls._index[doc_id][1]
+            else:
                 continue
-            _, filepath = cls._index[doc_id]
+            idx = cls._filepath_to_idx.get(filepath)
+            if idx is None:
+                continue
             truncated = False
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
@@ -351,7 +462,7 @@ class FileTag(TagPlugin):
                     truncated = f.read(1) != ""
             except Exception:
                 preview = "(unable to read file)"
-            output.append((doc_id, score, filepath, preview, truncated))
+            output.append((idx, score, filepath, preview, truncated))
         return output
 
     @classmethod

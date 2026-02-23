@@ -62,11 +62,12 @@ Tags live in the `macllm/tags/` directory and inherit from the base class `TagPl
 
 ## Current Plugins (examples)
 
-- ClipboardTag (`@clipboard`) — Inserts clipboard text as context.
-- FileTag (path-like tags: `@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10 KB) as context; config tag `@IndexFiles` builds an index.
+- ClipboardTag (`@clipboard`) — Inserts clipboard text or image as context.
+- FileTag (path-like tags: `@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10 KB) as context; config tag `@IndexFiles` builds an index; `/reindex` triggers immediate re-indexing.
 - URLTag (`@http://`, `@https://`) — Downloads and strips web page content as context.
 - ImageTag (`@selection`, `@window`) — Captures screenshots for image analysis.
-- SpeedTag (`/fast`, `/slow`, `/think`) — Adjusts processing speed/sticky mode (commands, not context).
+- SpeedTag (`/fast`, `/slow`, `/think`) — Adjusts processing speed (commands, not context).
+- AgentTag (`@agent:<name>`) — Selects which agent runs the conversation (with autocomplete for registered agent names).
 
 ## Processing Order Summary
 

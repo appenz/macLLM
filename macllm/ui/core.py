@@ -59,31 +59,9 @@ class AppDelegate(NSObject):
     def pb_init(self):
         self.pasteboard = NSPasteboard.generalPasteboard()
 
-    def timerFired_(self, timer):
-        if self.checkClipboard():
-            self.status_item.setTitle_(MacLLMUI.status_working)
-            # Read the clipboard content
-            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                0.1, self, 'doClipboardCallback:', None, False)
-
-    def doClipboardCallback_(self, timer):
-        self.macllm_ui.clipboardCallback()
-        self.macllm_ui.pb_change_count = self.pasteboard.changeCount()
-        self.status_item.setTitle_(MacLLMUI.status_ready)
-
     def terminate_(self, sender):
         NSApp().terminate_(self)
 
-    # Check if the Clipboard has changed
-
-    def checkClipboard(self):
-        current_change_count = self.pasteboard.changeCount()
-        if current_change_count != self.macllm_ui.pb_change_count:
-            self.macllm_ui.pb_change_count = current_change_count
-            return True
-        else:
-            return False
-        
     # Create the menu items under the menu bar icon
 
     def menu(self):
@@ -110,13 +88,7 @@ class AppDelegate(NSObject):
             self.status_item.setTitle_(MacLLMUI.status_ready)
             self.status_item.setHighlightMode_(True)
 
-            # Register a timer to check for new events
-            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                0.1, self, 'timerFired:', None, True)
-            
-            # Start tracking the clipboard
             self.pasteboard = NSPasteboard.generalPasteboard()
-            self.macllm_ui.pb_change_count = self.pasteboard.changeCount()
             
             # Open window on startup if requested
             if self.macllm_ui.macllm and getattr(self.macllm_ui.macllm.args, 'show_window_on_start', False):
@@ -164,7 +136,7 @@ class MacLLMUI:
 
     # Define colors for the status icon
     status_ready   = "🟢 LLM"
-    status_working = "🟠 LLM"
+    status_working = "🟡 LLM"
 
     # Colors
     white = NSColor.whiteColor()
@@ -183,8 +155,6 @@ class MacLLMUI:
         self.delegate = None
         self.macllm = None
         
-        self.pb_change_count = 0
-        self.clipboardCallback = self.dummy
 
         self.quick_window = None
         self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
@@ -199,9 +169,6 @@ class MacLLMUI:
         # Browsing history mode state
         self.browsing_history = False
         self.history_index = 0
-
-    def dummy(self):
-        return
 
     def _create_scaled_logo(self):
         """Create a high-quality scaled version of the logo for the top bar."""
@@ -260,6 +227,9 @@ class MacLLMUI:
     # This is called when the user presses Return in the pop-up window
 
     def handle_user_input(self, text):
+        if self.macllm.is_agent_running():
+            self.macllm.abort_agent()
+            return
         if text == "":
             return
         # Send the text to the LLM
@@ -268,6 +238,12 @@ class MacLLMUI:
         self.update_window()
         # Clear the input field for the next message
         InputFieldHandler.clear_input_field(self.input_field)
+
+    def set_status_indicator(self, working: bool):
+        """Update the menu bar status indicator."""
+        if self.delegate and hasattr(self.delegate, 'status_item'):
+            title = MacLLMUI.status_working if working else MacLLMUI.status_ready
+            self.delegate.status_item.setTitle_(title)
 
     def request_update(self):
         if NSThread.isMainThread():
@@ -645,7 +621,6 @@ class MacLLMUI:
         self.app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
 
         self.delegate.pb_init()
-        self.pb_change_count = self.read_change_count()
         
         # Change the App icon
         # Only set the icon if the image is valid (has non-zero size)

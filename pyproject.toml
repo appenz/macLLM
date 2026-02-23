@@ -8,6 +8,7 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "certifi>=2024.12.14",
     "litellm>=1.0.0",
+    "markdown-it-py>=4.0.0",
     "openai[realtime]>=1.54.4",
     "pyobjc>=10.3.1",
     "pytest>=8.3.5",
