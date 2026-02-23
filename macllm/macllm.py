@@ -25,9 +25,6 @@ from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, 
 
 macLLM = None
 
-start_token = "@@"
-alias_token = "@"
-
 from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
 
 # Backward-compat alias
@@ -56,9 +53,6 @@ def handler():
 
 class MacLLM:
     _instance = None  # Singleton reference for global access
-
-    # Watch the clipboard for the trigger string "@@" and if you find it run through GPT
-    # and write the result back to the clipboard
 
     version = "0.2.0"
 
@@ -104,7 +98,6 @@ class MacLLM:
 
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
-        print(f'To use via the clipboard, copy text starting with "@@"')
 
     def __init__(self, args=None):
         MacLLM._instance = self
@@ -113,10 +106,12 @@ class MacLLM:
         self.ui.macllm = self
         self.req = 0
 
-        self.ui.clipboardCallback = self.clipboard_changed
-        
         # Initialize agent status manager for displaying progress
         self.status_manager = AgentStatusManager(ui_update_callback=self._update_ui_from_callback)
+        
+        # Agent thread tracking for abort support
+        self._agent_thread = None
+        self._abort_event = threading.Event()
         
         # Initialize conversation history (multiple conversations)
         self.conversation_history = ConversationHistory()
@@ -128,6 +123,42 @@ class MacLLM:
         # Initialize metadata for UI display (default speed is Normal)
         self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'input_tokens': 0, 'output_tokens': 0}
         self._prefix_index = []
+
+    def is_agent_running(self):
+        """Check if an agent is currently executing."""
+        return self._agent_thread is not None and self._agent_thread.is_alive()
+
+    def abort_agent(self):
+        """Signal the running agent to abort after the current step completes.
+        
+        Uses smolagents' built-in interrupt_switch which causes the agent to
+        raise AgentError at the start of the next step iteration.
+        """
+        if not self.is_agent_running():
+            return
+        self._abort_event.set()
+        if self.chat_history.agent:
+            self.chat_history.agent.interrupt_switch = True
+        self.debug_log("Agent abort requested", 1)
+
+    def _handle_abort_summary(self, task):
+        """After an abort, ask the LLM to summarize what the agent found so far."""
+        try:
+            self.status_manager.set_plan("Summarizing...")
+            self._update_ui_from_callback()
+            summary_msg = self.chat_history.agent.provide_final_answer(task)
+            content = summary_msg.content
+            if isinstance(content, list):
+                content = " ".join(
+                    item.get("text", "") for item in content if isinstance(item, dict)
+                )
+            result = content.strip() if isinstance(content, str) else str(content)
+            prefix = "**Interrupted.** The following is a partial answer based on what I found before being stopped:\n\n"
+            self.chat_history.add_assistant_message(prefix + result if result else "[Interrupted]")
+        except Exception as summary_error:
+            self.debug_exception(summary_error)
+            self.chat_history.add_assistant_message("[Interrupted]")
+        save_conversation(self.chat_history)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -170,7 +201,9 @@ class MacLLM:
             # Step 8: Run agent on background thread
             def run_agent():
                 try:
+                    self.ui.set_status_indicator(working=True)
                     self.status_manager.reset()
+                    self._abort_event.clear()
                     
                     run_kwargs = dict(max_steps=10, reset=False)
                     if request.images:
@@ -190,13 +223,21 @@ class MacLLM:
                     
                     self.debug_log(f'Output: {result}\n')
                 except Exception as e:
-                    self.debug_exception(e)
-                    self.chat_history.add_assistant_message(f"Error: {str(e)}")
-                    save_conversation(self.chat_history)
+                    if self._abort_event.is_set():
+                        self._handle_abort_summary(request.expanded_prompt)
+                    else:
+                        self.debug_exception(e)
+                        self.chat_history.add_assistant_message(f"Error: {str(e)}")
+                        save_conversation(self.chat_history)
                     self.status_manager.reset()
+                finally:
+                    self._agent_thread = None
+                    self._abort_event.clear()
+                    self.ui.set_status_indicator(working=False)
+                    self._update_ui_from_callback()
             
-            thread = threading.Thread(target=run_agent, daemon=True)
-            thread.start()
+            self._agent_thread = threading.Thread(target=run_agent, daemon=True)
+            self._agent_thread.start()
             
             return None  # Async operation, no immediate return value
             
@@ -208,14 +249,6 @@ class MacLLM:
         if self.ui:
             self.ui.request_update()
         
-    def clipboard_changed(self):
-        txt = self.ui.read_clipboard()
-
-        if txt.startswith(start_token):
-            out = self.handle_instructions(txt[len(start_token):])
-            if out is not None:  # Only update clipboard if operation succeeded
-                self.ui.write_clipboard(out)    
-
 def main():
     global macLLM
 
