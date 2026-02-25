@@ -120,6 +120,7 @@ class MainTextHandler:
         # Clear the text view first and set the font
         text_view.setString_("")
         text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+        text_view.setLinkTextAttributes_({})
         
         # Get displayable messages (user and assistant only)
         messages = macllm.chat_history.get_displayable_messages()

@@ -117,8 +117,10 @@ class MacLLM:
         self.conversation_history = ConversationHistory()
         self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
         self.chat_history.ui_update_callback = self._update_ui_from_callback
-        
-        load_conversation(self.chat_history)
+
+        self.ephemeral = bool(getattr(self.args, 'query', None))
+        if not self.ephemeral:
+            load_conversation(self.chat_history)
         
         # Initialize metadata for UI display (default speed is Normal)
         self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'input_tokens': 0, 'output_tokens': 0}
@@ -158,7 +160,8 @@ class MacLLM:
         except Exception as summary_error:
             self.debug_exception(summary_error)
             self.chat_history.add_assistant_message("[Interrupted]")
-        save_conversation(self.chat_history)
+        if not self.ephemeral:
+            save_conversation(self.chat_history)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -218,7 +221,8 @@ class MacLLM:
                     else:
                         self.chat_history.add_assistant_message("Error: No output from agent")
                     
-                    save_conversation(self.chat_history)
+                    if not self.ephemeral:
+                        save_conversation(self.chat_history)
                     self.status_manager.reset()
                     
                     self.debug_log(f'Output: {result}\n')
@@ -228,13 +232,17 @@ class MacLLM:
                     else:
                         self.debug_exception(e)
                         self.chat_history.add_assistant_message(f"Error: {str(e)}")
-                        save_conversation(self.chat_history)
+                        if not self.ephemeral:
+                            save_conversation(self.chat_history)
                     self.status_manager.reset()
                 finally:
                     self._agent_thread = None
                     self._abort_event.clear()
                     self.ui.set_status_indicator(working=False)
                     self._update_ui_from_callback()
+                    if getattr(self.args, 'query', None):
+                        screenshot_path = getattr(self.args, 'screenshot', None)
+                        self.ui.schedule_quit(screenshot_path=screenshot_path)
             
             self._agent_thread = threading.Thread(target=run_agent, daemon=True)
             self._agent_thread.start()
@@ -257,7 +265,13 @@ def main():
     parser.add_argument("--debuglitellm", action="store_true", help="Enable verbose LiteLLM debug logging")
     parser.add_argument("--version", action="store_true", help="Print version and exit")
     parser.add_argument("--show-window", action="store_true", dest="show_window_on_start", help="Open the window immediately on startup")
+    parser.add_argument("--query", type=str, default=None, help="Auto-submit a query after the window opens (implies --show-window)")
+    parser.add_argument("--screenshot", type=str, default=None, metavar="PATH",
+                        help="After --query completes, capture the window to PATH and exit")
     args = parser.parse_args()
+
+    if args.query:
+        args.show_window_on_start = True
 
     if args.version:
         print(MacLLM.version)
@@ -294,6 +308,10 @@ def main():
     from macllm.tags.file_tag import FileTag
     FileTag.start_index_loop()
     
+    if args.query:
+        macLLM.ui.pending_query = args.query
+        macLLM.ui.pending_screenshot = args.screenshot
+
     macLLM.show_instructions()
     macLLM.ui.start(dont_run_app=False)
 

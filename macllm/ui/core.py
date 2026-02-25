@@ -79,6 +79,27 @@ class AppDelegate(NSObject):
     def openWindowOnStart_(self, timer):
         self.macllm_ui.update_window()
 
+    def autoSubmitQuery_(self, timer):
+        query = self.macllm_ui.pending_query
+        self.macllm_ui.pending_query = None
+        if query:
+            self.macllm_ui.handle_user_input(query)
+
+    def scheduleQuitTimer_(self, sender):
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            2.0, self, 'screenshotAndQuit:', None, False)
+
+    def screenshotAndQuit_(self, timer):
+        path = getattr(self.macllm_ui, '_quit_screenshot_path', None)
+        if path:
+            from macllm.utils.screenshot import capture_window_by_title
+            ok = capture_window_by_title("macLLM", path)
+            if ok:
+                print(f"Screenshot saved to {path}")
+            else:
+                print(f"Warning: failed to capture window screenshot to {path}")
+        NSApp().terminate_(None)
+
     def applicationDidFinishLaunching_(self, notification):
         try:
             self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)
@@ -94,6 +115,11 @@ class AppDelegate(NSObject):
             if self.macllm_ui.macllm and getattr(self.macllm_ui.macllm.args, 'show_window_on_start', False):
                 NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
                     0.1, self, 'openWindowOnStart:', None, False)
+
+            # Auto-submit a query if one was provided via --query
+            if self.macllm_ui.pending_query:
+                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                    0.5, self, 'autoSubmitQuery:', None, False)
 
         except Exception as e:
             # If we fail to initialize the status item, terminate the application and show stack trace
@@ -154,7 +180,8 @@ class MacLLMUI:
         self.app = None
         self.delegate = None
         self.macllm = None
-        
+        self.pending_query = None
+        self.pending_screenshot = None
 
         self.quick_window = None
         self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
@@ -244,6 +271,17 @@ class MacLLMUI:
         if self.delegate and hasattr(self.delegate, 'status_item'):
             title = MacLLMUI.status_working if working else MacLLMUI.status_ready
             self.delegate.status_item.setTitle_(title)
+
+    def schedule_quit(self, screenshot_path: str | None = None):
+        """Schedule optional screenshot + app termination after the query finishes.
+
+        Waits 2 seconds for the UI to render, then captures the window
+        (if *screenshot_path* is set) and terminates. Safe to call from
+        any thread.
+        """
+        self._quit_screenshot_path = screenshot_path
+        self.delegate.performSelectorOnMainThread_withObject_waitUntilDone_(
+            'scheduleQuitTimer:', None, False)
 
     def request_update(self):
         if NSThread.isMainThread():

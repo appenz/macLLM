@@ -5,4 +5,12 @@ alwaysApply: false
 ---
 
 Please read @overview.md for a high-level overview of the project before answering.
-For Testing use "make test" or other make targets. Avoid calling pytest directly if possible.
+
+### How to Test:
+- Run "make test" for the usual test suite
+- Run "make debug-render" to test rendering, it will delete the old screenshot and take a new one
+
+Avoid the following unless there is no other way:
+- Calling pytest directly
+- Running the program using uv directly
+- Using rm

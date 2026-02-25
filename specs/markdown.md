@@ -8,7 +8,8 @@ Assistant messages are rendered as Markdown via the `macllm/markdown/` package. 
 macllm/markdown/
   __init__.py       render_markdown(text, color) — public entry point
   renderer.py       MarkdownRenderer: parses tokens, dispatches to element modules
-  inline.py         Bold, plain text, softbreak, inline code
+  inline.py         Bold, plain text, softbreak, inline code, links
+  link.py           Clickable URLs — bare URL regex detection + markdown link rendering
   blocks.py         Headings, paragraphs, bullet/ordered lists, fenced code blocks
   table.py          Monospaced column-aligned tables
 ```
@@ -29,6 +30,10 @@ Tables render as monospaced, column-aligned text at a slightly smaller font size
 ## Lists
 
 Bullet and ordered lists use `NSParagraphStyle` with `firstLineHeadIndent` / `headIndent` to create a hanging indent — wrapped lines align with the text after the bullet, not under it. Nested lists increase the indent.
+
+## Links
+
+Bare URLs (`https://...`) in text tokens are detected via regex in `link.py` and rendered with `NSLinkAttributeName` so they are clickable in the NSTextView. Markdown-style links (`[text](url)`) are handled via the `link_open`/`link_close` token pairs that `markdown-it-py` already produces. No additional dependencies are required.
 
 ## Integration
 
