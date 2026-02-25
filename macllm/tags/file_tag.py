@@ -103,8 +103,6 @@ class FileTag(TagPlugin):
         # Sort alphabetically by basename for deterministic ordering
         cls._index.sort(key=lambda t: t[0])
         cls._filepath_to_idx = {fp: idx for idx, (_, fp) in enumerate(cls._index)}
-        if cls._macllm:
-            cls._macllm.debug_log(f"Indexed {len(cls._index)} files from {len(cls._indexed_directories)} directories", 0)
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion
@@ -431,7 +429,6 @@ class FileTag(TagPlugin):
 
         cls._file_mtimes = current_mtimes
         cls._embedding_ready.set()
-        cls._macllm.debug_log("Embedding build complete", 0)
         cls._save_cache()
 
     @classmethod
