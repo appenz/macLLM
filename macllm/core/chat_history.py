@@ -1,33 +1,53 @@
-import time
 from typing import List, Dict, Optional, Union
 
 
 class Conversation:
     def __init__(self):
+        self.agent = None
+        self.agent_cls = None  # set lazily in reset() or by caller
+        self.ui_update_callback = None
         self.reset()
     
-    def add_chat_entry(self, role: str, text: str, expanded_text: str, context_refs: Optional[List[str]] = None) -> None:
-        """Add a conversation turn to the chat history."""
-        if role not in ['user', 'assistant']:
-            raise ValueError("Role must be either 'user' or 'assistant'")
-        
-        entry = {
-            'role': role,
-            'text': text,
-            'expanded_text': expanded_text,
-            'timestamp': time.time(),
-            'context_refs': context_refs or []
+    def add_user_message(self, content: str) -> None:
+        """Add a user message (display text only)."""
+        message = {
+            "role": "user",
+            "content": content
         }
-        self.chat_history.append(entry)
+        self.messages.append(message)
+    
+    def add_assistant_message(self, content: str) -> None:
+        """Add an assistant message."""
+        message = {
+            "role": "assistant",
+            "content": content
+        }
+        self.messages.append(message)
+    
+    def add_system_message(self, content: str) -> None:
+        """Add or update system message (typically only at conversation start)."""
+        if self.messages and self.messages[0]["role"] == "system":
+            self.messages[0]["content"] = content
+        else:
+            message = {
+                "role": "system",
+                "content": content
+            }
+            self.messages.insert(0, message)
+    
+    def get_displayable_messages(self) -> List[Dict]:
+        """Returns messages for UI rendering (user and assistant only)."""
+        return [
+            m for m in self.messages
+            if m["role"] in ("user", "assistant")
+        ]
     
     def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon = None) -> str:
         """Add context entry, returns the actual name used. Avoids duplicates based on source."""
-        # Check if source already exists
         for ctx in self.context_history:
             if ctx['source'] == source:
                 return ctx['name']
         
-        # Generate unique name if suggested_name already exists
         actual_name = suggested_name
         counter = 1
         
@@ -38,7 +58,6 @@ class Conversation:
         if icon is None:
             icon = ""
 
-        # Add new context entry
         entry = {
             'name': actual_name,
             'source': source,
@@ -48,64 +67,58 @@ class Conversation:
         }
         self.context_history.append(entry)
         return actual_name
-    
-    role_icons = {
-        'user': 'User: ',
-        'assistant': 'Assistant: ',
-        'system': 'System: ',
-    }
 
-    def get_chat_history_original(self) -> str:
-        """Returns the unexpanded chat history to show the user as a string."""
-        formatted_history = []
-        for entry in self.chat_history:
-            role = entry['role']
-            text = entry['text']
-            formatted_history.append(f"{self.role_icons[role]} {text}")
-        return "\n\n".join(formatted_history)
-    
-    def get_chat_history_expanded(self) -> str:
-        """Returns the fully expanded chat history for the LLM as a string."""
-        formatted_history = []
-        for entry in self.chat_history:
-            role = entry['role'].capitalize()
-            expanded_text = entry['expanded_text']
-            formatted_history.append(f"{role}: {expanded_text}")
-        return "\n".join(formatted_history)
-    
-    def get_context_history_text(self) -> str:
-        """Returns context history as one large string (excluding images)."""
-        text_parts = []
+    def has_path_in_context(self, path: str) -> bool:
+        """Check if a file path was explicitly referenced in this conversation's context."""
         for ctx in self.context_history:
-            if ctx['type'] != 'image':
-                context_name = ctx['name']
-                text_parts.append(
-                    f"--- context:{context_name} ---\n"
-                    f"{ctx['context']}\n"
-                    f"--- end context:{context_name} ---\n"
-                )
-        return "\n".join(text_parts)
+            if ctx.get("type") == "path" and ctx.get("source") == path:
+                return True
+        return False
     
-    def get_context_last_image(self) -> Optional[bytes]:
-        """Returns only the last image in the context history."""
-        for ctx in reversed(self.context_history):
-            if ctx['type'] == 'image':
-                return ctx['context']
-        return None
-    
-    def reset(self) -> None:
-        """Clears both lists, restores default message."""
-        self.chat_history = []
+    def _get_agent_cls(self):
+        if self.agent_cls is None:
+            from macllm.agents import get_default_agent_class
+            self.agent_cls = get_default_agent_class()
+        return self.agent_cls
+
+    def reset(self, clear_persisted: bool = False) -> None:
+        """Clears messages and metadata, restores default welcome message."""
+        self.messages = []
         self.context_history = []
-        # Conversation-level defaults
         self.speed_level = "normal"
-        # Add default welcome message
-        self.add_chat_entry(
-            role="assistant",
-            text="How can I help you?",
-            expanded_text="How can I help you?",
-            context_refs=[]
-        ) 
+
+        self._get_agent_cls()
+        
+        self.add_assistant_message("How can I help you?")
+        
+        if self.agent is not None:
+            self.agent.memory.steps = []
+        self._create_agent()
+        
+        if clear_persisted:
+            from macllm.core.memory import clear_conversation
+            clear_conversation()
+    
+    def _create_agent(self, token_callback=None):
+        """Create agent instance using the current agent class.
+
+        Routes through :func:`agent_service.create_agent` so tests can
+        monkeypatch a single function to inject mock agents.
+        """
+        from macllm.core.agent_service import create_agent
+
+        old_steps = None
+        if self.agent is not None:
+            old_steps = self.agent.memory.steps
+        
+        self.agent = create_agent(
+            agent_cls=self._get_agent_cls(),
+            speed=self.speed_level,
+            token_callback=token_callback,
+        )
+        
+        if old_steps is not None:
+            self.agent.memory.steps = old_steps
 
 
 class ConversationHistory:
@@ -123,4 +136,4 @@ class ConversationHistory:
         """Return the most recent Conversation object, or None if none exists."""
         if self.conversations:
             return self.conversations[-1]
-        return None 
+        return None

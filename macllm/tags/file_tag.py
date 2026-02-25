@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+
+import json
+import threading
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+import txtai
 
 from .base import TagPlugin
 
@@ -14,6 +24,7 @@ class FileTag(TagPlugin):
 
     # Public constants
     PREFIX_CONFIG = "@IndexFiles"
+    PREFIX_REINDEX = "/reindex"
 
     # Prefixes that represent plain path tags (previously handled by PathTag)
     PATH_PREFIXES = ["@/", "@~", "@\"/", "@\"~"]
@@ -23,15 +34,40 @@ class FileTag(TagPlugin):
     # at least *MIN_CHARS* characters after the leading "@".
     MIN_CHARS = 3
     EXTENSIONS = (".txt", ".md")
-    MAX_CONTEXT_LEN = 200 * 1024  # 10 KB cap identical to old PathTag
+    MAX_CONTEXT_LEN = 200 * 1024  # cap identical to old PathTag
+    MAX_FULL_FILE_LEN = 10 * 1000
+    SEARCH_PREVIEW_LEN = 1000
+    SEARCH_RESULTS_COUNT = 5
+
+    REINDEX_INTERVAL = 5 * 60  # seconds between periodic re-indexes
+    CACHE_SUBDIR = "embeddings"
+
+    # Class-level state for file index and embeddings
+    _macllm = None
+    _index: list[tuple[str, str]] = []
+    _indexed_directories: list[str] = []
+    _embeddings: Optional[txtai.Embeddings] = None
+    _embedding_ready = threading.Event()
+    _embedding_lock = threading.Lock()
+    _reindex_event = threading.Event()
+    _file_mtimes: dict[str, float] = {}
+    _filepath_to_idx: dict[str, int] = {}
+    _first_build_done: bool = False
 
     # ------------------------------------------------------------------
-    # Object lifecycle & in-memory index
+    # Object lifecycle
     # ------------------------------------------------------------------
     def __init__(self, macllm):
         super().__init__(macllm)
-        # List of tuples (basename_lower, full_path)
-        self._index: list[tuple[str, str]] = []
+        FileTag._macllm = macllm
+        FileTag._index = []
+        FileTag._indexed_directories = []
+        FileTag._embeddings = None
+        FileTag._embedding_ready = threading.Event()
+        FileTag._reindex_event = threading.Event()
+        FileTag._file_mtimes = {}
+        FileTag._filepath_to_idx = {}
+        FileTag._first_build_done = False
 
     # ------------------------------------------------------------------
     # TagPlugin interface – configuration tags
@@ -42,29 +78,31 @@ class FileTag(TagPlugin):
     def on_config_tag(self, tag: str, value: str):  # noqa: D401
         """Called during shortcut loading for each `@IndexFiles` entry.
 
-        *value* is expected to be a path string.  We walk the directory
-        recursively and add eligible files to *self._index*."""
-        # Accept optional quotes and env vars
+        *value* is expected to be a path string. We collect the directory
+        for later indexing via build_index()."""
         dir_path = value.strip().strip('"')
         dir_path = os.path.expandvars(os.path.expanduser(dir_path))
 
         if os.path.isdir(dir_path) is False:
-            if self.macllm.debug:
-                self.macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
+            FileTag._macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
             return
 
-        for fp in Path(dir_path).rglob("*"):
-            if fp.is_file() and fp.suffix.lower() in self.EXTENSIONS:
-                basename = fp.name
-                self._index.append((basename.lower(), str(fp)))
+        # Collect directory for later indexing
+        if dir_path not in FileTag._indexed_directories:
+            FileTag._indexed_directories.append(dir_path)
+
+    @classmethod
+    def build_index(cls):
+        """Walk all indexed directories and build the file index."""
+        cls._index = []
+        for dir_path in cls._indexed_directories:
+            for fp in Path(dir_path).rglob("*"):
+                if fp.is_file() and fp.suffix.lower() in cls.EXTENSIONS:
+                    cls._index.append((fp.name.lower(), str(fp)))
 
         # Sort alphabetically by basename for deterministic ordering
-        self._index.sort(key=lambda t: t[0])
-
-        if self.macllm.debug:
-            self.macllm.debug_log(
-                f"Indexed {len(self._index)} files from {dir_path}", 0
-            )
+        cls._index.sort(key=lambda t: t[0])
+        cls._filepath_to_idx = {fp: idx for idx, (_, fp) in enumerate(cls._index)}
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion
@@ -75,7 +113,7 @@ class FileTag(TagPlugin):
         # other plugins (e.g. ClipboardTag) are not shadowed during
         # expansion.  We still use the generic symbol for autocomplete via
         # *match_any_autocomplete()*.
-        return self.PATH_PREFIXES
+        return self.PATH_PREFIXES + [self.PREFIX_REINDEX]
 
     # ------------------------------------------------------------------
     # Catch-all autocomplete flag
@@ -89,6 +127,10 @@ class FileTag(TagPlugin):
         """Read the referenced file (tag may be a plain path or an internal
         @file tag), add it to *conversation* context, and return a
         ``context:<handle>`` replacement string."""
+
+        if tag == self.PREFIX_REINDEX:
+            FileTag._start_reindex()
+            return ""
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -105,9 +147,8 @@ class FileTag(TagPlugin):
 
         try:
             content = self._read_file(path_spec)
-        except Exception as exc:  # pylint: disable=broad-except
-            if self.macllm.debug:
-                self.macllm.debug_exception(exc)
+        except Exception as exc:
+            FileTag._macllm.debug_exception(exc)
             return tag  # leave unmodified so the user sees the failure
 
         context_name = conversation.add_context(
@@ -117,7 +158,7 @@ class FileTag(TagPlugin):
             content,
             icon="📁"
         )
-        return f"context:{context_name}"
+        return f"\n\n--- context:{context_name} (path: {path_spec}) ---\n{content}\n--- end context:{context_name} ---"
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks
@@ -142,7 +183,7 @@ class FileTag(TagPlugin):
             return []
 
         term_lc = search_term.lower()
-        matches = [fp for base, fp in self._index if term_lc in base]
+        matches = [fp for base, fp in FileTag._index if term_lc in base]
         matches.sort()
         raw_tags: list[str] = []
         for p in matches[:max_results]:
@@ -221,4 +262,211 @@ class FileTag(TagPlugin):
             content = f.read(self.MAX_CONTEXT_LEN)
             if "\0" in content:
                 raise ValueError("File appears to be binary")
-        return content 
+        return content
+
+    # ------------------------------------------------------------------
+    # Embedding search (class methods)
+    # ------------------------------------------------------------------
+    @classmethod
+    def start_index_loop(cls, interval: float = None):
+        """Start a daemon thread that periodically rebuilds the file index
+        and embeddings.  The first cycle runs immediately."""
+        if interval is None:
+            interval = cls.REINDEX_INTERVAL
+        thread = threading.Thread(target=cls._index_loop, args=(interval,), daemon=True)
+        thread.start()
+
+    @classmethod
+    def _index_loop(cls, interval: float):
+        while True:
+            cls.build_index()
+            if cls._index:
+                cls._build_embeddings()
+            else:
+                cls._embedding_ready.set()
+            cls._reindex_event.wait(timeout=interval)
+            cls._reindex_event.clear()
+
+    @classmethod
+    def _start_reindex(cls):
+        cls._macllm.debug_log("Reindexing...", 0)
+        cls._reindex_event.set()
+
+    @classmethod
+    def _load_embedding_model(cls) -> txtai.Embeddings:
+        """Load the sentence-transformer model.
+
+        Attempts one normal load (which may check for updates or download the
+        model on the very first run).  If that fails (e.g. network is down),
+        retries in offline/cache-only mode.  After loading, locks the process
+        to offline so the periodic reindex never triggers network requests.
+        """
+        model_path = "sentence-transformers/all-mpnet-base-v2"
+        try:
+            embeddings = txtai.Embeddings(path=model_path)
+        except Exception:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            embeddings = txtai.Embeddings(path=model_path)
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        return embeddings
+
+    @classmethod
+    def _cache_dir(cls) -> Path:
+        from macllm.core.memory import get_storage_dir
+        return get_storage_dir() / cls.CACHE_SUBDIR
+
+    @classmethod
+    def _save_cache(cls):
+        try:
+            cache_dir = cls._cache_dir()
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with cls._embedding_lock:
+                if cls._embeddings is not None:
+                    cls._embeddings.save(str(cache_dir))
+            with open(cache_dir / "mtimes.json", "w") as f:
+                json.dump(cls._file_mtimes, f)
+        except Exception as e:
+            if cls._macllm:
+                cls._macllm.debug_log(f"Failed to save embedding cache: {e}", 1)
+
+    @classmethod
+    def _load_cache(cls) -> bool:
+        """Attempt to restore embeddings from disk cache.
+
+        Returns ``True`` if the cache was loaded successfully, populating
+        ``_embeddings``, ``_file_mtimes``, and setting ``_first_build_done``.
+        On any failure the state is left clean so a full rebuild can proceed.
+        """
+        cache_dir = cls._cache_dir()
+        mtimes_path = cache_dir / "mtimes.json"
+        if not mtimes_path.exists():
+            return False
+        try:
+            with open(mtimes_path, "r") as f:
+                cls._file_mtimes = json.load(f)
+            embeddings = cls._load_embedding_model()
+            embeddings.load(str(cache_dir))
+            cls._embeddings = embeddings
+            cls._first_build_done = True
+            cls._macllm.debug_log(
+                f"Loaded embedding cache ({len(cls._file_mtimes)} files)", 0
+            )
+            return True
+        except Exception as e:
+            cls._macllm.debug_log(f"Cache load failed, rebuilding: {e}", 1)
+            cls._file_mtimes = {}
+            cls._embeddings = None
+            cls._first_build_done = False
+            return False
+
+    @classmethod
+    def _prepare_docs(cls, filepaths: list[str]) -> list[tuple]:
+        """Build txtai document tuples for the given filepaths.
+
+        Each tuple is ``(filepath, indexed_content, None)`` where *filepath*
+        is used as a stable document ID.
+        """
+        docs = []
+        for filepath in filepaths:
+            try:
+                filename = Path(filepath).name
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read(cls.SEARCH_PREVIEW_LEN)
+                indexed_content = f"{filename}\n{content}"
+                docs.append((filepath, indexed_content, None))
+            except Exception as e:
+                cls._macllm.debug_log(f"Skipping unreadable file: {filepath} ({e})", 1)
+        return docs
+
+    @classmethod
+    def _build_embeddings(cls):
+        if not cls._first_build_done:
+            cls._load_cache()
+
+        current_mtimes: dict[str, float] = {}
+        for _, filepath in cls._index:
+            try:
+                current_mtimes[filepath] = os.path.getmtime(filepath)
+            except OSError:
+                continue
+
+        new_files = [fp for fp in current_mtimes if fp not in cls._file_mtimes]
+        changed_files = [
+            fp for fp in current_mtimes
+            if fp in cls._file_mtimes and cls._file_mtimes[fp] != current_mtimes[fp]
+        ]
+        deleted_files = [fp for fp in cls._file_mtimes if fp not in current_mtimes]
+
+        if not new_files and not changed_files and not deleted_files and cls._first_build_done:
+            cls._embedding_ready.set()
+            return
+
+        n_new, n_changed, n_deleted = len(new_files), len(changed_files), len(deleted_files)
+        n_unchanged = len(current_mtimes) - n_new - n_changed
+        cls._macllm.debug_log(
+            f"Embedding update: {n_new} new, {n_changed} changed, "
+            f"{n_deleted} deleted, {n_unchanged} unchanged",
+            0,
+        )
+
+        with cls._embedding_lock:
+            if cls._embeddings is None:
+                cls._embeddings = cls._load_embedding_model()
+
+            if not cls._first_build_done:
+                docs = cls._prepare_docs(list(current_mtimes.keys()))
+                if docs:
+                    cls._embeddings.index(docs)
+                cls._first_build_done = True
+            else:
+                if deleted_files:
+                    cls._embeddings.delete(deleted_files)
+                files_to_upsert = new_files + changed_files
+                if files_to_upsert:
+                    docs = cls._prepare_docs(files_to_upsert)
+                    if docs:
+                        cls._embeddings.upsert(docs)
+
+        cls._file_mtimes = current_mtimes
+        cls._embedding_ready.set()
+        cls._save_cache()
+
+    @classmethod
+    def search(cls, query: str, n: int = SEARCH_RESULTS_COUNT, timeout: float = 60.0) -> list[tuple[int, float, str, str, bool]]:
+        if not cls._embedding_ready.wait(timeout=timeout):
+            return []
+
+        with cls._embedding_lock:
+            if cls._embeddings is None:
+                return []
+            results = cls._embeddings.search(query, n)
+
+        output = []
+        for doc_id, score in results:
+            if isinstance(doc_id, str):
+                filepath = doc_id
+            elif 0 <= doc_id < len(cls._index):
+                filepath = cls._index[doc_id][1]
+            else:
+                continue
+            idx = cls._filepath_to_idx.get(filepath)
+            if idx is None:
+                continue
+            truncated = False
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    preview = f.read(cls.SEARCH_PREVIEW_LEN)
+                    truncated = f.read(1) != ""
+            except Exception:
+                preview = "(unable to read file)"
+            output.append((idx, score, filepath, preview, truncated))
+        return output
+
+    @classmethod
+    def get_file_content(cls, file_id: int) -> tuple[str, str]:
+        if file_id < 0 or file_id >= len(cls._index):
+            raise IndexError(f"Invalid file ID: {file_id}")
+        _, filepath = cls._index[file_id]
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read(cls.MAX_FULL_FILE_LEN)
+        return content, filepath

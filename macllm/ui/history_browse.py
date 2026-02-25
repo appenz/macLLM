@@ -58,7 +58,8 @@ class HistoryBrowseDelegate(NSObject):
     # ------------------------------------------------------------------
     def _move_history(self, delta: int):
         """Move selection *delta* steps (-1 up, +1 down)."""
-        history_len = len(self.macllm_ui.macllm.chat_history.chat_history)
+        messages = self.macllm_ui.macllm.chat_history.get_displayable_messages()
+        history_len = len(messages)
         # If user tries to move *down* past the newest message, return focus to input.
         if delta > 0 and self.macllm_ui.history_index == history_len - 1:
             self.macllm_ui.exit_history_browsing()

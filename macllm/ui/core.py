@@ -7,7 +7,7 @@ from Foundation import NSThread
 
 from Cocoa import NSApplication, NSStatusBar, NSMenu, NSMenuItem, NSObject, NSImage, NSApp, NSApplicationActivationPolicyRegular
 from Cocoa import NSTimer
-from Cocoa import NSPasteboard, NSStringPboardType
+from Cocoa import NSPasteboard, NSStringPboardType, NSPasteboardTypePNG, NSPasteboardTypeTIFF
 
 from Cocoa import NSPanel, NSScreen, NSPanel, NSBorderlessWindowMask, NSImageView
 from Cocoa import NSBorderlessWindowMask
@@ -31,6 +31,17 @@ import signal
 import traceback
 from time import sleep
 
+# Helper for dispatching UI updates from background threads
+class _UIUpdater(NSObject):
+    target = None
+    
+    def run_(self, sender):
+        if _UIUpdater.target:
+            _UIUpdater.target.update_window()
+
+_ui_updater = _UIUpdater.alloc().init()
+
+
 # Custom panel for the quick entry window. This is neededto enable it to become 
 # key window and main window
 
@@ -48,31 +59,9 @@ class AppDelegate(NSObject):
     def pb_init(self):
         self.pasteboard = NSPasteboard.generalPasteboard()
 
-    def timerFired_(self, timer):
-        if self.checkClipboard():
-            self.status_item.setTitle_(MacLLMUI.status_working)
-            # Read the clipboard content
-            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                0.1, self, 'doClipboardCallback:', None, False)
-
-    def doClipboardCallback_(self, timer):
-        self.macllm_ui.clipboardCallback()
-        self.macllm_ui.pb_change_count = self.pasteboard.changeCount()
-        self.status_item.setTitle_(MacLLMUI.status_ready)
-
     def terminate_(self, sender):
         NSApp().terminate_(self)
 
-    # Check if the Clipboard has changed
-
-    def checkClipboard(self):
-        current_change_count = self.pasteboard.changeCount()
-        if current_change_count != self.macllm_ui.pb_change_count:
-            self.macllm_ui.pb_change_count = current_change_count
-            return True
-        else:
-            return False
-        
     # Create the menu items under the menu bar icon
 
     def menu(self):
@@ -86,6 +75,30 @@ class AppDelegate(NSObject):
 
     def options_(self, sender):
         print("Options clicked!")
+    
+    def openWindowOnStart_(self, timer):
+        self.macllm_ui.update_window()
+
+    def autoSubmitQuery_(self, timer):
+        query = self.macllm_ui.pending_query
+        self.macllm_ui.pending_query = None
+        if query:
+            self.macllm_ui.handle_user_input(query)
+
+    def scheduleQuitTimer_(self, sender):
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            2.0, self, 'screenshotAndQuit:', None, False)
+
+    def screenshotAndQuit_(self, timer):
+        path = getattr(self.macllm_ui, '_quit_screenshot_path', None)
+        if path:
+            from macllm.utils.screenshot import capture_window_by_title
+            ok = capture_window_by_title("macLLM", path)
+            if ok:
+                print(f"Screenshot saved to {path}")
+            else:
+                print(f"Warning: failed to capture window screenshot to {path}")
+        NSApp().terminate_(None)
 
     def applicationDidFinishLaunching_(self, notification):
         try:
@@ -96,13 +109,17 @@ class AppDelegate(NSObject):
             self.status_item.setTitle_(MacLLMUI.status_ready)
             self.status_item.setHighlightMode_(True)
 
-            # Register a timer to check for new events
-            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                0.1, self, 'timerFired:', None, True)
-            
-            # Start tracking the clipboard
             self.pasteboard = NSPasteboard.generalPasteboard()
-            self.macllm_ui.pb_change_count = self.pasteboard.changeCount()
+            
+            # Open window on startup if requested
+            if self.macllm_ui.macllm and getattr(self.macllm_ui.macllm.args, 'show_window_on_start', False):
+                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                    0.1, self, 'openWindowOnStart:', None, False)
+
+            # Auto-submit a query if one was provided via --query
+            if self.macllm_ui.pending_query:
+                NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                    0.5, self, 'autoSubmitQuery:', None, False)
 
         except Exception as e:
             # If we fail to initialize the status item, terminate the application and show stack trace
@@ -145,7 +162,7 @@ class MacLLMUI:
 
     # Define colors for the status icon
     status_ready   = "🟢 LLM"
-    status_working = "🟠 LLM"
+    status_working = "🟡 LLM"
 
     # Colors
     white = NSColor.whiteColor()
@@ -163,9 +180,8 @@ class MacLLMUI:
         self.app = None
         self.delegate = None
         self.macllm = None
-        
-        self.pb_change_count = 0
-        self.clipboardCallback = self.dummy
+        self.pending_query = None
+        self.pending_screenshot = None
 
         self.quick_window = None
         self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
@@ -180,9 +196,6 @@ class MacLLMUI:
         # Browsing history mode state
         self.browsing_history = False
         self.history_index = 0
-
-    def dummy(self):
-        return
 
     def _create_scaled_logo(self):
         """Create a high-quality scaled version of the logo for the top bar."""
@@ -220,6 +233,17 @@ class MacLLMUI:
         content = self.delegate.pasteboard.stringForType_(NSStringPboardType)
         return content
 
+    def read_clipboard_image(self):
+        """Read image data from the pasteboard, returning a PIL Image or None."""
+        pb = self.delegate.pasteboard
+        for ptype in (NSPasteboardTypePNG, NSPasteboardTypeTIFF):
+            data = pb.dataForType_(ptype)
+            if data:
+                from PIL import Image
+                import io
+                return Image.open(io.BytesIO(bytes(data)))
+        return None
+
     def write_clipboard(self, content):
         self.delegate.pasteboard.declareTypes_owner_([NSStringPboardType], None)
         self.delegate.pasteboard.setString_forType_(content, NSStringPboardType)
@@ -230,6 +254,9 @@ class MacLLMUI:
     # This is called when the user presses Return in the pop-up window
 
     def handle_user_input(self, text):
+        if self.macllm.is_agent_running():
+            self.macllm.abort_agent()
+            return
         if text == "":
             return
         # Send the text to the LLM
@@ -238,6 +265,30 @@ class MacLLMUI:
         self.update_window()
         # Clear the input field for the next message
         InputFieldHandler.clear_input_field(self.input_field)
+
+    def set_status_indicator(self, working: bool):
+        """Update the menu bar status indicator."""
+        if self.delegate and hasattr(self.delegate, 'status_item'):
+            title = MacLLMUI.status_working if working else MacLLMUI.status_ready
+            self.delegate.status_item.setTitle_(title)
+
+    def schedule_quit(self, screenshot_path: str | None = None):
+        """Schedule optional screenshot + app termination after the query finishes.
+
+        Waits 2 seconds for the UI to render, then captures the window
+        (if *screenshot_path* is set) and terminates. Safe to call from
+        any thread.
+        """
+        self._quit_screenshot_path = screenshot_path
+        self.delegate.performSelectorOnMainThread_withObject_waitUntilDone_(
+            'scheduleQuitTimer:', None, False)
+
+    def request_update(self):
+        if NSThread.isMainThread():
+            self.update_window()
+        else:
+            _UIUpdater.target = self
+            _ui_updater.performSelectorOnMainThread_withObject_waitUntilDone_('run:', None, False)
 
     def update_window(self):
 
@@ -360,7 +411,11 @@ class MacLLMUI:
 
             scroll_view.setHasVerticalScroller_(True)
             scroll_view.setHasHorizontalScroller_(False)
-            scroll_view.setAutohidesScrollers_(True)
+            scroll_view.setAutohidesScrollers_(False)
+            scroll_view.setScrollerStyle_(0)  # NSScrollerStyleLegacy
+            scroller = scroll_view.verticalScroller()
+            if scroller:
+                scroller.setHidden_(False)
             self.scroll_view = scroll_view
 
             text_view = NSTextView.alloc().initWithFrame_(((textbox_x_fudge, textbox_y_fudge), (MacLLMUI.text_area_width - 2*text_corner_radius, main_area_height - 2*text_corner_radius)))
@@ -392,11 +447,15 @@ class MacLLMUI:
             if scroll_view.superview() is None:
                 text_container.addSubview_(scroll_view)
 
-        # Render content and decide if scrolling is needed
+        # Render content and show scrollbar when content significantly exceeds visible area
         rendered_height = MainTextHandler.set_text_content(self.macllm, text_view)
-        need_scroll = rendered_height > text_view.frame().size.height
+        visible_height = scroll_view.contentView().bounds().size.height
+        scroll_threshold = 20  # Buffer to avoid scrollbar for minor overflows
+        need_scroll = rendered_height > (visible_height + scroll_threshold)
         scroll_view.setHasVerticalScroller_(need_scroll)
-        scroll_view.setAutohidesScrollers_(True)
+
+        # Scroll to the bottom so the latest messages are visible
+        text_view.scrollRangeToVisible_((text_view.textStorage().length(), 0))
 
         # Update the top bar text with model and token information
         self.update_top_bar_text()
@@ -447,12 +506,16 @@ class MacLLMUI:
         if not hasattr(self, "top_bar_text_view"):
             return
 
-        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'tokens': 0})
+        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'input_tokens': 0, 'output_tokens': 0})
         provider = metadata.get('provider', 'Unknown')
         model = metadata.get('model', 'unknown')
-        tokens = metadata.get('tokens', 0)
+        input_tokens = metadata.get('input_tokens', 0)
+        output_tokens = metadata.get('output_tokens', 0)
 
-        # Determine mode from conversation speed
+        # Determine agent and speed for display
+        agent_cls = getattr(self.macllm.chat_history, "agent_cls", None)
+        agent_display = agent_cls.macllm_name.capitalize() if agent_cls else "Default"
+
         speed = getattr(self.macllm.chat_history, "speed_level", "normal") or "normal"
         speed_display = {
             "fast": "Fast",
@@ -460,10 +523,9 @@ class MacLLMUI:
             "slow": "Think",
         }.get(speed.lower(), "Normal")
 
-        # Create the full text with requested ordering
-        line1 = f"{speed_display}"
+        line1 = f"{agent_display} / {speed_display}"
         line2 = f"{model}"
-        line3 = f"{tokens} tkns"
+        line3 = f"{input_tokens} in / {output_tokens} out"
         txt = f"{line1}\n{line2}\n{line3}"
 
         para = NSMutableParagraphStyle.alloc().init()
@@ -502,7 +564,8 @@ class MacLLMUI:
         if self.browsing_history:
             return
         self.browsing_history = True
-        self.history_index = max(0, len(self.macllm.chat_history.chat_history) - 1)
+        messages = self.macllm.chat_history.get_displayable_messages()
+        self.history_index = max(0, len(messages) - 1)
         # Focus main area and highlight
         if hasattr(self, "text_area"):
             self.text_area.window().makeFirstResponder_(self.text_area)
@@ -517,15 +580,19 @@ class MacLLMUI:
     def copy_current_history_to_clipboard(self):
         """Copy the selected history entry (raw text only) to the clipboard."""
         try:
-            entry = self.macllm.chat_history.chat_history[self.history_index]
-            self.write_clipboard(entry.get("text", ""))
+            messages = self.macllm.chat_history.get_displayable_messages()
+            message = messages[self.history_index]
+            text = message['content']
+            self.write_clipboard(text)
         except IndexError:
             pass
 
     def insert_current_history_into_input(self):
         """Paste selected history entry into the input field and exit browsing."""
         try:
-            entry_text = self.macllm.chat_history.chat_history[self.history_index].get("text", "")
+            messages = self.macllm.chat_history.get_displayable_messages()
+            message = messages[self.history_index]
+            entry_text = message['content']
             if hasattr(self, "input_field") and self.input_field:
                 InputFieldHandler.clear_input_field(self.input_field)
                 self.input_field.insertText_(entry_text)
@@ -592,7 +659,6 @@ class MacLLMUI:
         self.app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
 
         self.delegate.pb_init()
-        self.pb_change_count = self.read_change_count()
         
         # Change the App icon
         # Only set the icon if the image is valid (has non-zero size)

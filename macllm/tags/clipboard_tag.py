@@ -1,7 +1,7 @@
 from .base import TagPlugin
 
 class ClipboardTag(TagPlugin):
-    """Expands @clipboard by adding the current clipboard text to conversation context."""
+    """Expands @clipboard by adding the current clipboard text or image to conversation context."""
 
     def __init__(self, macllm):
         super().__init__(macllm)
@@ -11,27 +11,35 @@ class ClipboardTag(TagPlugin):
         return ["@clipboard"]
 
     def expand(self, tag: str, conversation, request):
-        # Retrieve clipboard contents via UI helper
-        content = self.ui.read_clipboard()
-
-        # Unique source name is clipboard-#
-        # where # is the number of context entires in the chat history
         context_count = len(conversation.context_history)
         if context_count == 0:
             source_name = "clipboard"
         else:
             source_name = f"clipboard-{context_count}"
 
-        # Store in conversation context
+        image = self.ui.read_clipboard_image()
+        if image is not None:
+            request.images.append(image)
+
+            context_name = conversation.add_context(
+                "clipboard",
+                source_name,
+                "image",
+                "[image]",
+                icon="🖼️",
+            )
+            return f"\n\n[Attached image from clipboard]"
+
+        content = self.ui.read_clipboard()
+
         context_name = conversation.add_context(
-            "clipboard",            # suggested name
-            source_name,            # source (constant)
-            "clipboard",            # context type
-            content,                # actual text
+            "clipboard",
+            source_name,
+            "clipboard",
+            content,
             icon="📋",
         )
-        # Replace tag with the context name (e.g. clipboard or clipboard-1)
-        return f"context:{context_name}" 
+        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---" 
     
     def display_string(self, suggestion: str) -> str:
         return "📋" + suggestion

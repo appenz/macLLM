@@ -14,7 +14,7 @@ class URLTag(TagPlugin):
         try:
             content = self._retrieve_url(url)
         except Exception as e:
-            if self.macllm.debug:
+            if self.macllm.args.debug:
                 self.macllm.debug_log(str(e), 2)
             return tag
 
@@ -24,13 +24,12 @@ class URLTag(TagPlugin):
             "url",
             content,
         )
-        return f"context:{context_name}"
+        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---"
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     def _retrieve_url(self, url: str) -> str:
-        # Basic url validation
         result = urlparse(url)
         if not all([result.scheme, result.netloc]):
             raise ValueError("Invalid URL format")

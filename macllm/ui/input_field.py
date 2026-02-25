@@ -22,6 +22,7 @@ from macllm.ui.tag_render import (
     build_input_attributed_with_caret,
 )
 from macllm.core.shortcuts import ShortCut
+from macllm.core.llm_service import get_model_for_speed
 import objc
 
 TAG_ATTR_NAME_CONST = TAG_ATTR_NAME
@@ -65,15 +66,45 @@ class InputFieldDelegate(NSObject):
     # NSTextView keyboard command handler
     def textView_doCommandBySelector_(self, _view, commandSelector):
         try:
+            # --- Cmd-key shortcuts work regardless of autocomplete state ---
+            if commandSelector == 'noop:':
+                current_event = NSApp().currentEvent()
+                if current_event and (current_event.modifierFlags() & (1 << 20)):
+                    key = current_event.charactersIgnoringModifiers().lower()
+                    if key in ('1', '2', '3'):
+                        if key == '1':
+                            new_speed = 'fast'
+                        elif key == '2':
+                            new_speed = 'normal'
+                        else:
+                            new_speed = 'slow'
+                        self.macllm_ui.macllm.chat_history.speed_level = new_speed
+                        self.macllm_ui.macllm.llm_metadata['model'] = get_model_for_speed(new_speed)
+                        self.macllm_ui.update_top_bar_text()
+                        return True
+                    if key == 'c':
+                        self.text_view.copy_(None)
+                        return True
+                    if key == 'v':
+                        if hasattr(self.text_view, 'pasteAndMatchStyle_'):
+                            self.text_view.pasteAndMatchStyle_(None)
+                        else:
+                            clipboard_content = self.macllm_ui.read_clipboard()
+                            if clipboard_content:
+                                self.text_view.insertText_(clipboard_content)
+                        return True
+                    if key == 'n':
+                        self.macllm_ui.macllm.chat_history.reset(clear_persisted=True)
+                        self.macllm_ui.update_window()
+                        return True
+                return False
+
             if self.autocomplete and self.autocomplete.is_visible():
                 # --- Tag editing mode, the autocomplete popup is visible ---------
                 if commandSelector == 'insertNewline:':
-                    # Accept autocomplete selection and close the tag (convert to pill)
                     selection = self.autocomplete.current_selection()
                     if selection:
                         self._insert_tag(selection)
-                        # Add a trailing space so caret lands after a delimiter
-                        # and the pill is considered complete immediately.
                         try:
                             self.text_view.insertText_(" ")
                         except Exception:
@@ -81,96 +112,50 @@ class InputFieldDelegate(NSObject):
                         self.autocomplete.hide()
                     return True
                 elif commandSelector == 'insertTab:':
-                    # Accept the suggestion but keep the tag editable – just insert the raw text
                     selection = self.autocomplete.current_selection()
                     if selection:
-                        # Unpack tuple or use string directly
                         raw_tag = selection[0] if isinstance(selection, tuple) else selection
-                        # Strip trailing quote so the tag stays *open* while editing
                         if raw_tag.endswith('"') and (raw_tag.startswith('@"') or raw_tag.startswith('/"')):
-                            raw_edit = raw_tag[:-1]  # drop closing quote
+                            raw_edit = raw_tag[:-1]
                         else:
                             raw_edit = raw_tag
-                        # Replace current fragment with the editable tag text
                         rng = self.text_view.selectedRange()
                         fragment = self._current_fragment()
                         replace_start = rng.location - len(fragment)
                         self.text_view.textStorage().replaceCharactersInRange_withString_(
                             NSRange(replace_start, len(fragment)), raw_edit
                         )
-                        # Move caret to end *inside* the open quote
                         self.text_view.setSelectedRange_(NSRange(replace_start + len(raw_edit), 0))
-                        # Refresh autocomplete suggestions for the now-completed tag
                         self.autocomplete.update_suggestions(raw_edit)
-                    # Keep popup visible so the user can continue editing
                     return True
                 elif commandSelector in ('moveUp:', 'moveDown:'):
-                    # Navigate popup
                     delta = -1 if commandSelector == 'moveUp:' else 1
                     self.autocomplete.navigate(delta)
                     return True
                 elif commandSelector == 'cancelOperation:':
-                    # Hide popup (ESC)
                     self.autocomplete.hide()
                     return True
-                # Allow normal text editing (backspace, delete, arrows, etc.)
                 return False
                 
             else:
                 # --- Normal mode, the autocomplete popup is not visible ---------
                 if commandSelector == 'moveUp:':
-                    # If caret is on the very first line, switch to history browsing
                     if self._caret_on_first_line():
                         self.macllm_ui.begin_history_browsing()
                         return True
-                    # Otherwise, allow default movement
                     return False
                 elif commandSelector in ('insertNewline:'):
-                    # Send message
+                    current_event = NSApp().currentEvent()
+                    shift_pressed = current_event and (current_event.modifierFlags() & (1 << 17))
+                    if shift_pressed:
+                        self.text_view.insertText_("\n")
+                        return True
                     input_text = self._plain_text_from_view()
                     self.macllm_ui.handle_user_input(input_text)
                     return True
                 elif commandSelector == 'cancelOperation:':
-                    # Close window (ESC)  
                     self.macllm_ui.close_window()
                     return True
-                elif commandSelector == 'noop:':  # Handle Command-N
-                    current_event = NSApp().currentEvent()
-                    if current_event and (current_event.modifierFlags() & (1 << 20)):
-                        key = current_event.charactersIgnoringModifiers().lower()
-                        # Mode switches: Cmd-1 fast, Cmd-2 normal, Cmd-3 slow
-                        if key in ('1', '2', '3'):
-                            if key == '1':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'fast'
-                            elif key == '2':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'normal'
-                            elif key == '3':
-                                self.macllm_ui.macllm.chat_history.speed_level = 'slow'
-                            # Refresh the top bar immediately
-                            self.macllm_ui.update_top_bar_text()
-                            return True
-                        if key == 'c':
-                            # Let NSTextView handle copying selected text to the clipboard
-                            self.text_view.copy_(None)
-                            return True
-                        if key == 'v':
-                            # Paste clipboard content as plain text, matching current style
-                            if hasattr(self.text_view, 'pasteAndMatchStyle_'):
-                                self.text_view.pasteAndMatchStyle_(None)
-                            else:
-                                # Fallback: read plain string and insert
-                                clipboard_content = self.macllm_ui.read_clipboard()
-                                if clipboard_content:
-                                    self.text_view.insertText_(clipboard_content)
-                            return True
-                        if key == 'n':
-                            # Reset chat history (custom shortcut)
-                            self.macllm_ui.macllm.chat_history.reset()
-                            self.macllm_ui.update_window()
-                            return True
-                    # For any other Command-key shortcut, fall through to default handling
-                    return False
-                # Allow default behavior for other keys in normal mode
                 return False
                 
         except Exception as exc:  # pragma: no cover
@@ -198,6 +183,12 @@ class InputFieldDelegate(NSObject):
         while start > 0:
             ch = full_text[start - 1]
             if ch == '"':
+                # Check if this is an opening quote for a tag (preceded by @ or /)
+                # If so, include the tag prefix and stop - don't toggle in_quotes
+                # which would incorrectly extend past whitespace before the tag.
+                if start >= 2 and full_text[start - 2] in ('@', '/'):
+                    start -= 2  # include both @ (or /) and the opening quote
+                    break
                 in_quotes = not in_quotes
                 start -= 1
                 continue

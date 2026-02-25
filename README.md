@@ -1,133 +1,87 @@
-# macLLM - Fast LLM Desktop Utility for macOS
+# macLLM - AI Agent for macOS
 
-macLLM is a utility that makes it easy to work with LLMs from the macOS desktop. It is launched
-via a hotkey and can do things like:
-* Send a prompt to an LLM, e.g. "What state is Kansas City in?"
-* Fix spelling or find emojis for a specific topic
-* Work with files, e.g. "find the ship date in @~/Documents/Notes/team-meeting.md"
-* Index your notes (e.g. Obsidian) and auto-complete them for easy reference
-* Work with URLs, e.g. "summarize @https://github.com/appenz/macLLM/edit/main/README.md"
+macLLM is a local AI agent for macOS, launched via a hotkey. It uses tools to answer questions, search the web, and work with your files. For example:
+
+* "Can a Cessna C172S fly over Mt Kilimanjaro?" — searches the web and reasons on facts
+* "Make a table of my families passport numbers" — searches your indexed notes or files, e.g. Obsidian
+* "Check @~/Documents/proposal.md vs. @company.com/proposal.html — reads and processes files and URLs
+* "/emojis Crazy drunken ski party" — picks relevant emojis
+* "Summarize @clipboard and append to my note @~/Notes/skiholiday2026.md"
 
 macLLM is:
 * Open source (Apache 2.0)
-* Written in 100% Python to be easily extensible
-* Has a native macOS Cocoa UI (written in Python)
+* Very easily extensible. It's written in 100% Python and highly modular
+* Has a native macOS Cocoa UI written in Python (via PyObjC)
+* Agentic — uses [smolagents](https://github.com/huggingface/smolagents) with tool calling
+* Model-agnostic via [LiteLLM](https://docs.litellm.ai/) (supports OpenAI, Gemini, Anthropic, and more)
 
 ![Example Image](./assets/example.png)
 
 ## Installation
 
-macLLM uses the uv package manager, make sure you have it installed first (`https://github.com/astral-sh/uv`). 
-
-Your OpenAI API key should be configured in the environment variable OPENAI_API_KEY.
-
-```bash
-export OPENAI_API_KEY="your_api_key"
-```
-
-Now you can run macLLM with:
+macLLM uses the [uv](https://github.com/astral-sh/uv) package manager. Install it first, then run:
 
 ```bash
 uv run -m macllm
 ```
 
-uv should take care of all the dependencies.
+uv handles all dependencies automatically.
+
+### API Keys
+
+macLLM requires API keys for the LLM you want to use. Right now supported providers are:
+* Google - Gemini flash is default
+* OpenAI - good for complex tasks
+* Inception Labs - ultra fast diffusion models)
+Create a `.env` file in the project root or export environment variables:
+
+| Variable | Required for | Provider |
+|---|---|---|
+| `GEMINI_API_KEY` | Default (`/normal`) | Google Gemini |
+| `INCEPTION_API_KEY` | `/fast` speed | Inception Labs (Mercury) |
+| `OPENAI_API_KEY` | `/slow` / `/think` speed | OpenAI (GPT-5) |
+| `BRAVE_API_KEY` | Web search tool | Brave Search |
+
+At minimum, set `GEMINI_API_KEY` to use the default model. Add `BRAVE_API_KEY` to enable web search.
 
 ## Basic Usage
 
-Press the hotkey. By default, it is option-space (⌥-space) but it can be easily remapped. 
-A window will appear in the center of the screen and you can start typing a query to the LLM.
-For example:
+Press the hotkey (default: **⌥ Space** / option-space) to open the window, then type a query:
 
-> Capital of france?
+> Capital of France?
 
-After a second or so you should get the answer "Paris". You can now do a few things:
-1. Hit escape to close the window. Pressing the hotkey again will close it as well.
-2. Press ⬆️ to move to the reply and press Command-C (⌘-C) to copy the reply.
-3. Type a new query into the text box.
+After a moment you get the reply. From there you can:
+1. Press **Escape** to close the window (the hotkey also toggles it).
+2. Press **⬆** to browse the reply, then **⌘C** to copy it.
+3. Type a follow-up query — macLLM keeps conversation context.
+4. Press **⌘N** to start a new conversation (clears context).
 
-## Referencing external data
+## Agentic Architecture
 
-macLLM understands a number of external data sources:
-* @clipboard is the current clipboard content
-* @window is any desktop window. You can select it after entering the query with your mouse.
-* @selection allows you to select any area on the screen.
-* @<filename> is any file in macOS. The path has to start with "/" or "~"
-* @<url> for an http url. It has to start with "http" or "https"
+macLLM is an AI agent, not just a chat interface. Each query is handled by an agent that can reason through multi-step problems and call tools autonomously. The agent decides which tools to use based on your query — you don't need to tell it explicitly.
 
-The data can be referenced in the query, e.g. "translate @clipboard into French" or "summarize the slide @window".
+For example, asking "Can a Cessna C172 fly over Mt Kilimanjaro?" will cause the agent to look up the aircraft's service ceiling and the mountain's elevation, then reason about the answer.
 
-## Conversations and context
+### Tools
 
-- A conversation is the running exchange between you and the assistant. macLLM keeps the full chat history in the main text area.
-- When you reference external data (e.g., `@clipboard`, a path like `@~/note.md`, a URL, or an image via `@selection`/`@window`), macLLM adds that as a persistent context item for the current conversation.
-- Context is automatically included with every subsequent request in the same conversation and is summarized in the top bar as small pills.
-- Starting a new conversation clears prior context. You can also reset history from the UI (e.g., via the menu shortcut) if you want a clean slate.
-- You can start a new conversation with Command-N (⌘-N)
+The agent has access to the following tools:
 
-## Browsing previous messages and copying
+| Tool | Description |
+|---|---|
+| **web_search** | Searches the web via Brave Search. The agent can issue multiple queries per request. |
+| **search_files** | Semantic search across your indexed notes and files. |
+| **read_full_file** | Reads the full content of an indexed file. |
+| **file_append** | Appends text to an existing file. |
+| **file_create** | Creates a new file with the given content. |
+| **get_current_time** | Returns the current date and time. |
 
-- Press Up Arrow when the caret is on the first line of the input to enter history browsing.
-- Use Up/Down to move through previous user/assistant messages.
-- Press Command-C (⌘-C) to copy the currently highlighted message.
-- Press Return (↩) to insert the message back into the input field for quick editing/resubmission; press Escape (Esc) to exit browsing.
+Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
 
-## Shortcuts
+## Searching Your Notes and Files
 
-Shortcuts are shorthand for specific prompts and always start with the `/` symbol. For example, "/fix" is a prompt with instructions to fix spelling and grammar but but nothing else.
+macLLM can index directories of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_files` to find relevant documents and `read_full_file` to read them.
 
->/fix My Canaidian Mooose is Braun.
-
-This gets internally expanded to:
-
->Fix any spelling or grammar mistakes. Make no other changes. Reply *only* with the corrected text. The input is: My Canaidian Mooose is Braun.
-
-Which GPT will correct to:
-
-> My Canadian Moose is Brown.
-
-Shortcuts are read from:
-1. The shortcuts.py file for built-in shortcuts
-2. In TOML config files in either:
-   - App config directory: ./config/
-   - User config directory: ~/.config/macllm/
-
-Config files should use TOML format with a shortcuts table. Example:
-```toml
-shortcuts = [
-  ["/exampleshortcut", "This is the expanded version of the example shortcut."],
-  ["/emoji", "Suggest a single emoji that represents the following (reply only with the emoji, do not write any other text) : "],
-]
-```
-
-Entries whose trigger starts with `@` are reserved for plugin configuration tags (not user shortcuts).
-
-## Autocomplete and highlighting
-
-Both `/` shortcuts and `@` tags use the same autocomplete popup and inline pill highlighting:
-- Typing `/` shows your configured shortcuts; typing `@` shows available tag prefixes and dynamic suggestions from plugins.
-- Enter inserts the selected suggestion as a pill; Tab inserts the raw text and keeps it editable. Quoted forms like `@"..."` and `/"..."` are supported.
-
-## Example Shortcuts
-- Default examples in `config/default_shortcuts.toml`:
-  - `/emoji`: Pick a relevant emoji for the text and reply only with that emoji.
-  - `/emojis`: Suggest a few relevant emojis and reply only with those emojis.
-- You can add more in your own TOML files under `~/.config/macllm/` (see sample above).
-
-## Using it via the clipboard
-
-If the clipboard contains text that starts with the trigger (default is "@@"), it will be sent to the LLM.
-This can be useful if you want to use macLLM from within an editor. Just type "@@" followed by instructions (e.g. "@@shorten this paragraph:"), hit copy (⌘-C), wait a few seconds, and paste (⌘-V).
-
-## Indexing markdown notes and file autocomplete
-
-You can index directories of notes (e.g. Obsidian) so that files are easy to find and insert via autocomplete:
-
-- Add `@IndexFiles` entries in any shortcuts TOML file (app or user config). On startup, macLLM will recursively index `.txt` and `.md` files in those directories.
-- When you type `@` and at least 3 characters, the autocomplete will list up to 10 matching files by basename (case-insensitive substring match). Selecting a suggestion inserts a pill that shows the filename; when sent, the full path is expanded and the file’s content (up to ~10 KB) is added as context.
-- Path-like tags also support direct completion for partial paths (e.g., `@~/Documents/`), including quoted paths with spaces: `@"~/My Notes/file.md"`.
-
-Example config:
+To set up indexing, add `@IndexFiles` entries in a TOML config file under `~/.config/macllm/`:
 
 ```toml
 shortcuts = [
@@ -135,6 +89,113 @@ shortcuts = [
   ["@IndexFiles", "/Users/you/Work/Docs"],
 ]
 ```
+
+This recursively indexes all `.txt` and `.md` files. The index rebuilds automatically every 5 minutes, or you can type `/reindex` to trigger it manually.
+
+When typing `@` followed by 3+ characters, autocomplete suggests matching files from the index. Selecting one inserts it as context for the conversation.
+
+## Web Search
+
+When the agent needs current information, it uses the `web_search` tool backed by the Brave Search API. This happens automatically — just ask a question that requires up-to-date information, like opening hours, recent events, or current statistics.
+
+Requires `BRAVE_API_KEY` to be set.
+
+## Tags — Referencing External Data
+
+Tags start with `@` and attach external data as context for the conversation:
+
+| Tag | Description |
+|---|---|
+| `@clipboard` | Current clipboard content (text or image) |
+| `@window` | Screenshot of a desktop window (click to select) |
+| `@selection` | Screenshot of a selected screen area |
+| `@<path>` | Any file — path must start with `/` or `~` |
+| `@<url>` | Web page content — must start with `http://` or `https://` |
+
+Tags can be used inline: "translate @clipboard into French" or "summarize the slide @window".
+
+Context items persist for the entire conversation and are shown as pills in the top bar. Starting a new conversation (⌘N) clears them.
+
+Quoted forms like `@"~/My Notes/file.md"` are supported for paths with spaces.
+
+## Speed Levels
+
+Speed levels select different models for the tradeoff between speed and capability:
+
+| Command | Speed | Model |
+|---|---|---|
+| *(default)* | Normal | `gemini/gemini-3-flash-preview` (Gemini) |
+| `/fast` | Fast | `openai/mercury` (Inception Labs) |
+| `/slow` or `/think` | Slow | `gpt-5` (OpenAI) |
+
+There are two ways to set the speed:
+
+- **In-line command:** Prefix your query, e.g. `/slow Explain quantum entanglement in detail`.
+- **Keyboard shortcut:** Press **⌘1** (Fast), **⌘2** (Normal), or **⌘3** (Slow/Think) at any time. This changes the speed for all subsequent queries in the conversation.
+
+The current speed level and model are shown in the top-right corner of the window.
+
+## Shortcuts
+
+Shortcuts are shorthand for specific prompts and start with `/`. For example:
+
+> /fix My Canaidian Mooose is Braun.
+
+This expands to a prompt instructing the model to fix spelling/grammar only, producing:
+
+> My Canadian Moose is Brown.
+
+### Built-in Shortcuts
+
+| Shortcut | Description |
+|---|---|
+| `/fix` | Fix spelling and grammar, no other changes |
+| `/emoji` | Suggest a single relevant emoji |
+| `/emojis` | Suggest several relevant emojis |
+| `/fast` | Use the fast model |
+| `/slow` | Use the slow/thinking model |
+| `/think` | Same as `/slow` |
+| `/reindex` | Rebuild the file index |
+
+### Custom Shortcuts
+
+Add shortcuts in TOML files under `~/.config/macllm/` or `./config/`:
+
+```toml
+shortcuts = [
+  ["/summarize", "Summarize the following in 3 bullet points: "],
+  ["/translate", "Translate the following to French: "],
+]
+```
+
+## Autocomplete
+
+Both `/` shortcuts and `@` tags use an autocomplete popup:
+- Typing `/` shows configured shortcuts; typing `@` shows available tags and file suggestions.
+- **Enter** inserts the selection as a pill; **Tab** inserts as editable raw text.
+
+## Conversations and History
+
+- macLLM maintains a full conversation history in the main text area.
+- Context attached via tags persists for the current conversation.
+- **⌘N** starts a new conversation and clears context.
+- Press **⬆** when the cursor is on the first line to browse previous messages.
+- **⌘C** copies the highlighted message; **Return** inserts it back for editing; **Escape** exits browsing.
+
+## Command-Line Options
+
+```
+uv run -m macllm [options]
+```
+
+| Option | Description |
+|---|---|
+| `--debug` | Enable debug logging to the terminal |
+| `--debuglitellm` | Enable verbose LiteLLM debug logging |
+| `--version` | Print version and exit |
+| `--show-window` | Open the window immediately on startup |
+| `--query <text>` | Auto-submit a query (implies `--show-window`) |
+| `--screenshot <path>` | After `--query` completes, capture the window to the given path and exit |
 
 ## License
 

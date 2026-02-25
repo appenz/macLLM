@@ -1,6 +1,5 @@
 from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSBackgroundColorAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
-from .main_text_helpers import is_markdown
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.core.shortcuts import ShortCut
 
@@ -46,121 +45,53 @@ class MainTextHandler:
     @staticmethod
     def append_markdown(text_view, text, color):
         """Append markdown-formatted text to the NSTextView."""
-        text_storage = text_view.textStorage()
-        font = NSFont.systemFontOfSize_(13.0)
-        
-        # Remove trailing newline to avoid extra blank line after markdown blocks
-        text = text.rstrip('\n')
-        # Process text line by line
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            # Handle headlines
-            if line.startswith('#'):
-                # Process the entire headline line with bold font
-                bold_font = NSFont.boldSystemFontOfSize_(13.0)
-                headline_text = line.lstrip('#').strip()
-                if i < len(lines) - 1:  # Not the last line
-                    headline_text += "\n"
-                processed_headline = MainTextHandler._process_bold_text(headline_text, color, bold_font)
-                text_storage.appendAttributedString_(processed_headline)
-                continue
-            
-            # Handle bullets
-            if line.strip().startswith(('* ', '- ')):
-                # Remove the bullet marker and get content
-                content = line.strip()[2:]  # Remove first 2 chars (* or - plus space)
-                bullet_char = '•'
-                
-                # Calculate indentation (count leading spaces/tabs)
-                indent_level = 0
-                for char in line:
-                    if char in ' \t':
-                        indent_level += 1
-                    else:
-                        break
-                
-                # Create indentation
-                indent = "  " * indent_level
-                
-                # Create bullet prefix with indentation
-                bullet_prefix = indent + bullet_char + " "
-                bullet_prefix_attr = NSAttributedString.alloc().initWithString_attributes_(bullet_prefix, {
-                    NSForegroundColorAttributeName: color,
-                    NSFontAttributeName: font
-                })
-                text_storage.appendAttributedString_(bullet_prefix_attr)
-                
-                # Process and append the bullet content with bold formatting
-                processed_content = MainTextHandler._process_bold_text(content, color, font)
-                text_storage.appendAttributedString_(processed_content)
-                
-                # Add newline only if not the last line
-                if i < len(lines) - 1:
-                    newline_attr = NSAttributedString.alloc().initWithString_("\n")
-                    text_storage.appendAttributedString_(newline_attr)
-                continue
-            
-            # Handle regular text with bold formatting
-            processed_text = MainTextHandler._process_bold_text(line, color, font)
-            text_storage.appendAttributedString_(processed_text)
-            
-            # Add newline only if not the last line
-            if i < len(lines) - 1:
-                newline_attr = NSAttributedString.alloc().initWithString_("\n")
-                text_storage.appendAttributedString_(newline_attr)
-    
+        from macllm.markdown import render_markdown
+        attr_str = render_markdown(text, color)
+        text_view.textStorage().appendAttributedString_(attr_str)
+
     @staticmethod
-    def _process_bold_text(text, color, font):
-        """Process bold text markers (**text** or __text__) in a line."""
-        # Handle **bold** and __bold__ patterns
-        import re
-        
-        # Create a mutable attributed string
+    def _render_agent_status(text_view, status_mgr):
+        """Render agent plan and tool calls with rich formatting."""
         from Foundation import NSMutableAttributedString
-        
-        # Split text by bold markers
-        parts = re.split(r'(\*\*.*?\*\*|__.*?__)', text)
-        
-        if len(parts) == 1:
-            # No bold markers found, return regular text
-            attributes = {
-                NSForegroundColorAttributeName: color,
-                NSFontAttributeName: font
-            }
-            return NSAttributedString.alloc().initWithString_attributes_(text, attributes)
-        
-        # Create mutable attributed string
-        result = NSMutableAttributedString.alloc().init()
-        
-        for part in parts:
-            if not part:
-                continue
-                
-            # Check if this part is bold (starts and ends with ** or __)
-            is_bold = (part.startswith('**') and part.endswith('**')) or \
-                     (part.startswith('__') and part.endswith('__'))
-            
-            if is_bold:
-                # Remove the markers and make bold
-                bold_text = part[2:-2] if part.startswith('**') else part[2:-2]
-                bold_font = NSFont.boldSystemFontOfSize_(13.0)
-                attributes = {
-                    NSForegroundColorAttributeName: color,
-                    NSFontAttributeName: bold_font
-                }
-            else:
-                # Regular text
-                attributes = {
-                    NSForegroundColorAttributeName: color,
-                    NSFontAttributeName: font
-                }
-                bold_text = part
-            
-            # Create attributed string for this part
-            part_attr = NSAttributedString.alloc().initWithString_attributes_(bold_text, attributes)
-            result.appendAttributedString_(part_attr)
-        
-        return result
+        ts = text_view.textStorage()
+
+        muted = NSColor.colorWithCalibratedWhite_alpha_(0.50, 1.0)
+        light = NSColor.colorWithCalibratedWhite_alpha_(0.62, 1.0)
+        green = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.30, 0.69, 0.31, 1.0)
+        red   = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.84, 0.24, 0.24, 1.0)
+
+        font_sm      = NSFont.systemFontOfSize_(11.0)
+        font_sm_bold = NSFont.boldSystemFontOfSize_(11.0)
+
+        def _append(text, color, font=font_sm):
+            a = NSAttributedString.alloc().initWithString_attributes_(
+                text, {NSForegroundColorAttributeName: color, NSFontAttributeName: font})
+            ts.appendAttributedString_(a)
+
+        _append("\n\n", muted)
+
+        if status_mgr.plan:
+            _append("Plan\n", muted, font_sm_bold)
+            for line in status_mgr.plan.split('\n'):
+                _append(f"  {line}\n", light)
+
+        if status_mgr.tool_calls:
+            if status_mgr.plan:
+                _append("\n", muted)
+            _append("Steps\n", muted, font_sm_bold)
+            for entry in status_mgr.tool_calls:
+                if entry.status == "success":
+                    _append("  ✓ ", green, font_sm_bold)
+                elif entry.status == "running":
+                    _append("  ⟳ ", muted, font_sm_bold)
+                else:
+                    _append("  ✗ ", red, font_sm_bold)
+                _append(f"{entry.name}", muted)
+                if entry.args_summary:
+                    _append(f"({entry.args_summary})", light)
+                if entry.status == "error" and entry.result_summary:
+                    _append(f" — {entry.result_summary}", red)
+                _append("\n", muted)
 
     @staticmethod
     def calculate_minimum_text_height(macllm):
@@ -189,20 +120,21 @@ class MainTextHandler:
         # Clear the text view first and set the font
         text_view.setString_("")
         text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+        text_view.setLinkTextAttributes_({})
         
-        # Get chat history entries
-        chat_history = macllm.chat_history.chat_history
+        # Get displayable messages (user and assistant only)
+        messages = macllm.chat_history.get_displayable_messages()
         
         # Define colors for different roles
         user_color = NSColor.blackColor()  # Black
         assistant_color = NSColor.darkGrayColor()  # Dark Grey
         
-        # Add each chat entry with appropriate color
-        for i, entry in enumerate(chat_history):
+        # Add each message with appropriate color
+        for i, message in enumerate(messages):
             # Track start index to allow highlighting
             start_pos = text_view.textStorage().length()
-            role = entry['role']
-            text = entry['text']
+            role = message['role']
+            text = message['content']
             
             # Choose color based on role
             if role == 'user':
@@ -210,65 +142,42 @@ class MainTextHandler:
                 prefix = "User: "
             else:  # assistant
                 color = assistant_color
-                if is_markdown(text):
-                    prefix = None
-                else:
-                    prefix = "Assistant: "
-            
+                prefix = None
 
             # Append the colored prefix first (e.g., "User: ")
             if prefix:
                 MainTextHandler.append_colored_text(text_view, prefix, color)
             
-            # Add message content and optional separator + highlight
-            if i < len(chat_history) - 1:
-                if role == 'user':
-                    font = NSFont.systemFontOfSize_(13.0)
-                    shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
-                    plugins = getattr(macllm, 'plugins', [])
-                    attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
-                    text_view.textStorage().appendAttributedString_(attr)
-                else:
-                    if is_markdown(text):
-                        MainTextHandler.append_markdown(text_view, text, color)
-                    else:
-                        MainTextHandler.append_colored_text(text_view, text, color)
+            # Render message content
+            if role == 'user':
+                font = NSFont.systemFontOfSize_(13.0)
+                shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
+                plugins = getattr(macllm, 'plugins', [])
+                attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
+                text_view.textStorage().appendAttributedString_(attr)
+            else:
+                MainTextHandler.append_markdown(text_view, text, color)
 
-                # Apply highlight (exclude upcoming separator)
-                end_pos = text_view.textStorage().length()
-                if highlight_index is not None and i == highlight_index:
-                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
-                    text_view.textStorage().addAttributes_range_(
-                        {NSBackgroundColorAttributeName: highlight_color},
-                        (start_pos, end_pos - start_pos)
-                    )
+            # Apply highlight
+            end_pos = text_view.textStorage().length()
+            if highlight_index is not None and i == highlight_index:
+                highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+                text_view.textStorage().addAttributes_range_(
+                    {NSBackgroundColorAttributeName: highlight_color},
+                    (start_pos, end_pos - start_pos)
+                )
 
-                # Add centered separator with paragraph breaks
+            # Add separator between messages (not after the last one)
+            if i < len(messages) - 1:
                 separator_text = "\n" + "─"*47 + "\n"
                 separator_attributed_text = NSAttributedString.alloc().initWithString_attributes_(separator_text, MainTextHandler._separator_attributes)
                 text_view.textStorage().appendAttributedString_(separator_attributed_text)
-            else:
-                if role == 'user':
-                    font = NSFont.systemFontOfSize_(13.0)
-                    shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
-                    plugins = getattr(macllm, 'plugins', [])
-                    attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
-                    text_view.textStorage().appendAttributedString_(attr)
-                else:
-                    if is_markdown(text):
-                        MainTextHandler.append_markdown(text_view, text, color)
-                    else:
-                        MainTextHandler.append_colored_text(text_view, text, color)
 
-                # Apply highlight for the last message
-                end_pos = text_view.textStorage().length()
-                if highlight_index is not None and i == highlight_index:
-                    highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
-                    text_view.textStorage().addAttributes_range_(
-                        {NSBackgroundColorAttributeName: highlight_color},
-                        (start_pos, end_pos - start_pos)
-                    )
-
+        # Add agent status if present (shown at bottom during agent execution)
+        from macllm.macllm import MacLLM
+        status_mgr = MacLLM.get_status_manager()
+        if status_mgr.plan or status_mgr.tool_calls:
+            MainTextHandler._render_agent_status(text_view, status_mgr)
         
         # Calculate height from the rendered content
         layout_manager = text_view.layoutManager()
