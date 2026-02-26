@@ -62,6 +62,9 @@ class AppDelegate(NSObject):
     def terminate_(self, sender):
         NSApp().terminate_(self)
 
+    def signalCheck_(self, timer):
+        pass
+
     # Create the menu items under the menu bar icon
 
     def menu(self):
@@ -664,6 +667,11 @@ class MacLLMUI:
         # Only set the icon if the image is valid (has non-zero size)
         if self.dock_image.size().width > 0 and self.dock_image.size().height > 0:
             self.app.setApplicationIconImage_(self.dock_image)
+
+        # Recurring timer gives CPython a chance to dispatch pending
+        # signals (SIGINT) while the Cocoa run loop owns the main thread.
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.5, self.delegate, 'signalCheck:', None, True)
 
         # Start the application event loop (unless in test mode)
         if not dont_run_app:
