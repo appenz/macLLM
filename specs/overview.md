@@ -26,7 +26,7 @@ A user enters a request (e.g. "What is 1+1?") and MacLLM replies with a result (
     - `memory.py`: Conversation persistence (save/load/clear)
 - **Tags** (`tags/`): Plugin system for @tag and /command expansion (e.g. `@clipboard`, `@file`, `/fast`, `@agent:`)
 - **Agents** (`agents/`): Agent architecture built on smolagents (see `specs/agents.md`)
-- **Tools** (`tools/`): Agent tool implementations (`web_search`, `search_files`, `read_full_file`, `file_append`, `file_create`, `get_current_time`)
+- **Tools** (`tools/`): Agent tool implementations (`web_search`, `get_current_time`, `search_files`, `read_file`, `file_create`, `file_append`, `file_modify`, `file_move`, `file_delete`, `list_directory`, `view_directory_structure`)
 - **Markdown** (`markdown/`): Markdown-to-`NSAttributedString` rendering for assistant messages
 
 ## LLM Integration

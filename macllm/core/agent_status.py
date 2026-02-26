@@ -14,6 +14,7 @@ class ToolCallEntry:
     status: Literal["running", "success", "error"]
     result_summary: str = ""
     started_at: float = field(default_factory=time.time)
+    indent: int = 0
 
 
 class AgentStatusManager:
@@ -33,12 +34,37 @@ class AgentStatusManager:
         """Clear all state for a new agent run."""
         self.plan = ""
         self.tool_calls: list[ToolCallEntry] = []
+        self._managed_agent_depth: int = 0
     
     def set_plan(self, plan: str) -> None:
         """Update the current plan."""
         self.plan = plan
         self._notify()
     
+    def enter_managed_agent(self, name: str, task: str) -> None:
+        """Record that a managed subagent is starting execution."""
+        task_summary = task[:60] + "..." if len(task) > 60 else task
+        task_summary = task_summary.replace("\n", " ")
+        entry = ToolCallEntry(
+            id=f"_managed_{name}_{int(time.time() * 1000)}",
+            name=f"→ {name}",
+            args_summary=f'"{task_summary}"',
+            status="running",
+            indent=self._managed_agent_depth,
+        )
+        self.tool_calls.append(entry)
+        self._managed_agent_depth += 1
+        self._notify()
+
+    def exit_managed_agent(self, name: str) -> None:
+        """Record that a managed subagent has finished execution."""
+        self._managed_agent_depth = max(0, self._managed_agent_depth - 1)
+        for entry in reversed(self.tool_calls):
+            if entry.name == f"→ {name}" and entry.status == "running":
+                entry.status = "success"
+                break
+        self._notify()
+
     def start_tool_call(self, id: str, name: str, args: dict) -> None:
         """Record the start of a tool call."""
         args_summary = _format_args_summary(name, args)
@@ -46,7 +72,8 @@ class AgentStatusManager:
             id=id,
             name=name,
             args_summary=args_summary,
-            status="running"
+            status="running",
+            indent=self._managed_agent_depth,
         )
         self.tool_calls.append(entry)
         self._notify()
@@ -69,7 +96,8 @@ class AgentStatusManager:
                 name=name,
                 args_summary="",
                 status="success",
-                result_summary=result[:100] if result else ""
+                result_summary=result[:100] if result else "",
+                indent=self._managed_agent_depth,
             )
             self.tool_calls.append(entry)
         self._notify()
@@ -91,7 +119,8 @@ class AgentStatusManager:
                 name=name,
                 args_summary="",
                 status="error",
-                result_summary=error[:100] if error else "Unknown error"
+                result_summary=error[:100] if error else "Unknown error",
+                indent=self._managed_agent_depth,
             )
             self.tool_calls.append(entry)
         self._notify()
@@ -111,8 +140,8 @@ class AgentStatusManager:
                     "success": "[OK]",
                     "error": "[ERR]"
                 }[entry.status]
-                
-                line = f"{status_indicator} {entry.name}({entry.args_summary})"
+                indent = "  " * entry.indent
+                line = f"{indent}{status_indicator} {entry.name}({entry.args_summary})"
                 if entry.status == "error" and entry.result_summary:
                     line += f" - {entry.result_summary}"
                 lines.append(line)

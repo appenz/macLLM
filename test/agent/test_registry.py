@@ -10,18 +10,22 @@ from macllm.agents import (
 from macllm.agents.base import MacLLMAgent
 from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
 from macllm.agents.smolagent import MacLLMSmolAgent
+from macllm.agents.file_agent import FileAgent
 
 
 class TestAgentDiscovery:
     def test_registry_populated(self):
         _discover_agents()
-        assert len(AGENT_REGISTRY) >= 2
+        assert len(AGENT_REGISTRY) >= 3
 
     def test_default_registered(self):
         assert get_agent_class("default") is MacLLMDefaultAgent
 
     def test_smolagent_registered(self):
         assert get_agent_class("smolagent") is MacLLMSmolAgent
+
+    def test_file_agent_registered(self):
+        assert get_agent_class("files") is FileAgent
 
     def test_unknown_raises(self):
         with pytest.raises(KeyError):
@@ -36,6 +40,7 @@ class TestAgentDiscovery:
         names = {a.macllm_name for a in agents}
         assert "default" in names
         assert "smolagent" in names
+        assert "files" in names
 
 
 class TestAgentDefinitions:
@@ -46,9 +51,29 @@ class TestAgentDefinitions:
         assert "get_current_time" in MacLLMDefaultAgent.macllm_tools
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
 
+    def test_default_agent_uses_files_subagent(self):
+        assert "files" in MacLLMDefaultAgent.macllm_managed_agents
+
+    def test_default_agent_no_file_tools(self):
+        for tool_name in ["search_files", "read_file", "file_append", "file_create"]:
+            assert tool_name not in MacLLMDefaultAgent.macllm_tools
+
     def test_smolagent_attributes(self):
         assert MacLLMSmolAgent.macllm_name == "smolagent"
         assert len(MacLLMSmolAgent.macllm_tools) > 0
+        assert "files" in MacLLMSmolAgent.macllm_managed_agents
+
+    def test_file_agent_attributes(self):
+        assert FileAgent.macllm_name == "files"
+        assert len(FileAgent.macllm_description) > 0
+        expected_tools = [
+            "search_files", "read_file", "file_create", "file_append",
+            "file_modify", "file_move", "file_delete",
+            "list_directory", "view_directory_structure",
+        ]
+        for tool_name in expected_tools:
+            assert tool_name in FileAgent.macllm_tools
+        assert len(FileAgent.macllm_managed_agents) == 0
 
     def test_all_agents_inherit_from_base(self):
         for agent_cls in list_agents():

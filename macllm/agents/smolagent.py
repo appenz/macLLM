@@ -14,11 +14,8 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_tools = [
         "get_current_time",
         "web_search",
-        "search_files",
-        "read_full_file",
-        "file_append",
-        "file_create",
     ]
+    macllm_managed_agents = ["files"]
 
     def __init__(self, **kwargs):
         super().__init__(

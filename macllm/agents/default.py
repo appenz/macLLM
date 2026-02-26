@@ -11,11 +11,8 @@ You are a helpful assistant.
 - If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
 - If asked to just look at a context, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
-- Personal, non-public information is often found in the users files (see tool)
-- If the user refers to "notes" he means the local files. Use tools to interact with them.
-- If you can't find a file right away, always ask for instructions.
-- Never create a file without the user's explicit instructions.
-- If a user asks you to append to a file, you may NEVER create a file with that name. Instead ask the user for instructions.
+- Personal, non-public information is often found in the user's files. Delegate file tasks to your files team member.
+- If the user refers to "notes" he means local files. Use the files team member to interact with them.
 
 """
 
@@ -36,11 +33,8 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_tools = [
         "get_current_time",
         "web_search",
-        "search_files",
-        "read_full_file",
-        "file_append",
-        "file_create",
     ]
+    macllm_managed_agents = ["files"]
 
     def __init__(self, **kwargs):
         super().__init__(

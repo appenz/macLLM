@@ -31,6 +31,7 @@ class MacLLMAgent(ToolCallingAgent):
     macllm_name: str = ""
     macllm_description: str = ""
     macllm_tools: list[str] = []
+    macllm_managed_agents: list[str] = []
 
     def __init__(self, speed: str = "normal",
                  token_callback: Optional[Callable[[int, int], None]] = None,
@@ -53,6 +54,13 @@ class MacLLMAgent(ToolCallingAgent):
         tools = [getattr(tools_module, n) for n in self.macllm_tools]
         step_callback = create_step_callback(token_callback)
 
+        if managed_agents is None and self.macllm_managed_agents:
+            from macllm.agents import get_agent_class
+            managed_agents = [
+                get_agent_class(name)(speed=speed)
+                for name in self.macllm_managed_agents
+            ]
+
         super().__init__(
             tools=tools,
             model=model,
@@ -70,3 +78,19 @@ class MacLLMAgent(ToolCallingAgent):
             },
             **kwargs,
         )
+
+    def __call__(self, *args, **kwargs):
+        """Wrap managed-agent invocation to signal the status manager."""
+        from macllm.macllm import MacLLM
+        task = args[0] if args else kwargs.get("task", "")
+        try:
+            MacLLM.get_status_manager().enter_managed_agent(self.macllm_name, task)
+        except Exception:
+            pass
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            try:
+                MacLLM.get_status_manager().exit_managed_agent(self.macllm_name)
+            except Exception:
+                pass

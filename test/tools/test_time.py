@@ -29,11 +29,16 @@ def test_get_current_time():
 
 @pytest.mark.external
 def test_agent_uses_time_tool():
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set")
-    
+    if not os.getenv("GEMINI_API_KEY"):
+        pytest.skip("GEMINI_API_KEY not set")
+
+    from macllm.macllm import MacLLM
     from macllm.agents.default import MacLLMDefaultAgent
-    agent = create_agent(agent_cls=MacLLMDefaultAgent, speed="fast")
-    result = agent.run("What is the current time? Use the get_current_time tool.")
-    
-    assert re.search(r"\d{4}-\d{2}-\d{2}", result)
+
+    MacLLM._instance = DummyApp()
+    try:
+        agent = create_agent(agent_cls=MacLLMDefaultAgent, speed="normal")
+        result = agent.run("What is the current time? Use the get_current_time tool.")
+        assert re.search(r"\d{4}-\d{2}-\d{2}", result)
+    finally:
+        MacLLM._instance = None

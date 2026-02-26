@@ -80,12 +80,13 @@ class MainTextHandler:
                 _append("\n", muted)
             _append("Steps\n", muted, font_sm_bold)
             for entry in status_mgr.tool_calls:
+                indent = "  " * (1 + entry.indent)
                 if entry.status == "success":
-                    _append("  ✓ ", green, font_sm_bold)
+                    _append(f"{indent}✓ ", green, font_sm_bold)
                 elif entry.status == "running":
-                    _append("  ⟳ ", muted, font_sm_bold)
+                    _append(f"{indent}⟳ ", muted, font_sm_bold)
                 else:
-                    _append("  ✗ ", red, font_sm_bold)
+                    _append(f"{indent}✗ ", red, font_sm_bold)
                 _append(f"{entry.name}", muted)
                 if entry.args_summary:
                     _append(f"({entry.args_summary})", light)

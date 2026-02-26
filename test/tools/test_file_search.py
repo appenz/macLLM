@@ -1,132 +1,100 @@
-import pytest
-from unittest.mock import patch, MagicMock
+"""Tests for search_files and read_file (path-based API)."""
 
-from macllm.tools.file_search import search_files, read_full_file
+from unittest.mock import MagicMock
+from pathlib import Path
+
+from macllm.tools.file_search import search_files, read_file
 from macllm.tags.file_tag import FileTag
-from macllm.core.agent_status import AgentStatusManager
 
 
-class DummyArgs:
-    debug = False
+class TestSearchFiles:
+    def test_returns_paths_and_scores(self, file_env):
+        mock_emb = MagicMock()
+        mock_emb.search.return_value = [(0, 0.95), (1, 0.80)]
+        FileTag._embeddings = mock_emb
+        FileTag._embedding_ready.set()
+
+        result = search_files("travel")
+
+        assert str(file_env / "alpha.md") in result
+        assert str(file_env / "beta.txt") in result
+        assert "Score: 0.950" in result
+        assert "Score: 0.800" in result
+        assert "Alpha content" in result
+
+        FileTag._embeddings = None
+        FileTag._embedding_ready.clear()
+
+    def test_no_results(self, file_env):
+        mock_emb = MagicMock()
+        mock_emb.search.return_value = []
+        FileTag._embeddings = mock_emb
+        FileTag._embedding_ready.set()
+
+        result = search_files("nonexistent")
+        assert "No matching files found" in result
+
+        FileTag._embeddings = None
+        FileTag._embedding_ready.clear()
+
+    def test_truncated_indicator(self, file_env):
+        long_file = file_env / "long.md"
+        long_file.write_text("x" * 2000)
+        FileTag._index.append(("long.md", str(long_file)))
+        FileTag._filepath_to_idx[str(long_file)] = 3
+
+        mock_emb = MagicMock()
+        mock_emb.search.return_value = [(str(long_file), 0.9)]
+        FileTag._embeddings = mock_emb
+        FileTag._embedding_ready.set()
+
+        result = search_files("test")
+        assert "(truncated)" in result
+
+        FileTag._embeddings = None
+        FileTag._embedding_ready.clear()
+
+    def test_no_file_ids_in_output(self, file_env):
+        mock_emb = MagicMock()
+        mock_emb.search.return_value = [(0, 0.95)]
+        FileTag._embeddings = mock_emb
+        FileTag._embedding_ready.set()
+
+        result = search_files("travel")
+        assert "[File ID:" not in result
+
+        FileTag._embeddings = None
+        FileTag._embedding_ready.clear()
 
 
-class DummyApp:
-    args = DummyArgs()
+class TestReadFile:
+    def test_read_existing_file(self, file_env):
+        result = read_file(str(file_env / "alpha.md"))
 
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
+        assert "alpha.md" in result
+        assert "Alpha content about travel" in result
 
-    def debug_log(self, *args, **kwargs):
-        pass
+    def test_read_nested_file(self, file_env):
+        result = read_file(str(file_env / "subdir" / "gamma.md"))
 
-    def debug_exception(self, *args, **kwargs):
-        pass
+        assert "gamma.md" in result
+        assert "Gamma nested content" in result
 
+    def test_rejects_path_outside_indexed_dirs(self, file_env):
+        result = read_file("/tmp/not-indexed/secret.md")
+        assert "Error" in result
+        assert "not within an indexed directory" in result
 
-@pytest.fixture
-def file_tag_with_index(tmp_path):
-    from macllm.macllm import MacLLM
-    
-    test_file1 = tmp_path / "doc1.md"
-    test_file1.write_text("This is document one about Python programming.")
-    test_file2 = tmp_path / "doc2.md"
-    test_file2.write_text("This is document two about JavaScript frameworks.")
+    def test_rejects_nonexistent_file(self, file_env):
+        result = read_file(str(file_env / "nonexistent.md"))
+        assert "Error" in result
+        assert "not found" in result
 
-    dummy_app = DummyApp()
-    FileTag._macllm = dummy_app
-    MacLLM._instance = dummy_app
-    FileTag._index = [
-        ("doc1.md", str(test_file1)),
-        ("doc2.md", str(test_file2)),
-    ]
-    FileTag._filepath_to_idx = {str(test_file1): 0, str(test_file2): 1}
-    FileTag._embedding_ready.set()
+    def test_truncates_long_file(self, file_env):
+        long_file = file_env / "long.md"
+        long_file.write_text("x" * 20000)
+        FileTag._index.append(("long.md", str(long_file)))
 
-    mock_embeddings = MagicMock()
-    mock_embeddings.search.return_value = [(0, 0.95), (1, 0.80)]
-    FileTag._embeddings = mock_embeddings
-
-    yield tmp_path
-
-    FileTag._index = []
-    FileTag._filepath_to_idx = {}
-    FileTag._embeddings = None
-    FileTag._embedding_ready.clear()
-    MacLLM._instance = None
-
-
-def test_search_files_returns_formatted_results(file_tag_with_index):
-    result = search_files("Python programming")
-
-    assert "[File ID: 0]" in result
-    assert "[File ID: 1]" in result
-    assert "doc1.md" in result
-    assert "Score:" in result
-    assert "Python programming" in result
-    assert "(complete)" in result  # short files are not truncated
-
-
-def test_search_files_no_results(file_tag_with_index):
-    FileTag._embeddings.search.return_value = []
-    result = search_files("nonexistent topic")
-    assert "No matching files found" in result
-
-
-def test_read_full_file_returns_content(file_tag_with_index):
-    result = read_full_file(0)
-
-    assert "doc1.md" in result
-    assert "Python programming" in result
-
-
-def test_read_full_file_invalid_id(file_tag_with_index):
-    result = read_full_file(999)
-    assert "Error" in result
-
-
-def test_read_full_file_truncates_long_content(tmp_path):
-    from macllm.macllm import MacLLM
-    
-    long_file = tmp_path / "long.md"
-    long_content = "x" * 20000
-    long_file.write_text(long_content)
-
-    dummy_app = DummyApp()
-    MacLLM._instance = dummy_app
-    FileTag._index = [("long.md", str(long_file))]
-
-    result = read_full_file(0)
-
-    content_part = result.split("\n\n", 1)[1] if "\n\n" in result else result
-    assert len(content_part) <= 10000
-
-    FileTag._index = []
-    MacLLM._instance = None
-
-
-def test_search_files_shows_truncated_indicator(tmp_path):
-    from macllm.macllm import MacLLM
-    
-    long_file = tmp_path / "long.md"
-    long_content = "x" * 2000  # longer than SEARCH_PREVIEW_LEN (1000)
-    long_file.write_text(long_content)
-
-    dummy_app = DummyApp()
-    FileTag._macllm = dummy_app
-    MacLLM._instance = dummy_app
-    FileTag._index = [("long.md", str(long_file))]
-    FileTag._filepath_to_idx = {str(long_file): 0}
-    FileTag._embedding_ready.set()
-
-    mock_embeddings = MagicMock()
-    mock_embeddings.search.return_value = [(0, 0.9)]
-    FileTag._embeddings = mock_embeddings
-
-    result = search_files("test")
-    assert "(truncated)" in result
-
-    FileTag._index = []
-    FileTag._filepath_to_idx = {}
-    FileTag._embeddings = None
-    FileTag._embedding_ready.clear()
-    MacLLM._instance = None
+        result = read_file(str(long_file))
+        content_part = result.split("\n\n", 1)[1]
+        assert len(content_part) <= FileTag.MAX_FULL_FILE_LEN

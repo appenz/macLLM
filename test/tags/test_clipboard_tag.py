@@ -106,19 +106,17 @@ def test_clipboard_tag_real(app_real):
     app_real.ui.read_clipboard = lambda: "What is 1+1? Answer only with a number."
     app_real.ui.read_clipboard_image = lambda: None
     app_real.handle_instructions("Answer the question in @clipboard")
-    
-    # Wait for agent to complete
+
     import time
-    max_wait = 10
+    max_wait = 15
     waited = 0
     while waited < max_wait:
-        if app_real.chat_history.agent_status == "" and len(app_real.chat_history.messages) > 0:
+        if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
             last_msg = app_real.chat_history.messages[-1]
-            if last_msg['role'] == 'assistant':
-                response = last_msg['content']
-                assert "2" in response
+            if last_msg['role'] == 'assistant' and last_msg['content'] != "How can I help you?":
+                assert "2" in last_msg['content']
                 return
         time.sleep(0.5)
         waited += 0.5
-    
+
     assert False, "Agent did not complete within timeout"
