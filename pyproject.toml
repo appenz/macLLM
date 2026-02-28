@@ -8,6 +8,7 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "certifi>=2024.12.14",
     "litellm>=1.0.0",
+    "maccal>=1.0.0",
     "markdown-it-py>=4.0.0",
     "openai[realtime]>=1.54.4",
     "pyobjc>=10.3.1",
@@ -20,9 +21,10 @@ dependencies = [
 
 
 [tool.pytest.ini_options]
-addopts = "-m 'not external'"
+addopts = "-m 'not external and not calendar'"
 markers = [
     "external: tests that hit external services",
+    "calendar: tests that access macOS calendar (requires permissions)",
 ]
 filterwarnings = [
     "ignore::UserWarning:pydantic.*",

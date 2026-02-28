@@ -607,6 +607,18 @@ wheels = [
 ]
 
 [[package]]
+name = "maccal"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyobjc-framework-eventkit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/71/3093339aff688666ea2c10b809ffa0061f0bb44ae01fc1d9d7e0d44f14bf/maccal-1.0.0.tar.gz", hash = "sha256:516b52c7382723ad1bbe63082f8ef043ae1f0c6a54e7f8d05def19c50a1602c1", size = 11498, upload-time = "2026-02-27T23:49:31.745Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/e1/b8b64db7f168496732dcaaf2f157661f1ccc0f1f2efd15d86dae15c890f0/maccal-1.0.0-py3-none-any.whl", hash = "sha256:f9fcc87ddb6a81a93ef1df9aa1fd8d8e07ed8ec77810d54d54fbbd58a3f00bdc", size = 15187, upload-time = "2026-02-27T23:49:30.384Z" },
+]
+
+[[package]]
 name = "macllm"
 version = "0.1.0"
 source = { virtual = "." }
@@ -614,6 +626,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "certifi" },
     { name = "litellm" },
+    { name = "maccal" },
     { name = "markdown-it-py" },
     { name = "openai", extra = ["realtime"] },
     { name = "pyobjc" },
@@ -629,6 +642,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "certifi", specifier = ">=2024.12.14" },
     { name = "litellm", specifier = ">=1.0.0" },
+    { name = "maccal", specifier = ">=1.0.0" },
     { name = "markdown-it-py", specifier = ">=4.0.0" },
     { name = "openai", extras = ["realtime"], specifier = ">=1.54.4" },
     { name = "pyobjc", specifier = ">=10.3.1" },

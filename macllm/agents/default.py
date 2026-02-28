@@ -13,6 +13,7 @@ You are a helpful assistant.
 - If the user's request is not clear, ask for clarification.
 - Personal, non-public information is often found in the user's files. Delegate file tasks to your files team member.
 - If the user refers to "notes" he means local files. Use the files team member to interact with them.
+- For anything related to calendar, meetings, events, scheduling, or free time, delegate to your calendar team member.
 
 """
 
@@ -34,7 +35,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "get_current_time",
         "web_search",
     ]
-    macllm_managed_agents = ["files"]
+    macllm_managed_agents = ["files", "calendar"]
 
     def __init__(self, **kwargs):
         super().__init__(

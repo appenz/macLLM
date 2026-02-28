@@ -100,6 +100,10 @@ When the agent needs current information, it uses the `web_search` tool backed b
 
 Requires `BRAVE_API_KEY` to be set.
 
+## Calendar
+
+macLLM can access your local macOS calendars via EventKit. Ask it to find events, create meetings, check for conflicts, or find free time slots. It handles timezone conversions automatically — just say "schedule a meeting in Frankfurt at 5pm local time" and it figures out the rest.
+
 ## Tags — Referencing External Data
 
 Tags start with `@` and attach external data as context for the conversation:
