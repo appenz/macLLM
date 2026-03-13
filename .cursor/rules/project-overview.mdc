@@ -8,9 +8,10 @@ Please read @overview.md for a high-level overview of the project before answeri
 
 ### How to Test:
 - Run "make test" for the usual test suite
+- Run "make test-calendar" for calendar-specific tests
 - Run "make debug-render" to test rendering, it will delete the old screenshot and take a new one
 
-Avoid the following unless there is no other way:
-- Calling pytest directly
-- Running the program using uv directly
-- Using rm
+### IMPORTANT: Always use `make` targets, never call tools directly
+- `make` is on the shell allowlist; `uv` and `pytest` are NOT.
+- Running `uv run` or `pytest` directly will fail or reinstall wrong dependency versions.
+- **Never** call `uv`, `pytest`, or `rm` directly. Use the corresponding `make` target instead.

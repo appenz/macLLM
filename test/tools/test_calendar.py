@@ -90,9 +90,6 @@ def _event_start_end():
 
 
 @pytest.mark.calendar
-@pytest.mark.skip(
-    reason="maccal's NSColor.colorWithCGColor_ Bus-errors without a full Cocoa app context"
-)
 def test_list_calendars():
     from macllm.tools.calendar import cal_list_calendars
 
