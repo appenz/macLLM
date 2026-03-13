@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from macllm.tools.file_ops import file_move, file_delete
+from macllm.tools.file import file_move, file_delete
 from macllm.tags.file_tag import FileTag
 
 

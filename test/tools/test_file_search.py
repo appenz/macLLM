@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 from pathlib import Path
 
-from macllm.tools.file_search import search_files, read_file
+from macllm.tools.file import search_files, read_file
 from macllm.tags.file_tag import FileTag
 
 

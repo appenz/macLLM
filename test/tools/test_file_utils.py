@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from macllm.tools.file_utils import validate_indexed_path, backup_file, BACKUP_DIR
+from macllm.tools.file import validate_indexed_path, backup_file, BACKUP_DIR
 from macllm.tags.file_tag import FileTag
 
 
@@ -53,7 +53,7 @@ class TestBackupFile:
         assert backup_path.startswith(BACKUP_DIR)
 
     def test_backup_name_format(self, file_env, monkeypatch):
-        import macllm.tools.file_utils as fu
+        import macllm.tools.file as fu
         test_backup = str(file_env / "backups")
         monkeypatch.setattr(fu, "BACKUP_DIR", test_backup)
 

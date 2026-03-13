@@ -1,6 +1,6 @@
 """Tests for list_directory and view_directory_structure."""
 
-from macllm.tools.file_browse import list_directory, view_directory_structure
+from macllm.tools.file import list_directory, view_directory_structure
 from macllm.tags.file_tag import FileTag
 
 
