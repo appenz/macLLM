@@ -12,7 +12,7 @@ TABLE_FONT_SIZE = 11.5
 TABLE_LEFT_INDENT = 8.0
 COL_GAP = "  "
 
-_NUMERIC_RE = re.compile(r'^[\d,.\-+%$€£¥ ]+$')
+_NUMERIC_RE = re.compile(r'^[-+]?[$€£¥]?\d[\d,. ]*[%$€£¥]?$')
 
 
 def render_table(tokens, start_idx, color):

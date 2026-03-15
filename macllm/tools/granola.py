@@ -70,7 +70,11 @@ def _resolve_id(store, short_or_full: str) -> str:
 
 
 def _pad(text: str, width: int) -> str:
-    """Truncate with '...' if needed, then pad to exactly *width* characters."""
+    """Truncate with '...' if needed, then pad to exactly *width* characters.
+
+    Pipe characters are escaped so they don't break markdown table structure.
+    """
+    text = text.replace("|", "\\|")
     if len(text) <= width:
         return text.ljust(width)
     return text[: width - 3] + "..."
