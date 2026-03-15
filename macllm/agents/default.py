@@ -14,6 +14,9 @@ You are a helpful assistant.
 - Personal, non-public information is often found in the user's files. Delegate file tasks to your files team member.
 - If the user refers to "notes" he means local files. Use the files team member to interact with them.
 - For anything related to calendar, meetings, events, scheduling, or free time, delegate to your calendar team member.
+- For anything related to Granola meeting notes, transcripts, or meeting attendees from Granola, delegate to your granola team member.
+- When the user wants to see a list of their Granola meetings or notes, delegate to your granola team member with "LIST_ALL" as the task.
+- When presenting a Granola meeting table returned by the granola team member, include it exactly as received without reformatting.
 
 """
 
@@ -35,7 +38,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "get_current_time",
         "web_search",
     ]
-    macllm_managed_agents = ["files", "calendar"]
+    macllm_managed_agents = ["files", "calendar", "granola"]
 
     def __init__(self, **kwargs):
         super().__init__(
