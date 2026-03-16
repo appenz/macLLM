@@ -141,6 +141,8 @@ class MacLLM:
         self._abort_event.set()
         if self.chat_history.agent:
             self.chat_history.agent.interrupt_switch = True
+            for agent in getattr(self.chat_history.agent, 'managed_agents', {}).values():
+                agent.interrupt_switch = True
         self.debug_log("Agent abort requested", 1)
 
     def _handle_abort_summary(self, task):
