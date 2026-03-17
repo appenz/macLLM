@@ -19,14 +19,6 @@ from macllm.tools.calendar import (
     cal_update_event,
     cal_find_free_time,
 )
-from macllm.tools.granola import (
-    granola_list_meetings,
-    granola_find_meetings,
-    granola_get_meeting,
-    granola_get_transcript,
-    granola_list_people,
-)
-
 # Note: reset_search_counter is NOT in __all__ because it's a utility function,
 # not a tool. Import it directly when needed.
 __all__ = [
@@ -47,9 +39,4 @@ __all__ = [
     "cal_add_event",
     "cal_update_event",
     "cal_find_free_time",
-    "granola_list_meetings",
-    "granola_find_meetings",
-    "granola_get_meeting",
-    "granola_get_transcript",
-    "granola_list_people",
 ]

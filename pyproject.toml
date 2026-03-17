@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.12.3",
     "certifi>=2024.12.14",
-    "libgranola>=0.1.0",
     "litellm>=1.0.0",
     "maccal>=1.0.0",
     "markdown-it-py>=4.0.0",
@@ -22,11 +21,10 @@ dependencies = [
 
 
 [tool.pytest.ini_options]
-addopts = "-m 'not external and not calendar and not granola'"
+addopts = "-m 'not external and not calendar'"
 markers = [
     "external: tests that hit external services",
     "calendar: tests that access macOS calendar (requires permissions)",
-    "granola: tests that access real Granola cache (requires Granola installation)",
 ]
 filterwarnings = [
     "ignore::UserWarning:pydantic.*",
