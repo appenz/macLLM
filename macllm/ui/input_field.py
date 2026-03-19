@@ -21,7 +21,7 @@ from macllm.ui.tag_render import (
     display_string_for_tag,
     build_input_attributed_with_caret,
 )
-from macllm.core.shortcuts import ShortCut
+from macllm.core.skills import SkillsRegistry
 from macllm.core.llm_service import get_model_for_speed
 import objc
 
@@ -301,7 +301,7 @@ class InputFieldDelegate(NSObject):
 
         typing_attrs = tv.typingAttributes()
         plugins = getattr(self.macllm_ui.macllm, 'plugins', [])
-        shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
+        shortcuts_list = SkillsRegistry.list_manual_commands()
 
         attr_str, caret_attr = build_input_attributed_with_caret(
             plain, typing_attrs, shortcuts_list, plugins, caret_plain
@@ -398,8 +398,8 @@ class InputFieldHandler:
         # Create autocomplete controller with the full plugin list so that
         # dynamic suggestions (e.g. from the new file-plugin) are supported.
         plugin_list = macllm_ui.macllm.plugins if hasattr(macllm_ui.macllm, "plugins") else []
-        # Provide configured shortcuts to autocomplete (list of triggers like '/blog').
-        shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
+        # Provide configured slash skills to autocomplete (list of triggers like '/blog').
+        shortcuts_list = SkillsRegistry.list_manual_commands()
         delegate.autocomplete = AutocompleteController(plugin_list, input_field, shortcuts=shortcuts_list)
 
         return (input_container, input_field, delegate)

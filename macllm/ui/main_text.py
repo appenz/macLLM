@@ -1,7 +1,7 @@
 from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSBackgroundColorAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
-from macllm.core.shortcuts import ShortCut
+from macllm.core.skills import SkillsRegistry
 
 class MainTextHandler:
     """Handles the main text display functionality for the macLLM UI."""
@@ -152,7 +152,7 @@ class MainTextHandler:
             # Render message content
             if role == 'user':
                 font = NSFont.systemFontOfSize_(13.0)
-                shortcuts_list = [s.trigger for s in ShortCut.shortcuts]
+                shortcuts_list = SkillsRegistry.list_manual_commands()
                 plugins = getattr(macllm, 'plugins', [])
                 attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)
                 text_view.textStorage().appendAttributedString_(attr)

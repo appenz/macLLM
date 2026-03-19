@@ -14,6 +14,7 @@ You are a helpful assistant.
 - Personal, non-public information is often found in the user's files. Delegate file tasks to your files team member.
 - If the user refers to "notes" he means local files. Use the files team member to interact with them.
 - For anything related to calendar, meetings, events, scheduling, or free time, delegate to your calendar team member.
+- When a task might match an available skill, call read_skill with the skill name to retrieve its full instructions.
 """
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -33,6 +34,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_tools = [
         "get_current_time",
         "web_search",
+        "read_skill",
     ]
     macllm_managed_agents = ["files", "calendar"]
 

@@ -2,16 +2,14 @@ import os
 import litellm
 from litellm import completion
 from smolagents.models import LiteLLMModel
+from macllm.core.config import get_runtime_config
 
 
 def enable_litellm_debug():
     """Enable LiteLLM debug logging for troubleshooting API calls."""
     litellm._turn_on_debug()
 
-_inception_api_key = os.getenv("INCEPTION_API_KEY")
 _inception_api_base = "https://api.inceptionlabs.ai/v1"
-_openai_api_key = os.getenv("OPENAI_API_KEY")
-_gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 def _get_provider_from_config(model_id: str, api_base: str = None) -> str:
     """Determine provider name from model configuration."""
@@ -26,21 +24,50 @@ def _get_provider_from_config(model_id: str, api_base: str = None) -> str:
     return "Unknown"
 
 MODELS = {
-    'fast': LiteLLMModel(
-        model_id='openai/mercury',
-        api_key=_inception_api_key,
-        api_base=_inception_api_base
-    ) if _inception_api_key else None,
-    'normal': LiteLLMModel(
-        model_id='gemini/gemini-3-flash-preview',
-        api_key=_gemini_api_key,
-    ) if _gemini_api_key else None,
-    'slow': LiteLLMModel(
-        model_id='gpt-5',
-        api_key=_openai_api_key,
-        api_base='https://api.openai.com/v1'
-    ) if _openai_api_key else None,
+    'fast': None,
+    'normal': None,
+    'slow': None,
 }
+
+
+def _fallback_env_keys() -> dict[str, str]:
+    return {
+        "inception": os.getenv("INCEPTION_API_KEY", ""),
+        "openai": os.getenv("OPENAI_API_KEY", ""),
+        "gemini": os.getenv("GEMINI_API_KEY", ""),
+    }
+
+
+def refresh_models():
+    cfg = get_runtime_config()
+    env = _fallback_env_keys()
+    inception_key = cfg.api_keys.inception or env["inception"]
+    openai_key = cfg.api_keys.openai or env["openai"]
+    gemini_key = cfg.api_keys.gemini or env["gemini"]
+
+    MODELS['fast'] = (
+        LiteLLMModel(
+            model_id='openai/mercury',
+            api_key=inception_key,
+            api_base=_inception_api_base
+        ) if inception_key else None
+    )
+    MODELS['normal'] = (
+        LiteLLMModel(
+            model_id='gemini/gemini-3-flash-preview',
+            api_key=gemini_key,
+        ) if gemini_key else None
+    )
+    MODELS['slow'] = (
+        LiteLLMModel(
+            model_id='gpt-5',
+            api_key=openai_key,
+            api_base='https://api.openai.com/v1'
+        ) if openai_key else None
+    )
+
+
+refresh_models()
 
 def get_model_for_speed(speed: str) -> str:
     model_obj = MODELS.get(speed.lower(), MODELS['normal'])

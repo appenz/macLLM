@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from smolagents import tool
+from macllm.core.config import get_runtime_config
 
 # Use a mutable container to avoid Python global variable binding issues
 _state = {"search_count": 0, "tool_call_counter": 0}
@@ -78,9 +79,13 @@ def web_search(queries: list[str]) -> str:
     status.start_tool_call(tool_id, "web_search", {"queries": queries})
     
     try:
-        api_key = os.getenv("BRAVE_API_KEY")
+        cfg = get_runtime_config()
+        env_brave = os.getenv("BRAVE_API_KEY")
+        api_key = cfg.api_keys.brave or env_brave
         if not api_key:
-            raise ValueError("BRAVE_API_KEY environment variable is not set")
+            raise ValueError(
+                "BRAVE_API_KEY is not set (or config.toml api_keys.brave is empty)"
+            )
         
         if not queries:
             status.complete_tool_call(tool_id, "No queries")

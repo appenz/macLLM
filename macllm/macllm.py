@@ -9,15 +9,17 @@ import os
 import argparse
 import traceback
 import threading
+from pathlib import Path
 
-from macllm.core.shortcuts import ShortCut
 from macllm.ui import MacLLMUI  # noqa: F401
 
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
-from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug
+from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug, refresh_models
 from macllm.core.memory import save_conversation, load_conversation
 from macllm.core.agent_status import AgentStatusManager
+from macllm.core.config import load_runtime_config
+from macllm.core.skills import SkillsRegistry
 from macllm.tags.base import TagPlugin
 
 from quickmachotkey import quickHotKey, mask
@@ -99,9 +101,20 @@ class MacLLM:
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
 
+    def _apply_index_dirs_from_config(self):
+        from macllm.tags.file_tag import FileTag
+        FileTag._indexed_directories = []
+        for plugin in getattr(self, "plugins", []):
+            for d in self.config.resolved_index_dirs():
+                if hasattr(plugin, "on_config_tag"):
+                    plugin.on_config_tag("@IndexFiles", d)
+
     def __init__(self, args=None):
         MacLLM._instance = self
         self.args = args or argparse.Namespace(debug=False, show_window_on_start=False)
+        self.config = load_runtime_config()
+        refresh_models()
+        SkillsRegistry.reload()
         self.ui = MacLLMUI()
         self.ui.macllm = self
         self.req = 0
@@ -170,8 +183,26 @@ class MacLLM:
         user_input = user_input.strip()
 
         try:
-            # Step 1: expand shortcut aliases (e.g. @@foo -> full text macros)
-            expanded_input = ShortCut.expandAll(user_input)
+            # Local command: reload merged config + skills.
+            if user_input == "/reload":
+                self.config = load_runtime_config()
+                refresh_models()
+                summary = SkillsRegistry.reload()
+                self._apply_index_dirs_from_config()
+                try:
+                    from macllm.tags.file_tag import FileTag
+                    FileTag._start_reindex()
+                except Exception:
+                    pass
+                self.chat_history.add_user_message(user_input)
+                self.chat_history.add_assistant_message(summary)
+                self._update_ui_from_callback()
+                if not self.ephemeral:
+                    save_conversation(self.chat_history)
+                return None
+
+            # Step 1: expand slash skill invocations.
+            expanded_input = SkillsRegistry.expand_manual_invocation(user_input)
 
             # Step 2: Build UserRequest and process all @tags
             request = UserRequest(expanded_input)
@@ -289,8 +320,7 @@ def main():
         if args.debug:
             macLLM.debug_log("LiteLLM debug logging enabled", 2)
 
-    # Load plugins first so that configuration tags found in shortcut files
-    # can be handled by their respective plugins during shortcut parsing.
+    # Load plugins first.
     macLLM.plugins = TagPlugin.load_plugins(macLLM)
 
     # Build prefix index once: list of (prefix, plugin) for fast startswith matching
@@ -302,13 +332,22 @@ def main():
     prefix_pairs.sort(key=lambda x: len(x[0]), reverse=True)
     macLLM._prefix_index = prefix_pairs
 
-    # Now initialise shortcuts – this will invoke *on_config_tag()* on any
-    # plugin that registered configuration prefixes.
-    ShortCut.init_shortcuts(macLLM)
+    # Configure indexed directories from merged config.
+    macLLM._apply_index_dirs_from_config()
 
     # Start periodic file index + embedding rebuild (first cycle runs immediately)
     from macllm.tags.file_tag import FileTag
     FileTag.start_index_loop()
+
+    # Warn about deprecated shortcut files during transition.
+    project_root = Path(__file__).resolve().parents[2]
+    legacy = [
+        project_root / "config" / "default_shortcuts.toml",
+        project_root / "config" / "myshortcuts.toml",
+    ]
+    for p in legacy:
+        if p.exists() and macLLM.args.debug:
+            macLLM.debug_log(f"Deprecated shortcut file ignored: {p}", 1)
     
     if args.query:
         macLLM.ui.pending_query = args.query
@@ -326,7 +365,7 @@ def create_macllm(debug: bool = False, start_ui: bool = False):
     args = argparse.Namespace(debug=debug, show_window_on_start=False)
     mac = MacLLM(args=args)
     mac.plugins = TagPlugin.load_plugins(mac)
-    ShortCut.init_shortcuts(mac)
+    mac._apply_index_dirs_from_config()
     from macllm.tags.file_tag import FileTag
     FileTag.build_index()
     if start_ui:

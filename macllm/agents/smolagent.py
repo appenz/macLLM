@@ -14,6 +14,7 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_tools = [
         "get_current_time",
         "web_search",
+        "read_skill",
     ]
     macllm_managed_agents = ["files"]
 

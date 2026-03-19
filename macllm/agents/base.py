@@ -44,6 +44,7 @@ class MacLLMAgent(ToolCallingAgent):
         from macllm import tools as tools_module
         from macllm.core.agent_service import create_step_callback
         from macllm.tools.web_search import reset_search_counter
+        from macllm.core.skills import SkillsRegistry
 
         reset_search_counter()
 
@@ -53,6 +54,15 @@ class MacLLMAgent(ToolCallingAgent):
 
         tools = [getattr(tools_module, n) for n in self.macllm_tools]
         step_callback = create_step_callback(token_callback)
+
+        if custom_instructions and "read_skill" in self.macllm_tools:
+            skills_catalog = SkillsRegistry.model_catalog_text()
+            custom_instructions = (
+                f"{custom_instructions.rstrip()}\n\n"
+                "Skill discovery:\n"
+                f"{skills_catalog}\n"
+                "To retrieve a skill definition, call read_skill with the skill name.\n"
+            )
 
         if managed_agents is None and self.macllm_managed_agents:
             from macllm.agents import get_agent_class
