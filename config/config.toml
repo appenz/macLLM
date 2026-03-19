@@ -1,0 +1,10 @@
+skills_dirs = [
+  "config/skills",
+  "~/.config/macllm/skills",
+]
+
+[api_keys]
+openai = ""
+inception = ""
+brave = ""
+gemini = ""

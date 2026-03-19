@@ -1,10 +1,10 @@
 ---
 description: Overview of the project
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
 
-Please read @overview.md for a high-level overview of the project before answering.
+Read specs/overview.md for a high-level overview of the project first.
 
 ### How to Test:
 - Run "make test" for the usual test suite

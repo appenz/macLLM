@@ -1,10 +1,12 @@
 import os
 import sys
+import importlib
 
 import pytest
 
 from macllm.tools.web_search import web_search, reset_search_counter, _state
 from macllm.core.agent_status import AgentStatusManager
+from macllm.core.config import MacLLMConfig, ApiKeys
 
 
 class DummyApp:
@@ -53,6 +55,11 @@ def test_search_limit_exactly_at_max():
     # Temporarily remove the API key to avoid making real API calls
     original_key = os.environ.pop("BRAVE_API_KEY", None)
     
+    # Ensure user-level config does not inject a Brave key
+    ws_module = importlib.import_module("macllm.tools.web_search")
+    original_get_runtime_config = ws_module.get_runtime_config
+    ws_module.get_runtime_config = lambda: MacLLMConfig(api_keys=ApiKeys(brave=""))
+
     try:
         # 48 + 2 = 50, which is not > 50, so limit check passes
         # but it should fail due to missing API key
@@ -62,6 +69,7 @@ def test_search_limit_exactly_at_max():
         # Restore the key if it was set
         if original_key is not None:
             os.environ["BRAVE_API_KEY"] = original_key
+        ws_module.get_runtime_config = original_get_runtime_config
 
 
 def test_empty_queries():
@@ -79,6 +87,11 @@ def test_missing_api_key():
     # Temporarily remove the API key if set
     original_key = os.environ.pop("BRAVE_API_KEY", None)
     
+    # Ensure user-level config does not inject a Brave key
+    ws_module = importlib.import_module("macllm.tools.web_search")
+    original_get_runtime_config = ws_module.get_runtime_config
+    ws_module.get_runtime_config = lambda: MacLLMConfig(api_keys=ApiKeys(brave=""))
+
     try:
         with pytest.raises(ValueError, match="BRAVE_API_KEY"):
             web_search(["test query"])
@@ -86,6 +99,7 @@ def test_missing_api_key():
         # Restore the key if it was set
         if original_key is not None:
             os.environ["BRAVE_API_KEY"] = original_key
+        ws_module.get_runtime_config = original_get_runtime_config
 
 
 @pytest.mark.external
