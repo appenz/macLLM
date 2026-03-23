@@ -1,72 +1,42 @@
-# macLLM Plugin Architecture Specification
+# Tag Plugin Architecture
 
-## Base Plugin Class
+## Overview
 
-```python
-class TagPlugin:
-    # Required hooks
-    def get_prefixes(self) -> list[str]:  # e.g. ["@http://", "@https://", "@~"]
-    def expand(self, tag: str, conversation: Conversation, request: UserRequest) -> str:
-    # Optional config-time hooks (processed while reading shortcut files)
-    def get_config_prefixes(self) -> list[str]:
-    def on_config_tag(self, tag: str, value: str) -> None:
-    # Optional dynamic-autocomplete hooks (for UI suggestions)
-    def supports_autocomplete(self) -> bool:
-    def autocomplete(self, fragment: str, max_results: int = 10) -> list[str]:
-    def display_string(self, suggestion: str) -> str:
-    # Optional catch-all autocomplete hook
-    def match_any_autocomplete(self) -> bool:
-```
+Tag plugins are the request-expansion layer for `@...` and `/...` tokens.
 
-## Plugin Examples
+They turn user-facing shorthand into request state such as embedded context, selected agent,
+selected speed tier, attached images, and autocomplete suggestions. This layer sits between
+the original prompt and agent execution.
 
-- **URLTag**: handles `@http://`, `@https://` → fetches web content, embeds in message
-- **FileTag**: config tag `@IndexFiles` indexes directories; `@path` references embed file contents; `/reindex` rebuilds the index
-- **ClipboardTag**: handles `@clipboard` → gets clipboard content (text or image), embeds in message
-- **ImageTag**: handles `@selection`, `@window` → captures screenshots for image analysis
-- **SpeedTag**: handles `/fast`, `/slow`, `/think` → sets speed preference for the request
-- **AgentTag**: handles `@agent:<name>` → selects which agent runs the conversation (with autocomplete)
+Skills are adjacent but separate. Leading `/skill` expansion happens before plugin processing and is
+owned by `SkillsRegistry`, not by `TagPlugin`. After that expansion step, plugins process the remaining
+`@...` and plugin-owned `/...` tokens.
 
-## Context Embedding
+## Request Expansion Model
 
-Plugins that add context should:
+The base class is `TagPlugin` in `macllm/tags/base.py`. Plugins are discovered from
+`macllm/tags/*_tag.py` and instantiated per `MacLLM` instance.
 
-1. Fetch the content (file, URL, clipboard, etc.)
-2. Add to conversation's context_history (for UI pills)
-3. Return the context block to embed in the message:
+Request expansion is driven by `UserRequest.process_tags()` in `macllm/core/user_request.py`.
 
-```python
-def expand(self, tag: str, conversation: Conversation, request: UserRequest) -> str:
-    content = self.fetch_content(tag)
-    name = conversation.add_context(
-        suggested_name="clipboard",
-        source="clipboard",
-        context_type="clipboard",
-        context=content
-    )
-    return f"\n\n--- context:{name} ---\n{content}\n--- end context:{name} ---"
-```
+1. `MacLLM.handle_instructions()` builds a `UserRequest`.
+2. Any leading `/skill` invocation is expanded by `SkillsRegistry`.
+3. `UserRequest.find_shortcuts()` scans the prompt for `@...` and `/...` tokens.
+4. Tokens are matched against the plugin prefix index, longest prefix first.
+5. The matching plugin's `expand(...)` method is called.
+6. The returned string replaces the original token inside `expanded_prompt`.
 
-## Integration
+Key design decisions:
 
-- Main MacLLM class maintains list of registered plugins
-- `handle_instructions()` creates UserRequest, passes to plugins via `process_tags()`
-- Plugins return replacement strings that get embedded in the message content
+- expansion happens on `UserRequest.expanded_prompt`, not on stored `Conversation.messages`
+- plugins may mutate `UserRequest` and `Conversation` as side effects
+- context plugins maintain both `Conversation.context_history` for the UI and embedded context in `expanded_prompt` for the agent
 
-## LLM Service
+## Autocomplete and Configuration
 
-LLM calls are handled by `llm_service.py` which wraps LiteLLM:
+Autocomplete is plugin-driven through optional hooks on `TagPlugin`.
+`AutocompleteController` combines static prefix matches with plugin-provided dynamic suggestions.
+Static matches are shown first so built-in tags keep precedence over broader providers such as file search.
 
-```python
-from macllm.core.llm_service import generate
-
-response, metadata = generate(
-    messages=conversation.messages,
-    speed="normal"
-)
-```
-
-Speed levels map to LiteLLM model strings:
-- `fast` → `openai/mercury` (Inception Labs)
-- `normal` → `gemini/gemini-3-flash-preview` (Google)
-- `slow` → `gpt-5` (OpenAI)
+Plugins may also expose configuration hooks through `get_config_prefixes()` and `on_config_tag(...)`.
+This keeps plugin-specific setup, such as file indexing configuration, in the same subsystem as runtime expansion.

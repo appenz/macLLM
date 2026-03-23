@@ -1,4 +1,4 @@
-.PHONY: run test screenshot test-llm test-calendar debug-render
+.PHONY: run test screenshot test-llm test-calendar test-things debug-render
 
 uv = /opt/homebrew/bin/uv
 env_vars = KMP_DUPLICATE_LIB_OK=TRUE
@@ -22,6 +22,9 @@ test-external:
 
 test-calendar:
 	$(env_vars) $(uv) run --env-file .env python -m pytest -v -m calendar
+
+test-things:
+	$(env_vars) $(uv) run --env-file .env python -m pytest -v -m things
 
 screenshot:
 	$(env_vars) $(uv) run -m --env-file .env macllm --show-window &

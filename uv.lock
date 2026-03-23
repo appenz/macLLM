@@ -634,6 +634,7 @@ dependencies = [
     { name = "quickmachotkey" },
     { name = "requests" },
     { name = "smolagents" },
+    { name = "things-py" },
     { name = "txtai" },
 ]
 
@@ -650,6 +651,7 @@ requires-dist = [
     { name = "quickmachotkey", specifier = ">=2023.11.17" },
     { name = "requests", specifier = ">=2.32.3" },
     { name = "smolagents", specifier = ">=0.1.0" },
+    { name = "things-py", specifier = ">=1.0.1" },
     { name = "txtai", specifier = ">=9.3.0" },
 ]
 
@@ -4217,6 +4219,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
 ]
+
+[[package]]
+name = "things-py"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/f7/7ca01abf3927ed680688e2ce4c608f0c252dc224134ca2b1f04940db0efd/things_py-1.0.1.tar.gz", hash = "sha256:6d760727e57c0cfb85f18a63b36459287573f7d7c0442874a76d4ef38b92089d", size = 30360, upload-time = "2026-02-28T22:23:41.197Z" }
 
 [[package]]
 name = "tiktoken"

@@ -104,6 +104,12 @@ Requires `BRAVE_API_KEY` to be set.
 
 macLLM can access your local macOS calendars via EventKit. Ask it to find events, create meetings, check for conflicts, or find free time slots. It handles timezone conversions automatically — just say "schedule a meeting in Frankfurt at 5pm local time" and it figures out the rest.
 
+## Things
+
+macLLM can also work with your local [Things](https://culturedcode.com/things/) database. It can list and search your to-dos and projects, inspect items by ID, create new to-dos and projects, move them, and mark them complete or canceled. Reads come from the local Things database, while writes go through the official Things URL scheme.
+
+To use write actions, enable Things URLs in Things settings so an auth token is present.
+
 ## Tags — Referencing External Data
 
 Tags start with `@` and attach external data as context for the conversation:

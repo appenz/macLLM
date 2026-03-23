@@ -16,15 +16,17 @@ dependencies = [
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
     "smolagents>=0.1.0",
+    "things.py>=1.0.1",
     "txtai>=9.3.0",
 ]
 
 
 [tool.pytest.ini_options]
-addopts = "-m 'not external and not calendar'"
+addopts = "-m 'not external and not calendar and not things'"
 markers = [
     "external: tests that hit external services",
     "calendar: tests that access macOS calendar (requires permissions)",
+    "things: tests that access the real Things app and database (requires Things URLs auth)",
 ]
 filterwarnings = [
     "ignore::UserWarning:pydantic.*",
