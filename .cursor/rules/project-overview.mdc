@@ -4,7 +4,14 @@ globs:
 alwaysApply: true
 ---
 
-Read specs/overview.md for a high-level overview of the project first.
+### Before doing anything, check the specs
+Read specs/overview.md for a high-level overview of the project
+Alwasy read relevant specs before reading the code
+If you find a spec that is out of date, always say so!
+
+# How to Plan
+When asking questions, just ask them in plain text. Do NOT use the structured
+multiple choice UI.
 
 ### How to Test:
 - Run "make test" for the usual test suite

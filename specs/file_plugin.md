@@ -1,81 +1,64 @@
-# File Plugin – Design Specification
+# File Plugin Architecture
 
 ## Overview
 
-The **file-plugin** adds four user-facing capabilities:
+`FileTag` is both a request-expansion plugin and the indexing backend for file-related agent tools.
 
-1. **Directory indexing with auto-completion** – The shortcut tag `@IndexFiles "<dir>"` declared in any shortcuts TOML file triggers a *recursive* scan of the specified directory. Every file whose basename ends with `.txt` or `.md` is recorded. The files found will be auto-completed.
-2. **Path auto-completion** - If the user types a tag with a partial path (e.g. `@~/dev/projects/`) it will suggest completions of the path. Works like a command line autocomplete.
-3. **File reference tags** – Users can reference an indexed file in chat by typing `@<substring>` (case-insensitive). Once 3 characters are typed, the auto-complete popup lists up to **10** matching files by basename. Selecting a suggestion inserts a pill that shows only the basename, but when the message is processed the full path is expanded and its contents are attached to the conversation.
-4. **Embedding-based search** – The indexed files are embedded using a sentence-transformer model (`all-mpnet-base-v2` via txtai). Agent tools can call `FileTag.search(query)` to find semantically relevant files and `FileTag.get_file_content(file_id)` to retrieve their full content.
+This is the key design choice in the file subsystem: one component owns:
 
-## Constants
+- path-style `@...` expansion
+- indexed-file autocomplete
+- semantic search over indexed files
+- the shared index used by file tools
 
-```python
-class FileTag(TagPlugin):
-    PREFIX_CONFIG   = "@IndexFiles"
-    PREFIX_REINDEX  = "/reindex"
-    EXTENSIONS      = (".txt", ".md")
-    MIN_CHARS       = 3                    # Min chars for indexed autocomplete
-    MAX_CONTEXT_LEN = 10 * 1024            # 10 KB cap for path-tag file reads
-    MAX_FULL_FILE_LEN = 10 * 1000          # Cap for get_file_content()
-    SEARCH_PREVIEW_LEN = 1000              # Preview length in search results
-    SEARCH_RESULTS_COUNT = 5               # Default number of search results
-    REINDEX_INTERVAL = 5 * 60              # Seconds between periodic re-indexes
-```
+That keeps file discovery, file context injection, and file-tool lookup consistent.
 
-## Behaviour Summary
+## Indexing Model
 
-- Indexing runs in a background daemon thread. The first cycle runs immediately at startup, then repeats every `REINDEX_INTERVAL` seconds. The `/reindex` command triggers an immediate rebuild.
-- The embedding index supports incremental updates: only new, changed, or deleted files are re-embedded on subsequent cycles. Embeddings are cached to disk.
-- Search is **case-insensitive** and matches any substring of the basename.
-- Up to **10** suggestions are shown, ordered alphabetically.
-- When selected, the pill shows the basename only; expansion adds the file's contents (subject to the `MAX_CONTEXT_LEN` limit).
-- Multiple `@IndexFiles` tags may appear; all indexed files share the same global pool.
+Indexed directories come from `index_dirs` in runtime config, not from shortcut files.
+`MacLLM._apply_index_dirs_from_config()` passes those directories into `FileTag` through the plugin configuration hook.
 
-## High-level Flow
+`FileTag.start_index_loop()` runs a background indexing loop that:
 
-1. **Startup order**
-   a. `TagPlugin.load_plugins()` runs first.
-   b. `ShortCut.init_shortcuts()` then reads every shortcuts TOML file.
-   c. Each `trigger` in the TOML is checked: if it matches a *config tag* that some plugin registered (see below), the loader calls `plugin.on_config_tag(trigger, value)` instead of storing it as a normal shortcut.
-2. The file-plugin's `on_config_tag()` receives every `@IndexFiles` entry and collects directories for indexing.
-3. `FileTag.start_index_loop()` starts a daemon thread that calls `build_index()` and `_build_embeddings()` periodically.
-4. While the UI is running, the input field's autocomplete system asks every plugin that *supports dynamic completion* for suggestions.
-5. When the user hits Enter to send the message, the normal tag-expansion pipeline (`UserRequest.process_tags`) calls the file-plugin's `expand()` method which
-   - looks up the chosen full path,
-   - adds the contents to the conversation context, and
-   - returns a `context:<context_name>` block.
+- rebuilds the basename/path index
+- maintains txtai embeddings for semantic search
+- caches embedding state to disk
+- supports explicit rebuild through `/reindex`
 
-## Implementation
+The index is global to the running app and shared by autocomplete, context expansion, and file tools.
 
-### FileTag Responsibilities
+## Request Model
 
-1. **`get_config_prefixes()` → `["@IndexFiles"]`**
-2. **`on_config_tag()`**
-   - Resolve `~` and environment variables, accept quoted paths.
-   - Collect directory for later indexing (deduplicates).
-3. **`get_prefixes()` → `["@/", "@~", "@\"/", "@\"~", "/reindex"]`**
-4. **`match_any_autocomplete()` → `True`**
-   - Receives autocomplete callbacks for all `@…` fragments, enabling generic substring search.
-5. **`supports_autocomplete()` → `True`**
-6. **`autocomplete(fragment)`**
-   - For path-style fragments (`@/`, `@~`): live filesystem completion via `_autocomplete_live_path()`.
-   - For other `@` fragments: filter indexed basenames where `search_term in basename.lower()`.
-   - Return up to 10 items sorted alphabetically.
-   - Each item is returned in *raw* form: `@"<full_path>"`.
-7. **`display_string(suggestion)`**
-   - Return `"📁" + basename` (with trailing `/` for directories).
-8. **`expand(tag, conversation, request)`**
-   - If `/reindex`: trigger a re-index and return `""`.
-   - For path tags: strip the leading `@` and surrounding quotes, read file, enforce `MAX_CONTEXT_LEN` & binary check.
-   - Add context and return a `context:<handle>` block.
+The file plugin handles two different request patterns.
 
-### Class Methods (for Agent Tools)
+- path tags such as `@/...` and `@~/...` expand directly to file content embedded in the request
+- generic `@...` autocomplete can resolve to indexed files by basename match
 
-- **`search(query, n=5, timeout=60.0)`** – Semantic search over indexed files using txtai embeddings. Returns `list[tuple[int, float, str, str, bool]]` of `(file_id, score, filepath, preview, truncated)`.
-- **`get_file_content(file_id)`** – Retrieve full content (up to `MAX_FULL_FILE_LEN`) of an indexed file by its ID. Returns `(content, filepath)`.
+When a file is expanded into a request, `FileTag` reads the file, registers it in `Conversation.context_history`,
+and returns an embedded context block inside `UserRequest.expanded_prompt`.
 
-### Autocomplete Integration (UI)
+## Autocomplete Model
 
-`AutocompleteController` is extended so that when a fragment starts with any dynamic-autocomplete prefix it asks the owning plugin for suggestions and displays each with `plugin.display_string(s)`. Plugins returning `True` from `match_any_autocomplete()` are consulted for all `@` fragments regardless of prefix. The *committed text* inserted into the NSTextView remains the **raw suggestion**, ensuring `expand()` receives the full path later.
+The file plugin participates in autocomplete in two ways:
+
+- live filesystem completion for explicit path prefixes
+- indexed basename search for generic `@...` fragments
+
+It also uses `match_any_autocomplete()` so it can offer indexed-file matches even when the fragment
+does not start with one of its explicit path prefixes.
+
+Display and insertion are intentionally different:
+
+- the UI shows a short basename-oriented display string
+- the raw inserted token preserves the full path so expansion later has exact file identity
+
+## Relationship to File Tools
+
+The file tools in `macllm/tools/file.py` depend on the same indexed-directory model.
+
+Two boundaries matter:
+
+- `FileTag` owns discovery, autocomplete, context expansion, and semantic search
+- file tools own read/write/move/delete operations and validate that paths stay inside indexed directories
+
+This means the file plugin is not just a UI convenience layer. It is also the discovery and search backend for the file-tool subsystem.

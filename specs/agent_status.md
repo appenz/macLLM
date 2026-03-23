@@ -1,143 +1,94 @@
-# Agent Status Display
+# Agent Status
 
-During agent execution, macLLM displays real-time status information to the user. This document describes the two-section status display and the `AgentStatusManager` API.
+## Overview
 
-## Display Format
+During agent execution, macLLM shows a live status block in the conversation view.
 
-The status display shows two sections at the bottom of the conversation during agent execution:
+The status system has two goals:
 
-```
-Plan
-  1. Search for relevant information
-  2. Analyze the results
-  3. Provide a summary
+- show the current plan produced by the agent
+- show the progress of tool calls and managed-agent delegation
 
-Steps
-  ✓ web_search("python async")
-  ✓ web_search("asyncio best practices")
-  ⟳ file_append("/tmp/notes.txt")
-  ✗ web_search("invalid query") — API rate limit exceeded
-```
+The status model is intentionally simple. It tracks only user-visible execution state, not the
+full internal smolagents trace.
 
-### Section Details
+## Architecture
 
-**Plan**: The current execution plan from the agent's planning step. Updated when the agent replans.
+`AgentStatusManager` in `macllm/core/agent_status.py` is the central status object.
 
-**Steps**: Log of all tool invocations with status indicators:
-- `⟳` - Running (tool execution in progress)
-- `✓` - Success (tool completed successfully)
-- `✗` - Error (tool failed, shows error summary)
+It stores:
 
-## AgentStatusManager API
+- `plan`: the current extracted plan text
+- `tool_calls`: an ordered log of tool and managed-agent activity
 
-Located in `macllm/core/agent_status.py`.
+Each tool-call entry is represented by `ToolCallEntry`, which captures:
 
-### ToolCallEntry
+- stable call identity
+- display name
+- summarized arguments
+- running / success / error state
+- optional result or error summary
+- indentation level for nested managed-agent activity
 
-```python
-@dataclass
-class ToolCallEntry:
-    id: str                    # Unique identifier for this call
-    name: str                  # Tool name (e.g., "web_search")
-    args_summary: str          # Short summary of arguments
-    status: Literal["running", "success", "error"]
-    result_summary: str = ""   # Brief result or error message
-    started_at: float          # Timestamp from time.time()
-```
+The manager is owned by `MacLLM` and updated during a single agent run, then reset before the next run.
 
-### AgentStatusManager
+## Status Sources
 
-```python
-class AgentStatusManager:
-    plan: str                      # Current plan text
-    tool_calls: list[ToolCallEntry]
-    ui_update_callback: Callable   # Called after any update
-    
-    def set_plan(self, plan: str) -> None
-    def start_tool_call(self, id: str, name: str, args: dict) -> None
-    def complete_tool_call(self, id: str, result: str = "") -> None
-    def fail_tool_call(self, id: str, error: str) -> None
-    def reset(self) -> None        # Clear all state for new agent run
-    def render(self) -> str        # Format all sections for display
-```
+Status comes from two different sources.
 
-All mutating methods trigger `ui_update_callback()` after updating state.
+Planning status comes from the smolagents step callback in `macllm/core/agent_service.py`.
+`create_step_callback()` extracts the current plan from `PlanningStep` and forwards it to
+`AgentStatusManager.set_plan()`.
 
-## Integration
+Execution status comes from tools and managed agents.
 
-### Accessing the Status Manager
+- tools call `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()` directly
+- managed-agent delegation is reported by `MacLLMAgent.__call__()` through `enter_managed_agent()` and `exit_managed_agent()`
 
-The `AgentStatusManager` is stored in the `MacLLM` singleton and accessed via:
+This split is a key design decision: plan text comes from agent planning events, but tool progress does not.
+Tool progress is owned by the tool implementations themselves.
 
-```python
-from macllm.macllm import MacLLM
+## Managed-Agent Nesting
 
-MacLLM.get_status_manager().complete_tool_call(tool_id, result)
-```
+Managed-agent delegation is represented as part of the same status stream as normal tool calls.
 
-### Step Callbacks (agent_service.py)
+When a parent agent delegates work:
 
-The step callback in `create_step_callback()` handles:
+- the status manager inserts a running entry for the managed agent
+- nested tool calls are indented under that managed agent
+- the managed-agent entry is marked complete when control returns
 
-- **PlanningStep**: Calls `set_plan()` with extracted content
-- **ActionStep**: Calls `start_tool_call()` for each tool in `step.tool_calls`
+This allows one unified status block in the UI instead of separate views for top-level and delegated work.
 
-### Tools
+## Rendering Model
 
-All tools report their own status via the status manager:
+The status manager exposes a text `render()` method, but the conversation UI does not display that raw text directly.
 
-**Long-running tools** (e.g., `web_search`, `search_files`) call `start_tool_call()` at the beginning and `complete_tool_call()`/`fail_tool_call()` at the end:
+`MainTextHandler._render_agent_status()` in `macllm/ui/main_text.py` reads the structured state and renders:
 
-```python
-@tool
-def web_search(queries: list[str]) -> str:
-    tool_id = f"web_search_{counter}_{int(time.time() * 1000)}"
-    status = MacLLM.get_status_manager()
-    status.start_tool_call(tool_id, "web_search", {"queries": queries})
-    
-    try:
-        # ... do work ...
-        status.complete_tool_call(tool_id, f"{len(queries)} queries done")
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
-```
+- a `Plan` section when `plan` is present
+- a `Steps` section when `tool_calls` is non-empty
+- nested indentation for managed-agent activity
+- visual status markers for running, success, and error states
 
-**Instant tools** (e.g., `get_current_time`) only call `complete_tool_call()` at the end (no visible "running" state since they're instantaneous):
+The UI therefore depends on the structured fields of `AgentStatusManager`, not just on the output of `render()`.
 
-```python
-@tool
-def get_current_time() -> str:
-    result = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    tool_id = f"get_current_time_{counter}_{int(time.time() * 1000)}"
-    MacLLM.get_status_manager().complete_tool_call(tool_id, result)
-    
-    return result
-```
+## API Surface
 
-The status manager handles both patterns - if `complete_tool_call()` is called without a prior `start_tool_call()`, it creates the entry directly as "success".
+The architectural API of `AgentStatusManager` is:
 
-## Data Flow
+- `set_plan(plan)`
+- `enter_managed_agent(name, task)`
+- `exit_managed_agent(name)`
+- `start_tool_call(id, name, args)`
+- `complete_tool_call(id, result="")`
+- `fail_tool_call(id, error)`
+- `reset()`
 
-```
-smolagents step callback
-    │
-    ├─► PlanningStep ─► set_plan()
-    │
-    └─► ActionStep ─► start_tool_call() for each tool
-                          │
-                          ▼
-                    Tool executes
-                          │
-                          ├─► complete_tool_call() (from tool or next step)
-                          │
-                          └─► fail_tool_call() (on error)
-                                  │
-                                  ▼
-                          ui_update_callback()
-                                  │
-                                  ▼
-                          MainTextHandler renders status_manager.render()
-```
+All mutating methods notify the UI through the manager's `ui_update_callback`.
+
+## Design Notes
+
+- The status system is global to the active `MacLLM` instance, not per tool or per UI component.
+- Instant tools can skip `start_tool_call()` and still appear as successful entries when `complete_tool_call()` is called.
+- Error display is intentionally summarized rather than storing full exception traces.

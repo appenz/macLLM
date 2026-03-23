@@ -1,40 +1,41 @@
 # Markdown Rendering
 
-Assistant messages are rendered as Markdown via the `macllm/markdown/` package. Parsing is handled by `markdown-it-py`; rendering produces `NSAttributedString` for display in the Cocoa `NSTextView`.
+Assistant messages are rendered as Markdown via the `macllm/markdown/` package.
+Parsing is handled by `markdown-it-py`; rendering produces `NSAttributedString`
+for display in the Cocoa text view.
 
 ## Architecture
 
-```
-macllm/markdown/
-  __init__.py       render_markdown(text, color) — public entry point
-  renderer.py       MarkdownRenderer: parses tokens, dispatches to element modules
-  inline.py         Bold, plain text, softbreak, inline code, links
-  link.py           Clickable URLs — bare URL regex detection + markdown link rendering
-  blocks.py         Headings, paragraphs, bullet/ordered lists, fenced code blocks
-  table.py          Monospaced column-aligned tables
-```
+The renderer is dispatch-based.
 
-The renderer parses Markdown into a token stream and walks it with a dispatch table (`BLOCK_DISPATCH`, `SELF_CLOSING_DISPATCH`). Each token type maps to a render function that consumes a range of tokens and returns `(NSAttributedString, next_index)`.
+- `MarkdownRenderer` parses markdown into tokens
+- block tokens are dispatched through `BLOCK_DISPATCH`
+- self-closing tokens are dispatched through `SELF_CLOSING_DISPATCH`
+- each renderer consumes a token range and returns attributed text plus the next token index
 
-## Adding a New Element
+Rendering is split by concern:
 
-1. Write a render function in the appropriate module (or create a new one).
-2. Add an entry to `BLOCK_DISPATCH` or `SELF_CLOSING_DISPATCH` in `renderer.py`.
+- `blocks.py` handles headings, paragraphs, lists, and fenced code
+- `inline.py` handles text spans, bold, soft breaks, inline code, and links
+- `link.py` handles markdown links and bare URL detection
+- `table.py` handles markdown tables as monospaced aligned text
 
-No parser changes are needed — `markdown-it-py` already tokenises the full Markdown spec.
+This keeps markdown parsing centralized while allowing rendering behavior to be specialized by element type.
 
-## Tables
+## Rendering Choices
 
-Tables render as monospaced, column-aligned text at a slightly smaller font size (11.5pt vs 13pt body) with an 8pt left indent. Numeric columns are right-aligned. Overflow is handled via `NSLineBreakByTruncatingTail` so the display truncates with "..." but copy/paste captures the full content.
+The renderer does not aim for pixel-perfect HTML-style markdown. It makes a small number of
+display-oriented choices that fit the Cocoa text view well.
 
-## Lists
+- lists use hanging indents so wrapped lines align under the text rather than under the bullet
+- code blocks use monospaced text
+- tables are rendered as aligned monospaced text rather than as native table widgets
+- bare URLs are linkified even when they are not written as markdown links
+- tables get extra spacing around them so they read as separate blocks
 
-Bullet and ordered lists use `NSParagraphStyle` with `firstLineHeadIndent` / `headIndent` to create a hanging indent — wrapped lines align with the text after the bullet, not under it. Nested lists increase the indent.
-
-## Links
-
-Bare URLs (`https://...`) in text tokens are detected via regex in `link.py` and rendered with `NSLinkAttributeName` so they are clickable in the NSTextView. Markdown-style links (`[text](url)`) are handled via the `link_open`/`link_close` token pairs that `markdown-it-py` already produces. No additional dependencies are required.
+The main specialized rendering choice is tables: they are indented, slightly smaller, numerically aligned where possible, and visually truncated on overflow while preserving the underlying text for copy/paste.
 
 ## Integration
 
-`MainTextHandler.append_markdown()` in `macllm/ui/main_text.py` calls `render_markdown(text, color)` and appends the result to the text view's storage.
+`MainTextHandler.append_markdown()` in `macllm/ui/main_text.py` calls `render_markdown(...)`
+and appends the resulting attributed string to the conversation view.

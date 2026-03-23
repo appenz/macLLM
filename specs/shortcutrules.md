@@ -1,75 +1,62 @@
-# Shortcut Parsing Rules
+# Request Parsing Rules
 
-macLLM supports two user-facing constructs with distinct semantics:
+## Overview
 
-- **Commands** (`/`): Control behavior or expand to prompt text. Includes user-defined shortcuts and plugin-registered commands.
-- **Context** (`@`): Add data/context to the conversation (files, clipboard, images, URLs, etc.).
+macLLM has two request-expansion mechanisms:
 
-Processing order: shortcuts expand first (text replacement), then both `/` commands and `@` tags are processed by plugins.
+- leading `/skill` expansion, owned by `SkillsRegistry`
+- `@...` and plugin-owned `/...` token expansion, owned by tag plugins
 
-## Command Syntax (`/`)
+## Processing Order
 
-Commands can be either:
-1. **User-defined shortcuts**: Declared in TOML as two-element arrays: `["/trigger", "expansion text"]`.
-2. **Plugin-registered commands**: Handled by plugins (e.g. `/fast`, `/slow`, `/think`).
+The current processing order is:
 
-User shortcuts are read from:
-- The application-supplied TOML file `config/default_shortcuts.toml`
-- Any `*.toml` file found in the user directory `~/.config/macllm/`
+1. Start with the original prompt.
+2. If the prompt begins with a skill command, `SkillsRegistry.expand_manual_invocation()` expands it.
+3. Build a `UserRequest` from that result.
+4. `UserRequest.process_tags()` scans the expanded prompt for `@...` and `/...` tokens.
+5. Matching plugins rewrite the expanded prompt and may update request state such as agent, speed, images, or context.
+6. The original prompt is stored in conversation history, while the expanded prompt is sent to the agent.
 
-At runtime:
-- User shortcuts: occurrences of the exact `/trigger` are replaced with the configured expansion before plugin processing.
-- Plugin commands: processed by plugins which may modify request state (e.g., speed level) and remove the command from the prompt.
+## Token Syntax
 
-Example:
-- In TOML: `["/blog", "Expand the following into paragraphs...\n---\n"]`
-- In input: `Please /blog this:` → the `/blog` token is replaced with the configured text.
-- In input: `Hello /fast` → the `/fast` command sets speed to fast and is removed from the prompt.
+`UserRequest.find_shortcuts()` applies the same tokenization rules to both `@` and `/` forms.
 
-Configuration tags in TOML:
+- unquoted tokens run until the first unescaped whitespace character
+- backslash-escaped spaces are included in the token
+- quoted forms such as `@"..."` or `/"..."` run until the closing quote or newline, and the quotes are removed
 
-- Any entry whose trigger starts with `@` is treated as a configuration tag for plugins (not a user command).
-- Example: `[@IndexFiles, "/some/path"]` is consumed by the file plugin to build an index for path tags.
+This allows paths and other arguments with spaces to be represented as a single token.
 
-## Context Syntax (`@`)
+## Matching Model
 
-Tags are parsed in the user's input after shortcuts expand. The parsing rules are:
+The matching model has two layers.
 
-1. A tag runs until the first whitespace character: `@clipboard some text` → tag is `@clipboard`.
-2. Backslash-escaped spaces are included: `@/path/with\ spaces/file.txt` → tag is `@/path/with spaces/file.txt`.
-3. Quoted tags include everything until the closing quote or newline (quotes are stripped):
-   - `@"~/My Home/foo"` → tag is `@~/My Home/foo`
+For expansion, matching is strict and prefix-based.
 
-Tags are handled by plugins that implement `get_prefixes()` and `expand(...)`, adding context to the conversation.
+- plugins declare the prefixes they own
+- `MacLLM` builds a prefix index once at startup
+- expansion uses the longest matching prefix
+- replacement happens back-to-front in the prompt so earlier replacements do not shift later token offsets
 
-## Autocomplete and Highlighting (shared)
+This keeps expansion deterministic even when prefixes overlap.
 
-- The editor provides the same autocomplete popup and inline "pill" highlighting for both `/` commands and `@` tags.
-- Typing `/` lists user-defined shortcuts and plugin-registered commands; typing `@` lists context tag prefixes and dynamic suggestions from plugins.
-- Enter inserts the selected suggestion as a pill; Tab inserts the raw text and keeps it editable (quoted forms `@"..."` and `/"..."` are supported).
-- Pills for commands show plain text (no icon). Context tag pills may show an icon as provided by the plugin's `display_string`.
-- The UI applies a short minimum-length filter so suggestions appear after a few characters.
+For autocomplete, matching is broader.
 
-## Plugins and Tags
+- plugins can offer suggestions for their declared prefixes
+- plugins can also opt into catch-all autocomplete without owning those tokens for expansion
 
-Tags live in the `macllm/tags/` directory and inherit from the base class `TagPlugin` (`macllm.tags.base.TagPlugin`).
+The file plugin is the main example. It does not own the generic `@` prefix for expansion, because that
+would shadow plugins such as `@clipboard`. But it does participate in generic `@...` autocomplete so it
+can suggest indexed files by basename. Those suggestions insert a raw path token that later matches the
+file plugin's real expansion prefixes.
 
-- Each plugin should implement:
-  - `get_prefixes() -> list[str]` — return all `@` (context) and/or `/` (command) prefixes the plugin should react to
-  - `expand(tag: str, conversation, request) -> str` — return the replacement string to insert into the prompt
-- Plugins may optionally implement dynamic autocomplete and display mapping.
-- Some plugins can also expose configuration tags for use in TOML via `get_config_prefixes()` and `on_config_tag(...)`.
+## Autocomplete
 
-## Current Plugins (examples)
+Autocomplete follows the same split as parsing.
 
-- ClipboardTag (`@clipboard`) — Inserts clipboard text or image as context.
-- FileTag (path-like tags: `@/`, `@~`, `@"/`, `@"~`) — Reads file contents (up to 10 KB) as context; config tag `@IndexFiles` builds an index; `/reindex` triggers immediate re-indexing.
-- URLTag (`@http://`, `@https://`) — Downloads and strips web page content as context.
-- ImageTag (`@selection`, `@window`) — Captures screenshots for image analysis.
-- SpeedTag (`/fast`, `/slow`, `/think`) — Adjusts processing speed (commands, not context).
-- AgentTag (`@agent:<name>`) — Selects which agent runs the conversation (with autocomplete for registered agent names).
+- `/` suggestions include skill commands and plugin-owned slash commands
+- `@` suggestions include plugin prefixes and plugin-provided dynamic suggestions
+- plugins may provide a display string different from the raw inserted token
 
-## Processing Order Summary
-
-1. Expand all `/...` user shortcuts using the configured TOML mappings (text replacement).
-2. Process all `/...` commands and `@...` tags using the loaded tag plugins, which may add context and replace tags/commands in-place. 
+The inserted token remains the raw text that later parsing and expansion will consume.
