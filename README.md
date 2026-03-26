@@ -145,43 +145,48 @@ There are two ways to set the speed:
 
 The current speed level and model are shown in the top-right corner of the window.
 
-## Shortcuts
+## Slash commands (`/`)
 
-Shortcuts are shorthand for specific prompts and start with `/`. For example:
+Commands that start with `/` come from two places:
 
-> /fix My Canaidian Mooose is Braun.
+1. **Skills** — If your input begins with `/name` and `name` matches a loaded skill, the skill body replaces that prefix. Any text after the first space is appended as an `ARGUMENTS:` block. Skills are markdown files under directories listed in `skills_dirs` in `config/config.toml` (defaults: `config/skills` in the repo and `~/.config/macllm/skills`). The same `name` in a later directory overrides an earlier one.
+2. **Tag plugins** — After skill expansion, the text is scanned for `@…` and `/…` tokens. Plugins own specific prefixes (e.g. speed and reindex). They rewrite the prompt and may change speed, attach context, or run side effects.
 
-This expands to a prompt instructing the model to fix spelling/grammar only, producing:
+Example skill expansion:
 
-> My Canadian Moose is Brown.
+> /fix My Canadian Moose is Braun.
 
-### Built-in Shortcuts
+expands to instructions that correct spelling and grammar only, so the model can reply with corrected text.
 
-| Shortcut | Description |
+### Bundled skills
+
+These ship in `config/skills/shortcuts.md`:
+
+| Command | Description |
 |---|---|
-| `/fix` | Fix spelling and grammar, no other changes |
-| `/emoji` | Suggest a single relevant emoji |
+| `/fix` | Fix spelling and grammar only; reply with corrected text |
+| `/emoji` | Suggest one relevant emoji |
 | `/emojis` | Suggest several relevant emojis |
-| `/fast` | Use the fast model |
-| `/slow` | Use the slow/thinking model |
-| `/think` | Same as `/slow` |
-| `/reindex` | Rebuild the file index |
 
-### Custom Shortcuts
+### Other built-in `/` commands
 
-Add shortcuts in TOML files under `~/.config/macllm/` or `./config/`:
+| Command | Description |
+|---|---|
+| `/reload` | Reload merged config and skill files; may trigger index refresh |
+| `/fast` | Fast model tier (see **Speed Levels**) |
+| `/slow` / `/think` | Slow / thinking tier |
+| `/reindex` | Request a rebuild of the file index |
 
-```toml
-shortcuts = [
-  ["/summarize", "Summarize the following in 3 bullet points: "],
-  ["/translate", "Translate the following to French: "],
-]
-```
+### Adding skills
+
+Add or edit `*.md` skill files under `~/.config/macllm/skills/` (or another path you add to `skills_dirs`), then use `/reload` or restart. 
 
 ## Autocomplete
 
-Both `/` shortcuts and `@` tags use an autocomplete popup:
-- Typing `/` shows configured shortcuts; typing `@` shows available tags and file suggestions.
+Both `/` and `@` use an autocomplete popup:
+
+- Typing `/` suggests skill commands (including `/reload`) and plugin-registered slash prefixes.
+- Typing `@` suggests tag prefixes and dynamic items such as indexed files.
 - **Enter** inserts the selection as a pill; **Tab** inserts as editable raw text.
 
 ## Conversations and History
