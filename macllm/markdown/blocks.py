@@ -3,13 +3,18 @@ from Cocoa import (
     NSForegroundColorAttributeName, NSFontAttributeName,
     NSParagraphStyleAttributeName,
 )
+from AppKit import NSTextTab
 from Foundation import NSMutableAttributedString, NSMutableParagraphStyle
 
 from macllm.markdown.inline import render_inline
 
 FONT_SIZE = 13.0
+
+LIST_BASE_INDENT = 14.0
 INDENT_PER_LEVEL = 16.0
-BULLET_TEXT_OFFSET = 12.0
+BULLET_TEXT_OFFSET = 14.0
+LIST_SPACING_BEFORE = 6.0
+LIST_ITEM_SPACING = 2.0
 
 
 def render_heading(tokens, start_idx, color):
@@ -38,6 +43,28 @@ def render_paragraph(tokens, start_idx, color):
     return result, i + 1
 
 
+def _make_list_item_style(indent, is_first):
+    """Build an NSMutableParagraphStyle for one list item.
+
+    Uses a tab stop so bullet/number text always starts at a fixed column,
+    and adds vertical breathing room before the first item.
+    """
+    content_col = indent + BULLET_TEXT_OFFSET
+    style = NSMutableParagraphStyle.alloc().init()
+    style.setFirstLineHeadIndent_(indent)
+    style.setHeadIndent_(content_col)
+    style.setTabStops_([])
+    tab = NSTextTab.alloc().initWithTextAlignment_location_options_(
+        0, content_col, {},
+    )
+    style.setTabStops_([tab])
+    style.setDefaultTabInterval_(BULLET_TEXT_OFFSET)
+    if is_first:
+        style.setParagraphSpacingBefore_(LIST_SPACING_BEFORE)
+    style.setParagraphSpacing_(LIST_ITEM_SPACING)
+    return style
+
+
 def render_list(tokens, start_idx, color, depth=0):
     """Render a bullet or ordered list with hanging-indent for wrapped lines.
 
@@ -49,10 +76,7 @@ def render_list(tokens, start_idx, color, depth=0):
     is_ordered = tokens[start_idx].type == 'ordered_list_open'
     close_type = 'ordered_list_close' if is_ordered else 'bullet_list_close'
 
-    indent = depth * INDENT_PER_LEVEL
-    style = NSMutableParagraphStyle.alloc().init()
-    style.setFirstLineHeadIndent_(indent)
-    style.setHeadIndent_(indent + BULLET_TEXT_OFFSET)
+    indent = LIST_BASE_INDENT + depth * INDENT_PER_LEVEL
 
     i = start_idx + 1
     item_number = 0
@@ -66,11 +90,13 @@ def render_list(tokens, start_idx, color, depth=0):
             if not first_item:
                 nl = NSAttributedString.alloc().initWithString_("\n")
                 result.appendAttributedString_(nl)
+
+            style = _make_list_item_style(indent, first_item)
             first_item = False
 
             item_line = NSMutableAttributedString.alloc().init()
 
-            prefix = f"{item_number}. " if is_ordered else "\u2022 "
+            prefix = f"{item_number}.\t" if is_ordered else "\u2022\t"
             prefix_attr = NSAttributedString.alloc().initWithString_attributes_(
                 prefix, {
                     NSForegroundColorAttributeName: color,
@@ -101,8 +127,6 @@ def render_list(tokens, start_idx, color, depth=0):
 
             i += 1  # skip list_item_close
 
-            # Apply hanging-indent style to the item text (but not nested lists,
-            # which carry their own deeper indent).
             item_line.addAttribute_value_range_(
                 NSParagraphStyleAttributeName, style,
                 (0, item_line.length()),

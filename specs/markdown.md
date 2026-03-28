@@ -28,6 +28,11 @@ The renderer does not aim for pixel-perfect HTML-style markdown. It makes a smal
 display-oriented choices that fit the Cocoa text view well.
 
 - lists use hanging indents so wrapped lines align under the text rather than under the bullet
+- list items use tab stops (bullet/number + `\t`) so item text starts at a fixed column regardless
+  of marker width (e.g. "1." vs "10." align identically)
+- lists are visually inset from body text with a base indent (`LIST_BASE_INDENT`)
+- lists get vertical breathing room: `paragraphSpacingBefore` on the first item and
+  `paragraphSpacing` on every item for subtle inter-item and after-list separation
 - code blocks use monospaced text
 - tables are rendered as aligned monospaced text rather than as native table widgets
 - bare URLs are linkified even when they are not written as markdown links
