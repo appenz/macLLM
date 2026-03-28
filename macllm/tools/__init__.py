@@ -34,6 +34,7 @@ from macllm.tools.things import (
     things_complete_item,
     things_cancel_item,
 )
+from macllm.tools.shell import run_command
 from macllm.tools.skills import read_skill
 # Note: reset_search_counter is NOT in __all__ because it's a utility function,
 # not a tool. Import it directly when needed.
@@ -68,5 +69,6 @@ __all__ = [
     "things_update_project",
     "things_complete_item",
     "things_cancel_item",
+    "run_command",
     "read_skill",
 ]

@@ -14,6 +14,26 @@ class HistoryBrowseDelegate(NSObject):
     macllm_ui = None  # injected after creation
 
     # ---------------------------------------------------------------------
+    # Link click handler (used for expandable output blocks)
+    # ---------------------------------------------------------------------
+    def textView_clickedOnLink_atIndex_(self, _view, link, _index):  # noqa: N802
+        link_str = str(link)
+        if link_str.startswith("macllm://toggle-output/"):
+            tool_id = link_str.split("/", 3)[-1]
+            try:
+                from macllm.macllm import MacLLM
+                status_mgr = MacLLM.get_status_manager()
+                for entry in status_mgr.tool_calls:
+                    if entry.id == tool_id:
+                        entry.expanded = not entry.expanded
+                        self.macllm_ui.update_window()
+                        break
+            except Exception:
+                pass
+            return True
+        return False
+
+    # ---------------------------------------------------------------------
     # NSTextView command handler
     # ---------------------------------------------------------------------
     def textView_doCommandBySelector_(self, _view, commandSelector):  # noqa: N802

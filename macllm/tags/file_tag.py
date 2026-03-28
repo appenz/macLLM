@@ -29,6 +29,13 @@ class FileTag(TagPlugin):
     # Prefixes that represent plain path tags (previously handled by PathTag)
     PATH_PREFIXES = ["@/", "@~", "@\"/", "@\"~"]
 
+    DIR_SHORTCUTS = {
+        "@home": "~/",
+        "@desktop": "~/Desktop/",
+        "@downloads": "~/Downloads/",
+        "@documents": "~/Documents/",
+    }
+
     # Also allow generic "@" prefix for autocomplete (without explicit keyword)
     # Autocomplete suggestions will only be generated once the user has typed
     # at least *MIN_CHARS* characters after the leading "@".
@@ -113,7 +120,7 @@ class FileTag(TagPlugin):
         # other plugins (e.g. ClipboardTag) are not shadowed during
         # expansion.  We still use the generic symbol for autocomplete via
         # *match_any_autocomplete()*.
-        return self.PATH_PREFIXES + [self.PREFIX_REINDEX]
+        return self.PATH_PREFIXES + list(self.DIR_SHORTCUTS.keys()) + [self.PREFIX_REINDEX]
 
     # ------------------------------------------------------------------
     # Catch-all autocomplete flag
@@ -124,20 +131,41 @@ class FileTag(TagPlugin):
         return True
 
     def expand(self, tag: str, conversation, request):
-        """Read the referenced file (tag may be a plain path or an internal
-        @file tag), add it to *conversation* context, and return a
-        ``context:<handle>`` replacement string."""
+        """Read the referenced file or grant a directory.
+
+        For files: reads content, adds to conversation context, and returns
+        a ``context:<handle>`` replacement string.
+
+        For directories: grants sandbox access on the conversation and
+        returns a context marker noting the granted path.
+
+        For directory shortcuts (``@home``, ``@desktop``, etc.): expands
+        to the corresponding path and grants it.
+        """
 
         if tag == self.PREFIX_REINDEX:
             FileTag._start_reindex()
             return ""
 
+        # Handle directory shortcuts (@home, @desktop, etc.)
+        tag_lower = tag.lower()
+        for shortcut, shortcut_path in self.DIR_SHORTCUTS.items():
+            if tag_lower == shortcut:
+                expanded_path = os.path.expanduser(shortcut_path)
+                conversation.grant_directory(expanded_path)
+                context_name = conversation.add_context(
+                    shortcut[1:],
+                    expanded_path,
+                    "directory",
+                    f"Directory access granted: {expanded_path}",
+                    icon="📂",
+                )
+                return f"\n\n--- context:{context_name} (directory: {expanded_path}) ---\nDirectory access granted.\n--- end context:{context_name} ---"
+
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
-            # Strip the leading '@' to get the raw path (quotes may follow)
             path_spec = tag[1:]
         else:
-            # Unknown prefix – let other plugins handle it
             return tag
 
         if path_spec.startswith('"') and path_spec.endswith('"'):
@@ -145,11 +173,23 @@ class FileTag(TagPlugin):
 
         path_spec = os.path.expanduser(path_spec)
 
+        # If path is a directory, grant sandbox access instead of reading
+        if os.path.isdir(path_spec):
+            conversation.grant_directory(path_spec)
+            context_name = conversation.add_context(
+                Path(path_spec).name,
+                path_spec,
+                "directory",
+                f"Directory access granted: {path_spec}",
+                icon="📂",
+            )
+            return f"\n\n--- context:{context_name} (directory: {path_spec}) ---\nDirectory access granted.\n--- end context:{context_name} ---"
+
         try:
             content = self._read_file(path_spec)
         except Exception as exc:
             FileTag._macllm.debug_exception(exc)
-            return tag  # leave unmodified so the user sees the failure
+            return tag
 
         context_name = conversation.add_context(
             Path(path_spec).name,
@@ -168,13 +208,21 @@ class FileTag(TagPlugin):
 
     def autocomplete(self, fragment: str, max_results: int = 10) -> List[str]:
         """Return suggestions for *fragment* using either live filesystem
-        exploration or the pre-built index."""
+        exploration, directory shortcuts, or the pre-built index."""
 
         # Path-style fragments are handled via live filesystem completion without
         # applying the *MIN_CHARS* limit so that patterns like "@/" start
         # suggesting immediately.
         if any(fragment.startswith(p) for p in self.PATH_PREFIXES):
             return self._autocomplete_live_path(fragment, max_results)
+
+        # Match directory shortcuts (@home, @desktop, etc.)
+        frag_lower = fragment.lower()
+        shortcut_matches = [
+            sc for sc in self.DIR_SHORTCUTS if sc.startswith(frag_lower)
+        ]
+        if shortcut_matches:
+            return shortcut_matches[:max_results]
 
         # For indexed substring search we enforce the minimum length to avoid
         # overly eager suggestions.
@@ -191,6 +239,9 @@ class FileTag(TagPlugin):
         return raw_tags
 
     def display_string(self, suggestion: str) -> str:
+        if suggestion in self.DIR_SHORTCUTS:
+            return "📂" + suggestion[1:]
+
         if suggestion.startswith('@'):
             path_spec = suggestion[1:]
         else:

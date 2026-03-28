@@ -35,6 +35,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_tools = [
         "get_current_time",
         "web_search",
+        "run_command",
         "read_skill",
     ]
     macllm_managed_agents = ["files", "calendar", "things"]

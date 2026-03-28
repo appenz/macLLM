@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "bashlex>=0.18",
     "beautifulsoup4>=4.12.3",
     "certifi>=2024.12.14",
     "litellm>=1.0.0",
@@ -17,6 +18,7 @@ dependencies = [
     "requests>=2.32.3",
     "smolagents>=0.1.0",
     "things.py>=1.0.1",
+    "tomli_w>=1.0.0",
     "txtai>=9.3.0",
 ]
 
@@ -27,6 +29,7 @@ markers = [
     "external: tests that hit external services",
     "calendar: tests that access macOS calendar (requires permissions)",
     "things: tests that access the real Things app and database (requires Things URLs auth)",
+    "sandbox: tests that exercise macOS sandbox-exec (requires macOS)",
 ]
 filterwarnings = [
     "ignore::UserWarning:pydantic.*",

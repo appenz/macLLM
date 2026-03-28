@@ -148,10 +148,14 @@ class MacLLM:
         
         Uses smolagents' built-in interrupt_switch which causes the agent to
         raise AgentError at the start of the next step iteration.
+        If a shell command approval is pending, auto-deny it to unblock
+        the agent thread so the abort can proceed.
         """
         if not self.is_agent_running():
             return
         self._abort_event.set()
+        if self.status_manager.pending_approval is not None:
+            self.status_manager.resolve_approval("deny")
         if self.chat_history.agent:
             self.chat_history.agent.interrupt_switch = True
             for agent in getattr(self.chat_history.agent, 'managed_agents', {}).values():

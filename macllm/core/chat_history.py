@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict, Optional, Union
 
 
@@ -81,10 +82,28 @@ class Conversation:
             self.agent_cls = get_default_agent_class()
         return self.agent_cls
 
+    def grant_directory(self, path: str) -> None:
+        """Add a directory to the sandbox grant list for this conversation."""
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        if abs_path not in self.granted_dirs:
+            self.granted_dirs.append(abs_path)
+
+    def get_granted_dirs(self) -> list[str]:
+        """Return all granted directories (config defaults + conversation grants)."""
+        from macllm.core.config import get_runtime_config
+
+        config = get_runtime_config()
+        config_dirs = [
+            os.path.abspath(os.path.expanduser(d))
+            for d in config.shell.default_dirs
+        ]
+        return list(dict.fromkeys(config_dirs + self.granted_dirs))
+
     def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""
         self.messages = []
         self.context_history = []
+        self.granted_dirs: list[str] = []
         self.speed_level = "normal"
 
         self._get_agent_cls()

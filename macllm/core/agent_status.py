@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import Callable, Literal, Optional
+import threading
 import time
 
 
@@ -11,10 +12,23 @@ class ToolCallEntry:
     id: str
     name: str
     args_summary: str
-    status: Literal["running", "success", "error"]
+    status: Literal["running", "success", "error", "pending"]
     result_summary: str = ""
+    full_output: str = ""
     started_at: float = field(default_factory=time.time)
     indent: int = 0
+    expanded: bool = False
+
+
+@dataclass
+class PendingApproval:
+    """Tracks a shell command awaiting user approval."""
+    command: str
+    unknown_executables: list[str]
+    tool_call_id: str
+    ungranted_paths: list[str] = field(default_factory=list)
+    event: threading.Event = field(default_factory=threading.Event)
+    decision: Literal["run", "deny", "always_allow"] | None = None
 
 
 class AgentStatusManager:
@@ -35,6 +49,7 @@ class AgentStatusManager:
         self.plan = ""
         self.tool_calls: list[ToolCallEntry] = []
         self._managed_agent_depth: int = 0
+        self.pending_approval: PendingApproval | None = None
     
     def set_plan(self, plan: str) -> None:
         """Update the current plan."""
@@ -165,6 +180,27 @@ class AgentStatusManager:
             return parts[0]
         return id.split("_")[0] if "_" in id else id
     
+    def request_approval(self, command: str, unknown_executables: list[str],
+                         tool_call_id: str,
+                         ungranted_paths: list[str] | None = None) -> PendingApproval:
+        """Create a pending approval and notify the UI."""
+        self.pending_approval = PendingApproval(
+            command=command,
+            unknown_executables=unknown_executables,
+            tool_call_id=tool_call_id,
+            ungranted_paths=ungranted_paths or [],
+        )
+        self._notify()
+        return self.pending_approval
+
+    def resolve_approval(self, decision: str) -> None:
+        """Resolve the current pending approval with the user's decision."""
+        if self.pending_approval is not None:
+            self.pending_approval.decision = decision
+            self.pending_approval.event.set()
+            self.pending_approval = None
+            self._notify()
+
     def _notify(self) -> None:
         """Trigger UI update callback if set."""
         if self.ui_update_callback:

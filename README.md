@@ -100,6 +100,16 @@ When the agent needs current information, it uses the `web_search` tool backed b
 
 Requires `BRAVE_API_KEY` to be set.
 
+## Shell Commands (Sandboxed)
+
+Agents can execute shell commands via the `run_command` tool, restricted by three layers:
+
+1. **Command whitelist** — only pre-approved executables (e.g. `ls`, `git`, `grep`) run without asking. Unknown commands show an inline prompt: **[R]un once**, **[D]eny**, or **[A]lways allow**.
+2. **Directory grants** — commands can only read/write directories the user has mentioned with `@` (e.g. `@~/docs/notes`) or configured as defaults. Shortcuts `@home`, `@desktop`, `@downloads`, `@documents` are available.
+3. **Kernel sandbox** — every command runs under macOS Seatbelt (`sandbox-exec`), enforced at the kernel level. Even if a command tries to escape, the OS blocks it. `~/.ssh`, `~/.aws`, and `~/.gnupg` are always denied.
+
+The whitelist and default directories are configured in `~/.config/macllm/config.toml` under `[shell]`.
+
 ## Calendar
 
 macLLM can access your local macOS calendars via EventKit. Ask it to find events, create meetings, check for conflicts, or find free time slots. It handles timezone conversions automatically — just say "schedule a meeting in Frankfurt at 5pm local time" and it figures out the rest.

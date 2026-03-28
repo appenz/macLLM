@@ -53,6 +53,7 @@ class MainTextHandler:
     def _render_agent_status(text_view, status_mgr):
         """Render agent plan and tool calls with rich formatting."""
         from Foundation import NSMutableAttributedString
+        from macllm.ui.approval import ApprovalRenderer
         ts = text_view.textStorage()
 
         muted = NSColor.colorWithCalibratedWhite_alpha_(0.50, 1.0)
@@ -80,6 +81,21 @@ class MainTextHandler:
                 _append("\n", muted)
             _append("Steps\n", muted, font_sm_bold)
             for entry in status_mgr.tool_calls:
+                is_shell = entry.name == "run_command"
+
+                # Pending approval: delegate to ApprovalRenderer
+                if is_shell and entry.status == "pending":
+                    if status_mgr.pending_approval:
+                        ApprovalRenderer.render_pending(ts, status_mgr.pending_approval)
+                    continue
+
+                # Completed/failed shell commands: use compact rendering + output
+                if is_shell and entry.status in ("success", "error"):
+                    ApprovalRenderer.render_resolved(ts, entry)
+                    if entry.full_output:
+                        ApprovalRenderer.render_output(ts, entry)
+                    continue
+
                 indent = "  " * (1 + entry.indent)
                 if entry.status == "success":
                     _append(f"{indent}✓ ", green, font_sm_bold)

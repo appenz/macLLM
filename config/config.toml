@@ -8,3 +8,13 @@ openai = ""
 inception = ""
 brave = ""
 gemini = ""
+
+# [shell]
+# allowed_commands = [
+#   "ls", "cat", "head", "tail", "wc", "grep", "find",
+#   "sort", "uniq", "diff", "echo", "printf",
+#   "mkdir", "cp", "mv", "rm", "touch", "chmod",
+#   "git", "python", "python3",
+# ]
+# default_dirs = []
+# read_only_paths = ["~/.gitconfig", "~/.config/git"]

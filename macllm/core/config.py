@@ -20,10 +20,18 @@ class ApiKeys:
 
 
 @dataclass
+class ShellConfig:
+    allowed_commands: list[str] = field(default_factory=list)
+    default_dirs: list[str] = field(default_factory=list)
+    read_only_paths: list[str] = field(default_factory=list)
+
+
+@dataclass
 class MacLLMConfig:
     api_keys: ApiKeys = field(default_factory=ApiKeys)
     skills_dirs: list[str] = field(default_factory=list)
     index_dirs: list[str] = field(default_factory=list)
+    shell: ShellConfig = field(default_factory=ShellConfig)
 
     def resolved_skills_dirs(self, project_root: Path | None = None) -> list[str]:
         return _resolve_paths(self.skills_dirs, project_root)
@@ -74,8 +82,21 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
+_DEFAULT_ALLOWED_COMMANDS = [
+    "ls", "cat", "head", "tail", "wc", "grep", "find",
+    "sort", "uniq", "diff", "echo", "printf",
+    "mkdir", "cp", "mv", "touch",
+]
+
+_DEFAULT_READ_ONLY_PATHS = [
+    "~/.gitconfig",
+    "~/.config/git",
+]
+
+
 def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
     api = data.get("api_keys", {}) or {}
+    shell_data = data.get("shell", {}) or {}
     return MacLLMConfig(
         api_keys=ApiKeys(
             openai=str(api.get("openai", "") or ""),
@@ -85,6 +106,13 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
         ),
         skills_dirs=[str(x) for x in (data.get("skills_dirs", []) or [])],
         index_dirs=[str(x) for x in (data.get("index_dirs", []) or [])],
+        shell=ShellConfig(
+            allowed_commands=shell_data.get("allowed_commands")
+            or list(_DEFAULT_ALLOWED_COMMANDS),
+            default_dirs=[str(x) for x in (shell_data.get("default_dirs") or [])],
+            read_only_paths=shell_data.get("read_only_paths")
+            or list(_DEFAULT_READ_ONLY_PATHS),
+        ),
     )
 
 
@@ -107,3 +135,30 @@ def get_runtime_config(project_root: Path | None = None) -> MacLLMConfig:
     if _RUNTIME_CONFIG is None:
         _RUNTIME_CONFIG = load_config(project_root=project_root)
     return _RUNTIME_CONFIG
+
+
+def add_to_shell_allowlist(command: str) -> None:
+    """Persist *command* to the user-level shell allowlist.
+
+    Reads ``~/.config/macllm/config.toml``, appends *command* to the
+    ``[shell] allowed_commands`` list, and writes the file back.  Also
+    updates the in-memory runtime config so the change takes effect
+    immediately.
+    """
+    user_path = Path("~/.config/macllm/config.toml").expanduser()
+    user_path.parent.mkdir(parents=True, exist_ok=True)
+
+    data: dict[str, Any] = _load_toml(user_path) if user_path.exists() else {}
+    shell_section = data.setdefault("shell", {})
+    existing: list[str] = shell_section.get("allowed_commands", [])
+    if command not in existing:
+        existing.append(command)
+    shell_section["allowed_commands"] = existing
+
+    import tomli_w
+    with user_path.open("wb") as f:
+        tomli_w.dump(data, f)
+
+    global _RUNTIME_CONFIG
+    if _RUNTIME_CONFIG is not None and command not in _RUNTIME_CONFIG.shell.allowed_commands:
+        _RUNTIME_CONFIG.shell.allowed_commands.append(command)

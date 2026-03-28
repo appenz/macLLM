@@ -63,6 +63,19 @@ class InputFieldDelegate(NSObject):
         except Exception as exc:  # pragma: no cover
             self.macllm_ui.macllm.debug_exception(exc)
 
+    # Intercept character input for pending approval prompts
+    def textView_shouldChangeTextInRange_replacementString_(self, _view, _range, string):
+        try:
+            if string and len(string) == 1:
+                from macllm.macllm import MacLLM
+                from macllm.ui.approval import ApprovalRenderer
+                status_mgr = MacLLM.get_status_manager()
+                if ApprovalRenderer.handle_key(string, status_mgr):
+                    return False
+        except Exception:
+            pass
+        return True
+
     # NSTextView keyboard command handler
     def textView_doCommandBySelector_(self, _view, commandSelector):
         try:
