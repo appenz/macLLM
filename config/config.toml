@@ -16,5 +16,5 @@ gemini = ""
 #   "mkdir", "cp", "mv", "rm", "touch", "chmod",
 #   "git", "python", "python3",
 # ]
-# default_dirs = []
+# default_dirs = ["~/.macllm", "~/Downloads", "~/tmp"]
 # read_only_paths = ["~/.gitconfig", "~/.config/git"]

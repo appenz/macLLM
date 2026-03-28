@@ -91,13 +91,23 @@ class ApprovalRenderer:
             _append("A", cls._light, cls._font_sm_bold, underline=True)
             _append("]lways allow '", cls._muted)
             _append(exe_list, cls._light)
-            _append("'\n", cls._muted)
+            _append("'", cls._muted)
+            if has_ungranted:
+                _append("  [", cls._muted)
+                _append("H", cls._light, cls._font_sm_bold, underline=True)
+                _append("]ome access", cls._muted)
+            _append("\n", cls._muted)
         else:
             _append("  │ [", cls._muted)
             _append("R", cls._light, cls._font_sm_bold, underline=True)
             _append("]un (grant & run)  [", cls._muted)
             _append("D", cls._light, cls._font_sm_bold, underline=True)
-            _append("]eny\n", cls._muted)
+            _append("]eny", cls._muted)
+            if has_ungranted:
+                _append("  [", cls._muted)
+                _append("H", cls._light, cls._font_sm_bold, underline=True)
+                _append("]ome access", cls._muted)
+            _append("\n", cls._muted)
 
     @classmethod
     def render_resolved(cls, text_storage, entry):
@@ -196,6 +206,9 @@ class ApprovalRenderer:
             return True
         if key_lower == "a":
             status_mgr.resolve_approval("always_allow")
+            return True
+        if key_lower == "h":
+            status_mgr.resolve_approval("grant_home")
             return True
 
         return False

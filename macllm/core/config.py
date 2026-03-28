@@ -85,7 +85,13 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 _DEFAULT_ALLOWED_COMMANDS = [
     "ls", "cat", "head", "tail", "wc", "grep", "find",
     "sort", "uniq", "diff", "echo", "printf",
-    "mkdir", "cp", "mv", "touch",
+    "mkdir", "cp", "mv", "touch", "pwd",
+]
+
+_DEFAULT_DIRS = [
+    "~/.macllm",
+    "~/Downloads",
+    "~/tmp",
 ]
 
 _DEFAULT_READ_ONLY_PATHS = [
@@ -109,7 +115,8 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
         shell=ShellConfig(
             allowed_commands=shell_data.get("allowed_commands")
             or list(_DEFAULT_ALLOWED_COMMANDS),
-            default_dirs=[str(x) for x in (shell_data.get("default_dirs") or [])],
+            default_dirs=shell_data.get("default_dirs")
+            or list(_DEFAULT_DIRS),
             read_only_paths=shell_data.get("read_only_paths")
             or list(_DEFAULT_READ_ONLY_PATHS),
         ),

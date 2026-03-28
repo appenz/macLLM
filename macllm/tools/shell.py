@@ -56,17 +56,16 @@ def _get_shell_config():
 def run_command(command: str, working_directory: str = "") -> str:
     """Execute a shell command in a sandboxed environment.
 
-    The command runs with filesystem access restricted to directories
-    that the user has granted in this conversation (via @-mentions) or
-    configured as defaults. Sensitive paths like ~/.ssh are always denied.
+    The command runs with filesystem access restricted to the directories
+    that the user has granted access to in this conversation.
     If execution fails for permission reasons, ask the user for next steps.
+    Do NOT use this tool to work with notes, use the note subagent instead.
 
     Args:
         command: The shell command to execute. Pipes and standard shell
             syntax are supported.
         working_directory: Optional working directory for the command.
-            Must be inside a granted directory. Defaults to the first
-            granted directory or /tmp.
+            Must be inside a granted directory. Defaults to ~/.macllm.
 
     Returns:
         The command output (stdout, stderr, and exit code).
@@ -121,8 +120,10 @@ def run_command(command: str, working_directory: str = "") -> str:
                     if exe != "(unparseable command)":
                         add_to_shell_allowlist(exe)
 
-            # Grant directories the user approved
-            if ungranted:
+            if approval.decision == "grant_home":
+                conversation.grant_directory("~")
+                granted_dirs = conversation.get_granted_dirs()
+            elif ungranted:
                 for path in ungranted:
                     conversation.grant_directory(path)
                 granted_dirs = conversation.get_granted_dirs()
@@ -190,12 +191,14 @@ def _find_ungranted_paths(paths: list[str], granted_dirs: list[str]) -> list[str
     return ungranted
 
 
+_MACLLM_DIR = os.path.expanduser("~/.macllm")
+
+
 def _resolve_working_directory(requested: str, granted_dirs: list[str]) -> str:
     """Resolve and validate the working directory."""
     if not requested:
-        if granted_dirs:
-            return granted_dirs[0]
-        return "/tmp"
+        os.makedirs(_MACLLM_DIR, exist_ok=True)
+        return _MACLLM_DIR
 
     expanded = os.path.abspath(os.path.expanduser(requested))
 

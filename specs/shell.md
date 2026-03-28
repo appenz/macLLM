@@ -81,7 +81,7 @@ Project-level config can also define allowed commands; the two lists merge.
 The sandbox allows read-write access only to explicitly granted directories.
 There are two sources of grants:
 
-1. **Config defaults** — `[shell] default_dirs` in `config.toml` (empty by default)
+1. **Config defaults** — `[shell] default_dirs` in `config.toml` (defaults to `~/.macllm`, `~/Downloads`, `~/tmp`)
 2. **Conversation `@`-mentions** — when the user references a directory with `@~/some/path/`, the file tag plugin registers it as a granted directory on the conversation
 
 Directory grants are tracked on `Conversation` as a `granted_dirs: list[str]` field.
@@ -149,12 +149,14 @@ approval but for directories:
 ```
 ┌ Shell: ls ~
 │ ⚠ Needs access to: ~/
-│ [R]un (grant & run)  [D]eny
+│ [R]un (grant & run)  [D]eny  [H]ome access
 ```
 
-If the user presses **R**, the directories are added to the conversation's grant
-list and the command runs.  If both an unknown executable and ungranted paths are
-present, they are shown together in one combined prompt.
+If the user presses **R**, the specific directories are added to the conversation's grant
+list and the command runs.  **H** grants access to the entire home directory (`~`)
+for the rest of the conversation — useful when the agent needs broad filesystem
+access.  If both an unknown executable and ungranted paths are present, they are
+shown together in one combined prompt.
 
 Path extraction uses `bashlex` to walk the AST and collect word arguments that
 look like filesystem paths (`/…`, `~/…`, `./…`, `../…`), skipping the executable
@@ -218,6 +220,6 @@ Command output renders in the agent status area as an expandable block.
 ## Working Directory
 
 The `run_command` tool accepts an optional `working_directory` parameter.
-It defaults to the first granted directory on the conversation (or `/tmp` if none are granted).
+It defaults to `~/.macllm` (created automatically if it doesn't exist).
 
 The working directory must be inside a granted directory, otherwise the tool returns an error.

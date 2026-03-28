@@ -28,7 +28,7 @@ class PendingApproval:
     tool_call_id: str
     ungranted_paths: list[str] = field(default_factory=list)
     event: threading.Event = field(default_factory=threading.Event)
-    decision: Literal["run", "deny", "always_allow"] | None = None
+    decision: Literal["run", "deny", "always_allow", "grant_home"] | None = None
 
 
 class AgentStatusManager:
