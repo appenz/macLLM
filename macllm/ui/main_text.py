@@ -45,9 +45,12 @@ class MainTextHandler:
     @staticmethod
     def append_markdown(text_view, text, color):
         """Append markdown-formatted text to the NSTextView."""
-        from macllm.markdown import render_markdown
+        from macllm.markdown import render_markdown, get_last_render_block_infos, add_code_block_range
+        base = text_view.textStorage().length()
         attr_str = render_markdown(text, color)
         text_view.textStorage().appendAttributedString_(attr_str)
+        for block_id, rel_start, length in get_last_render_block_infos():
+            add_code_block_range(block_id, base + rel_start, length)
 
     @staticmethod
     def _render_agent_status(text_view, status_mgr):
@@ -131,6 +134,9 @@ class MainTextHandler:
     @staticmethod
     def set_text_content(macllm, text_view, highlight_index=None):
         """Set the text content for the main text view with colored text for different roles."""
+        from macllm.markdown import reset_code_blocks
+        reset_code_blocks()
+
         # Initialize static separator attributes if needed
         MainTextHandler._init_separator_attributes()
         

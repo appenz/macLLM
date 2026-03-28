@@ -31,6 +31,28 @@ class HistoryBrowseDelegate(NSObject):
             except Exception:
                 pass
             return True
+
+        if link_str.startswith("macllm://copy-code/"):
+            try:
+                block_id = int(link_str.split("/")[-1])
+                from macllm.markdown import get_code_block_content
+                content = get_code_block_content(block_id)
+                if content:
+                    self.macllm_ui.write_clipboard(content)
+            except Exception:
+                pass
+            return True
+
+        if link_str.startswith("macllm://toggle-code/"):
+            try:
+                block_id = int(link_str.split("/")[-1])
+                from macllm.markdown import toggle_code_block
+                toggle_code_block(block_id)
+                self.macllm_ui.update_window()
+            except Exception:
+                pass
+            return True
+
         return False
 
     # ---------------------------------------------------------------------
@@ -43,13 +65,43 @@ class HistoryBrowseDelegate(NSObject):
             return False
 
         try:
+            in_code_focus = getattr(self.macllm_ui, "focused_code_block", -1) >= 0
+
+            if commandSelector == "insertTab:":
+                self.macllm_ui.cycle_code_block(1)
+                return True
+
+            if commandSelector == "insertBacktab:":
+                self.macllm_ui.cycle_code_block(-1)
+                return True
+
+            if in_code_focus:
+                if commandSelector == "insertNewline:":
+                    self.macllm_ui.copy_focused_code_block()
+                    return True
+                if commandSelector == "noop:":
+                    current_event = NSApp().currentEvent()
+                    if current_event and (current_event.modifierFlags() & (1 << 20)):
+                        key = current_event.charactersIgnoringModifiers().lower()
+                        if key == "c":
+                            self.macllm_ui.copy_focused_code_block()
+                            return True
+                    return False
+                if commandSelector == "cancelOperation:":
+                    self.macllm_ui.exit_code_block_focus()
+                    return True
+                if commandSelector in ("moveUp:", "moveDown:"):
+                    delta = -1 if commandSelector == "moveUp:" else 1
+                    self.macllm_ui.cycle_code_block(delta)
+                    return True
+                return False
+
             if commandSelector in ("moveUp:", "moveDown:"):
                 delta = -1 if commandSelector == "moveUp:" else 1
                 self._move_history(delta)
                 return True
 
             elif commandSelector == "noop:":
-                # Handle Command-C for copy.
                 current_event = NSApp().currentEvent()
                 if current_event and (current_event.modifierFlags() & (1 << 20)):
                     key = current_event.charactersIgnoringModifiers().lower()
@@ -59,12 +111,10 @@ class HistoryBrowseDelegate(NSObject):
                 return False
 
             elif commandSelector == "insertNewline:":
-                # Return – insert message into input field and exit browsing.
                 self.macllm_ui.insert_current_history_into_input()
                 return True
 
             elif commandSelector == "cancelOperation:":
-                # ESC – abort browsing.
                 self.macllm_ui.exit_history_browsing()
                 return True
 

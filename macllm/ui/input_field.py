@@ -157,6 +157,10 @@ class InputFieldDelegate(NSObject):
                         self.macllm_ui.begin_history_browsing()
                         return True
                     return False
+                elif commandSelector == 'insertTab:':
+                    if self.macllm_ui.begin_code_block_focus():
+                        return True
+                    return False
                 elif commandSelector in ('insertNewline:'):
                     current_event = NSApp().currentEvent()
                     shift_pressed = current_event and (current_event.modifierFlags() & (1 << 17))

@@ -200,6 +200,9 @@ class MacLLMUI:
         self.browsing_history = False
         self.history_index = 0
 
+        # Code block keyboard focus state (-1 = none focused)
+        self.focused_code_block = -1
+
     def _create_scaled_logo(self):
         """Create a high-quality scaled version of the logo for the top bar."""
         if self.logo_image and self.logo_image.size().width > 0:
@@ -611,12 +614,81 @@ class MacLLMUI:
         if not self.browsing_history:
             return
         self.browsing_history = False
+        self.focused_code_block = -1
         # Remove highlight by re-rendering without highlight
         if hasattr(self, "text_area"):
             MainTextHandler.set_text_content(self.macllm, self.text_area)
         # Focus back to input field
         if hasattr(self, "input_field"):
             InputFieldHandler.focus_input_field(self.input_field)
+
+    # ------------------------------------------------------------------
+    # Code block keyboard navigation
+    # ------------------------------------------------------------------
+    def begin_code_block_focus(self):
+        """Enter code block focus mode (focuses text area, highlights first block)."""
+        from macllm.markdown import get_code_block_count
+        if get_code_block_count() == 0:
+            return False
+        if not self.browsing_history:
+            self.browsing_history = True
+            if hasattr(self, "text_area"):
+                self.text_area.window().makeFirstResponder_(self.text_area)
+        self.focused_code_block = 0
+        self._apply_code_block_highlight()
+        return True
+
+    def cycle_code_block(self, delta):
+        """Move focus to the next (+1) or previous (-1) code block."""
+        from macllm.markdown import get_code_block_count
+        count = get_code_block_count()
+        if count == 0:
+            return
+        if self.focused_code_block < 0:
+            self.focused_code_block = 0 if delta > 0 else count - 1
+        else:
+            self.focused_code_block = (self.focused_code_block + delta) % count
+        self._apply_code_block_highlight()
+
+    def copy_focused_code_block(self):
+        """Copy the currently focused code block to the clipboard."""
+        if self.focused_code_block < 0:
+            return False
+        from macllm.markdown import get_code_block_ranges, get_code_block_content
+        ranges = get_code_block_ranges()
+        if self.focused_code_block >= len(ranges):
+            return False
+        block_id = ranges[self.focused_code_block][0]
+        content = get_code_block_content(block_id)
+        if content:
+            self.write_clipboard(content)
+            return True
+        return False
+
+    def exit_code_block_focus(self):
+        """Leave code block focus and return to input."""
+        self.focused_code_block = -1
+        self.exit_history_browsing()
+
+    def _apply_code_block_highlight(self):
+        """Re-render and apply a background highlight to the focused code block."""
+        from macllm.markdown import get_code_block_ranges
+        from Cocoa import NSColor, NSBackgroundColorAttributeName
+        if not hasattr(self, "text_area"):
+            return
+        MainTextHandler.set_text_content(self.macllm, self.text_area)
+        ranges = get_code_block_ranges()
+        if 0 <= self.focused_code_block < len(ranges):
+            _, start, length = ranges[self.focused_code_block]
+            ts = self.text_area.textStorage()
+            if start + length <= ts.length():
+                highlight = NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                    0.85, 0.90, 1.0, 1.0)
+                ts.addAttributes_range_(
+                    {NSBackgroundColorAttributeName: highlight},
+                    (start, length),
+                )
+            self.text_area.scrollRangeToVisible_((start, length))
 
     # ------------------------------------------------------------------
     # Existing methods

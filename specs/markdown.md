@@ -15,7 +15,7 @@ The renderer is dispatch-based.
 
 Rendering is split by concern:
 
-- `blocks.py` handles headings, paragraphs, lists, and fenced code
+- `blocks.py` handles headings, paragraphs, lists, fenced code, and blockquotes
 - `inline.py` handles text spans, bold, soft breaks, inline code, and links
 - `link.py` handles markdown links and bare URL detection
 - `table.py` handles markdown tables as monospaced aligned text
@@ -33,14 +33,36 @@ display-oriented choices that fit the Cocoa text view well.
 - lists are visually inset from body text with a base indent (`LIST_BASE_INDENT`)
 - lists get vertical breathing room: `paragraphSpacingBefore` on the first item and
   `paragraphSpacing` on every item for subtle inter-item and after-list separation
-- code blocks use monospaced text
+- code blocks and blockquotes use a smaller font (11.5pt, matching tables) and are left-indented
 - tables are rendered as aligned monospaced text rather than as native table widgets
 - bare URLs are linkified even when they are not written as markdown links
-- tables get extra spacing around them so they read as separate blocks
+- tables, code blocks, and blockquotes get extra spacing around them so they read as separate blocks
 
 The main specialized rendering choice is tables: they are indented, slightly smaller, numerically aligned where possible, and visually truncated on overflow while preserving the underlying text for copy/paste.
+
+## Code Block and Blockquote Interactivity
+
+Code blocks (fenced and indented) and blockquotes share the same interactive features:
+
+- **Copy link:** each block has a clickable `[copy]` element that copies the full block content
+  to the clipboard via a `macllm://copy-code/<id>` link.
+- **Collapse/expand:** blocks longer than 10 lines are collapsed by default, showing the first
+  5 lines and a `▸ N more lines` toggle link. Clicking expands to show all lines with a
+  `▾ collapse` link. State is tracked per block via `macllm://toggle-code/<id>` links and
+  persists across re-renders within the same session.
+- **Keyboard navigation:** pressing Tab in the input field (when autocomplete is not visible)
+  enters code block focus mode. Tab / Shift-Tab cycle through blocks, Up / Down also cycle.
+  Enter or Cmd-C copies the focused block. Esc exits focus and returns to the input field.
+  The focused block receives a subtle background highlight and is scrolled into view.
+
+Block state (content registry, collapse state, text-storage ranges) lives in
+`macllm/markdown/__init__.py`. The registry is cleared at the start of each full re-render
+via `reset_code_blocks()`; collapse state persists across re-renders. Link clicks are handled
+in `HistoryBrowseDelegate.textView_clickedOnLink_atIndex_`.
 
 ## Integration
 
 `MainTextHandler.append_markdown()` in `macllm/ui/main_text.py` calls `render_markdown(...)`
-and appends the resulting attributed string to the conversation view.
+and appends the resulting attributed string to the conversation view. After appending, it
+records absolute text-storage ranges for each code block (via `add_code_block_range`) to
+support keyboard navigation and highlighting.

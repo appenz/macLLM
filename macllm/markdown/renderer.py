@@ -2,7 +2,10 @@ from markdown_it import MarkdownIt
 from Cocoa import NSAttributedString
 from Foundation import NSMutableAttributedString
 
-from macllm.markdown.blocks import render_heading, render_paragraph, render_list, render_fence
+from macllm.markdown.blocks import (
+    render_heading, render_paragraph, render_list,
+    render_fence, render_blockquote,
+)
 from macllm.markdown.table import render_table
 
 BLOCK_DISPATCH = {
@@ -13,34 +16,33 @@ BLOCK_DISPATCH = {
     'table_open': render_table,
 }
 
-SELF_CLOSING_DISPATCH = {
-    'fence': render_fence,
-    'code_block': render_fence,
-}
-
-# Block types that get an extra blank line before and after for breathing room.
-EXTRA_SPACING_TYPES = {'table_open'}
+EXTRA_SPACING_TYPES = {'table_open', 'fence', 'code_block', 'blockquote_open'}
 
 
 class MarkdownRenderer:
     def __init__(self):
         self.md = MarkdownIt().enable("table")
+        self.last_block_infos = []
 
     def render(self, text, color):
         text = text.rstrip('\n')
         tokens = self.md.parse(text)
         result = NSMutableAttributedString.alloc().init()
+        self.last_block_infos = []
 
         i = 0
         first_block = True
         prev_type = None
         while i < len(tokens):
             token = tokens[i]
+            block_id = None
 
-            if token.type in BLOCK_DISPATCH:
+            if token.type in ('fence', 'code_block'):
+                attr_str, i, block_id = render_fence(tokens, i, color)
+            elif token.type == 'blockquote_open':
+                attr_str, i, block_id = render_blockquote(tokens, i, color)
+            elif token.type in BLOCK_DISPATCH:
                 attr_str, i = BLOCK_DISPATCH[token.type](tokens, i, color)
-            elif token.type in SELF_CLOSING_DISPATCH:
-                attr_str, i = SELF_CLOSING_DISPATCH[token.type](tokens, i, color)
             else:
                 i += 1
                 continue
@@ -52,7 +54,14 @@ class MarkdownRenderer:
                     spacing = "\n\n" if extra else "\n"
                     nl = NSAttributedString.alloc().initWithString_(spacing)
                     result.appendAttributedString_(nl)
+
+                start_pos = result.length()
                 result.appendAttributedString_(attr_str)
+
+                if block_id is not None:
+                    self.last_block_infos.append(
+                        (block_id, start_pos, attr_str.length()))
+
                 prev_type = token.type
                 first_block = False
 
