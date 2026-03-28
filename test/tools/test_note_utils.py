@@ -1,16 +1,16 @@
-"""Tests for shared file utility helpers."""
+"""Tests for shared note utility helpers."""
 
 import os
 from pathlib import Path
 
 import pytest
 
-from macllm.tools.file import validate_indexed_path, backup_file, BACKUP_DIR
+from macllm.tools.note import validate_indexed_path, backup_file, BACKUP_DIR
 from macllm.tags.file_tag import FileTag
 
 
 class TestValidateIndexedPath:
-    def test_valid_path_in_indexed_dir(self, file_env):
+    def test_valid_path_in_indexed_folder(self, file_env):
         result = validate_indexed_path(str(file_env / "alpha.md"))
         assert result == str(file_env / "alpha.md")
 
@@ -29,7 +29,7 @@ class TestValidateIndexedPath:
         assert result == os.path.join(home, "test-file.md")
         FileTag._indexed_directories = [str(file_env)]
 
-    def test_empty_indexed_dirs(self, file_env):
+    def test_empty_indexed_folders(self, file_env):
         FileTag._indexed_directories = []
         result = validate_indexed_path(str(file_env / "alpha.md"))
         assert result is None
@@ -53,9 +53,9 @@ class TestBackupFile:
         assert backup_path.startswith(BACKUP_DIR)
 
     def test_backup_name_format(self, file_env, monkeypatch):
-        import macllm.tools.file as fu
+        import macllm.tools.note as nu
         test_backup = str(file_env / "backups")
-        monkeypatch.setattr(fu, "BACKUP_DIR", test_backup)
+        monkeypatch.setattr(nu, "BACKUP_DIR", test_backup)
 
         path = str(file_env / "alpha.md")
         backup_path = backup_file(path)

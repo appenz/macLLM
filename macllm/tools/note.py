@@ -1,4 +1,4 @@
-"""File tools: search, read, write, move, delete, and browse indexed files."""
+"""Note tools: search, read, write, move, delete, and browse indexed notes."""
 
 import os
 import shutil
@@ -13,20 +13,20 @@ from macllm.tags.file_tag import FileTag
 BACKUP_DIR = os.path.expanduser("~/.macllm-backup")
 
 _tool_call_counter = {
-    "file_append": 0,
-    "file_create": 0,
-    "file_modify": 0,
-    "search_files": 0,
-    "read_file": 0,
-    "file_move": 0,
-    "file_delete": 0,
-    "list_directory": 0,
-    "view_directory_structure": 0,
+    "note_append": 0,
+    "note_create": 0,
+    "note_modify": 0,
+    "search_notes": 0,
+    "read_note": 0,
+    "note_move": 0,
+    "note_delete": 0,
+    "list_folder": 0,
+    "view_folder_structure": 0,
 }
 
 
 def validate_indexed_path(path: str) -> str | None:
-    """Validate that *path* is inside an indexed directory.
+    """Validate that *path* is inside an indexed folder.
 
     Expands ``~`` and resolves the path.  Returns the absolute path string
     if it falls within one of ``FileTag._indexed_directories``, otherwise
@@ -69,33 +69,33 @@ def _status_manager():
     return MacLLM.get_status_manager()
 
 
-# --- file_write tools ---
+# --- note write tools ---
 
 
 @tool
-def file_append(path: str, text: str) -> str:
+def note_append(path: str, text: str) -> str:
     """
-    Append text to an existing file.
+    Append text to an existing note.
 
     Args:
-        path: The file path (must be within an indexed directory).
-        text: The text content to append to the file.
+        path: The note path (must be within an indexed folder).
+        text: The text content to append to the note.
 
     Returns:
-        Success message with the file path, or an error description.
+        Success message with the note path, or an error description.
     """
-    _tool_call_counter["file_append"] += 1
-    tool_id = f"file_append_{_tool_call_counter['file_append']}_{int(time.time() * 1000)}"
+    _tool_call_counter["note_append"] += 1
+    tool_id = f"note_append_{_tool_call_counter['note_append']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
-        status.fail_tool_call(tool_id, "File not found")
-        return f"Error: File does not exist: {expanded}. Use file_create to create new files."
+        status.fail_tool_call(tool_id, "Note not found")
+        return f"Error: Note does not exist: {expanded}. Use note_create to create new notes."
 
     try:
         has_content = os.path.getsize(expanded) > 0
@@ -108,23 +108,23 @@ def file_append(path: str, text: str) -> str:
         return f"Successfully appended to: {expanded}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
-        return f"Error writing to file: {e}"
+        return f"Error writing to note: {e}"
 
 
 @tool
-def file_create(path: str, text: str) -> str:
+def note_create(path: str, text: str) -> str:
     """
-    Create a new file with the given content. Fails if the file already exists.
+    Create a new note with the given content. Fails if the note already exists.
 
     Args:
-        path: The file path (must be within an indexed directory). Extension .md is added if missing.
-        text: The text content to write to the new file.
+        path: The note path (must be within an indexed folder). Extension .md is added if missing.
+        text: The text content to write to the new note.
 
     Returns:
-        Success message with the file path, or an error description.
+        Success message with the note path, or an error description.
     """
-    _tool_call_counter["file_create"] += 1
-    tool_id = f"file_create_{_tool_call_counter['file_create']}_{int(time.time() * 1000)}"
+    _tool_call_counter["note_create"] += 1
+    tool_id = f"note_create_{_tool_call_counter['note_create']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     if not path.lower().endswith(FileTag.EXTENSIONS):
@@ -132,17 +132,17 @@ def file_create(path: str, text: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if os.path.exists(expanded):
-        status.fail_tool_call(tool_id, "File exists")
-        return f"Error: File already exists: {expanded}. Use file_append to add content."
+        status.fail_tool_call(tool_id, "Note exists")
+        return f"Error: Note already exists: {expanded}. Use note_append to add content."
 
     parent = Path(expanded).parent
     if not parent.exists():
-        status.fail_tool_call(tool_id, "Dir not found")
-        return f"Error: Directory does not exist: {parent}"
+        status.fail_tool_call(tool_id, "Folder not found")
+        return f"Error: Folder does not exist: {parent}"
 
     try:
         with open(expanded, "w", encoding="utf-8") as f:
@@ -154,33 +154,33 @@ def file_create(path: str, text: str) -> str:
         return f"Successfully created: {expanded}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
-        return f"Error creating file: {e}"
+        return f"Error creating note: {e}"
 
 
 @tool
-def file_modify(path: str, new_content: str) -> str:
+def note_modify(path: str, new_content: str) -> str:
     """
-    Replace the entire content of an existing file. A backup of the original is saved automatically.
+    Replace the entire content of an existing note. A backup of the original is saved automatically.
 
     Args:
-        path: The file path (must be within an indexed directory).
-        new_content: The new content that will replace the file's current content.
+        path: The note path (must be within an indexed folder).
+        new_content: The new content that will replace the note's current content.
 
     Returns:
-        Success message with the file path and backup location, or an error description.
+        Success message with the note path and backup location, or an error description.
     """
-    _tool_call_counter["file_modify"] += 1
-    tool_id = f"file_modify_{_tool_call_counter['file_modify']}_{int(time.time() * 1000)}"
+    _tool_call_counter["note_modify"] += 1
+    tool_id = f"note_modify_{_tool_call_counter['note_modify']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
-        status.fail_tool_call(tool_id, "File not found")
-        return f"Error: File does not exist: {expanded}."
+        status.fail_tool_call(tool_id, "Note not found")
+        return f"Error: Note does not exist: {expanded}."
 
     try:
         backup_path = backup_file(expanded)
@@ -196,44 +196,44 @@ def file_modify(path: str, new_content: str) -> str:
         return f"Successfully modified: {expanded}\nBackup saved to: {backup_path}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
-        return f"Error modifying file: {e}"
+        return f"Error modifying note: {e}"
 
 
-# --- file_search tools ---
+# --- note search tools ---
 
 
 @tool
-def search_files(query: str) -> str:
+def search_notes(query: str) -> str:
     """
-    Search indexed files using semantic similarity.
+    Search indexed notes using semantic similarity.
 
     Args:
-        query: The search query to find relevant notes or personal files.
+        query: The search query to find relevant notes.
 
     Returns:
-        Top 5 matching files with path, filename, relevance score, and first 1000 characters of content.
+        Top 5 matching notes with path, filename, relevance score, and first 1000 characters of content.
     """
-    _tool_call_counter["search_files"] += 1
-    tool_id = f"search_files_{_tool_call_counter['search_files']}_{int(time.time() * 1000)}"
+    _tool_call_counter["search_notes"] += 1
+    tool_id = f"search_notes_{_tool_call_counter['search_notes']}_{int(time.time() * 1000)}"
     status = _status_manager()
-    status.start_tool_call(tool_id, "search_files", {"query": query})
+    status.start_tool_call(tool_id, "search_notes", {"query": query})
 
     try:
         results = FileTag.search(query)
         if not results:
             status.complete_tool_call(tool_id, "No matches")
-            return "No matching files found"
+            return "No matching notes found"
 
         output_parts = []
         for _file_id, score, filepath, preview, truncated in results:
             filename = Path(filepath).name
-            file_status = "(truncated)" if truncated else "(complete)"
+            note_status = "(truncated)" if truncated else "(complete)"
             output_parts.append(
-                f"[{filepath}] {filename} {file_status}\n"
+                f"[{filepath}] {filename} {note_status}\n"
                 f"Score: {score:.3f}\n{preview}\n"
             )
 
-        status.complete_tool_call(tool_id, f"{len(results)} files found")
+        status.complete_tool_call(tool_id, f"{len(results)} notes found")
         return "\n---\n".join(output_parts)
 
     except Exception as e:
@@ -242,72 +242,72 @@ def search_files(query: str) -> str:
 
 
 @tool
-def read_file(path: str) -> str:
+def read_note(path: str) -> str:
     """
-    Read the full content of a file by its path.
+    Read the full content of a note by its path.
 
     Args:
-        path: The file path (as returned by search_files).
+        path: The note path (as returned by search_notes).
 
     Returns:
-        The full content of the file (up to 10,000 characters).
+        The full content of the note (up to 10,000 characters).
     """
-    _tool_call_counter["read_file"] += 1
-    tool_id = f"read_file_{_tool_call_counter['read_file']}_{int(time.time() * 1000)}"
+    _tool_call_counter["read_note"] += 1
+    tool_id = f"read_note_{_tool_call_counter['read_note']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if not Path(expanded).is_file():
-        status.fail_tool_call(tool_id, "File not found")
-        return f"Error: File not found: {expanded}"
+        status.fail_tool_call(tool_id, "Note not found")
+        return f"Error: Note not found: {expanded}"
 
     try:
         with open(expanded, "r", encoding="utf-8") as f:
             content = f.read(FileTag.MAX_FULL_FILE_LEN)
         filename = Path(expanded).name
         status.complete_tool_call(tool_id, filename)
-        return f"File: {filename}\n\n{content}"
+        return f"Note: {filename}\n\n{content}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:50])
-        return f"Error reading file: {e}"
+        return f"Error reading note: {e}"
 
 
-# --- file_ops tools ---
+# --- note ops tools ---
 
 
 @tool
-def file_move(source_path: str, dest_path: str) -> str:
+def note_move(source_path: str, dest_path: str) -> str:
     """
-    Move or rename a file within indexed directories. Fails if the destination already exists.
+    Move or rename a note within indexed folders. Fails if the destination already exists.
 
     Args:
-        source_path: The current file path (must exist, must be in an indexed directory).
-        dest_path: The new file path (must be in an indexed directory, must not already exist).
+        source_path: The current note path (must exist, must be in an indexed folder).
+        dest_path: The new note path (must be in an indexed folder, must not already exist).
 
     Returns:
         Success message, or an error description.
     """
-    _tool_call_counter["file_move"] += 1
-    tool_id = f"file_move_{_tool_call_counter['file_move']}_{int(time.time() * 1000)}"
+    _tool_call_counter["note_move"] += 1
+    tool_id = f"note_move_{_tool_call_counter['note_move']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     src = validate_indexed_path(source_path)
     if src is None:
-        status.fail_tool_call(tool_id, "Source not in indexed dirs")
-        return f"Error: Source path '{source_path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Source not in indexed folders")
+        return f"Error: Source path '{source_path}' is not within an indexed folder."
 
     if not os.path.exists(src):
         status.fail_tool_call(tool_id, "Source not found")
-        return f"Error: Source file does not exist: {src}"
+        return f"Error: Source note does not exist: {src}"
 
     dst = validate_indexed_path(dest_path)
     if dst is None:
-        status.fail_tool_call(tool_id, "Dest not in indexed dirs")
-        return f"Error: Destination path '{dest_path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Dest not in indexed folders")
+        return f"Error: Destination path '{dest_path}' is not within an indexed folder."
 
     if os.path.exists(dst):
         status.fail_tool_call(tool_id, "Dest exists")
@@ -315,8 +315,8 @@ def file_move(source_path: str, dest_path: str) -> str:
 
     dst_parent = Path(dst).parent
     if not dst_parent.exists():
-        status.fail_tool_call(tool_id, "Dest dir not found")
-        return f"Error: Destination directory does not exist: {dst_parent}"
+        status.fail_tool_call(tool_id, "Dest folder not found")
+        return f"Error: Destination folder does not exist: {dst_parent}"
 
     try:
         shutil.move(src, dst)
@@ -333,32 +333,32 @@ def file_move(source_path: str, dest_path: str) -> str:
         return f"Successfully moved: {src} -> {dst}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
-        return f"Error moving file: {e}"
+        return f"Error moving note: {e}"
 
 
 @tool
-def file_delete(path: str) -> str:
+def note_delete(path: str) -> str:
     """
-    Delete a file. A backup is saved automatically before deletion.
+    Delete a note. A backup is saved automatically before deletion.
 
     Args:
-        path: The file path to delete (must be within an indexed directory).
+        path: The note path to delete (must be within an indexed folder).
 
     Returns:
         Success message with the backup location, or an error description.
     """
-    _tool_call_counter["file_delete"] += 1
-    tool_id = f"file_delete_{_tool_call_counter['file_delete']}_{int(time.time() * 1000)}"
+    _tool_call_counter["note_delete"] += 1
+    tool_id = f"note_delete_{_tool_call_counter['note_delete']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
-        status.fail_tool_call(tool_id, "File not found")
-        return f"Error: File does not exist: {expanded}"
+        status.fail_tool_call(tool_id, "Note not found")
+        return f"Error: Note does not exist: {expanded}"
 
     try:
         backup_path = backup_file(expanded)
@@ -378,14 +378,14 @@ def file_delete(path: str) -> str:
         return f"Successfully deleted: {expanded}\nBackup saved to: {backup_path}"
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
-        return f"Error deleting file: {e}"
+        return f"Error deleting note: {e}"
 
 
-# --- file_browse tools ---
+# --- note browse tools ---
 
 
 def _render_subtree(lines: list[str], current_dir: str, tree: dict[str, list[str]], indent: int):
-    """Recursively render directories and files as indented lines."""
+    """Recursively render folders and notes as indented lines."""
     prefix = "  " * indent
 
     subdirs = sorted(
@@ -404,28 +404,28 @@ def _render_subtree(lines: list[str], current_dir: str, tree: dict[str, list[str
 
 
 @tool
-def list_directory(path: str) -> str:
+def list_folder(path: str) -> str:
     """
-    List all indexed files in a specific directory (non-recursive).
+    List all indexed notes in a specific folder (non-recursive).
 
     Args:
-        path: The directory path to list (must be within an indexed directory).
+        path: The folder path to list (must be within an indexed folder).
 
     Returns:
-        A list of filenames in the directory, or an error description.
+        A list of note names in the folder, or an error description.
     """
-    _tool_call_counter["list_directory"] += 1
-    tool_id = f"list_directory_{_tool_call_counter['list_directory']}_{int(time.time() * 1000)}"
+    _tool_call_counter["list_folder"] += 1
+    tool_id = f"list_folder_{_tool_call_counter['list_folder']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     expanded = validate_indexed_path(path)
     if expanded is None:
-        status.fail_tool_call(tool_id, "Not in indexed dirs")
-        return f"Error: Path '{path}' is not within an indexed directory."
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.isdir(expanded):
-        status.fail_tool_call(tool_id, "Not a directory")
-        return f"Error: Not a directory: {expanded}"
+        status.fail_tool_call(tool_id, "Not a folder")
+        return f"Error: Not a folder: {expanded}"
 
     files = []
     for _basename, filepath in FileTag._index:
@@ -434,28 +434,28 @@ def list_directory(path: str) -> str:
 
     if not files:
         status.complete_tool_call(tool_id, "Empty")
-        return f"No indexed files in: {expanded}"
+        return f"No indexed notes in: {expanded}"
 
     files.sort()
-    status.complete_tool_call(tool_id, f"{len(files)} files")
-    return f"Directory: {expanded}\n\n" + "\n".join(files)
+    status.complete_tool_call(tool_id, f"{len(files)} notes")
+    return f"Folder: {expanded}\n\n" + "\n".join(files)
 
 
 @tool
-def view_directory_structure() -> str:
+def view_folder_structure() -> str:
     """
-    Show the directory tree of all indexed directories and their files.
+    Show the folder tree of all indexed folders and their notes.
 
     Returns:
-        A tree-style listing of all indexed directories and files.
+        A tree-style listing of all indexed folders and notes.
     """
-    _tool_call_counter["view_directory_structure"] += 1
-    tool_id = f"view_directory_structure_{_tool_call_counter['view_directory_structure']}_{int(time.time() * 1000)}"
+    _tool_call_counter["view_folder_structure"] += 1
+    tool_id = f"view_folder_structure_{_tool_call_counter['view_folder_structure']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
     if not FileTag._indexed_directories:
-        status.complete_tool_call(tool_id, "No dirs")
-        return "No directories are currently indexed."
+        status.complete_tool_call(tool_id, "No folders")
+        return "No folders are currently indexed."
 
     tree: dict[str, list[str]] = {}
 
@@ -470,5 +470,5 @@ def view_directory_structure() -> str:
         lines.append(f"{root_dir}/")
         _render_subtree(lines, root_dir, tree, indent=1)
 
-    status.complete_tool_call(tool_id, f"{len(FileTag._index)} files")
+    status.complete_tool_call(tool_id, f"{len(FileTag._index)} notes")
     return "\n".join(lines)

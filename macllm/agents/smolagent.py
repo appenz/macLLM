@@ -16,7 +16,7 @@ class MacLLMSmolAgent(MacLLMAgent):
         "web_search",
         "read_skill",
     ]
-    macllm_managed_agents = ["files"]
+    macllm_managed_agents = ["notes"]
 
     def __init__(self, **kwargs):
         super().__init__(

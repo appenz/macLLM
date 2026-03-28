@@ -1,17 +1,17 @@
-"""Tests for file_move and file_delete."""
+"""Tests for note_move and note_delete."""
 
 import os
 from pathlib import Path
 
-from macllm.tools.file import file_move, file_delete
+from macllm.tools.note import note_move, note_delete
 from macllm.tags.file_tag import FileTag
 
 
-class TestFileMove:
-    def test_move_renames_file(self, file_env):
+class TestNoteMove:
+    def test_move_renames_note(self, file_env):
         src = str(file_env / "alpha.md")
         dst = str(file_env / "renamed.md")
-        result = file_move(src, dst)
+        result = note_move(src, dst)
 
         assert "Successfully moved" in result
         assert not os.path.exists(src)
@@ -21,7 +21,7 @@ class TestFileMove:
     def test_move_updates_index(self, file_env):
         src = str(file_env / "alpha.md")
         dst = str(file_env / "renamed.md")
-        file_move(src, dst)
+        note_move(src, dst)
 
         paths = [fp for _, fp in FileTag._index]
         assert src not in paths
@@ -30,48 +30,48 @@ class TestFileMove:
     def test_move_refuses_overwrite(self, file_env):
         src = str(file_env / "alpha.md")
         dst = str(file_env / "beta.txt")
-        result = file_move(src, dst)
+        result = note_move(src, dst)
 
         assert "Error" in result
         assert "already exists" in result
         assert os.path.exists(src)
 
     def test_move_fails_source_missing(self, file_env):
-        result = file_move(str(file_env / "missing.md"), str(file_env / "dst.md"))
+        result = note_move(str(file_env / "missing.md"), str(file_env / "dst.md"))
         assert "Error" in result
         assert "does not exist" in result
 
     def test_move_rejects_source_outside_indexed(self, file_env):
-        result = file_move("/tmp/outside.md", str(file_env / "dst.md"))
+        result = note_move("/tmp/outside.md", str(file_env / "dst.md"))
         assert "Error" in result
-        assert "not within an indexed directory" in result
+        assert "not within an indexed folder" in result
 
     def test_move_rejects_dest_outside_indexed(self, file_env):
-        result = file_move(str(file_env / "alpha.md"), "/tmp/outside.md")
+        result = note_move(str(file_env / "alpha.md"), "/tmp/outside.md")
         assert "Error" in result
-        assert "not within an indexed directory" in result
+        assert "not within an indexed folder" in result
 
-    def test_move_into_subdirectory(self, file_env):
+    def test_move_into_subfolder(self, file_env):
         src = str(file_env / "alpha.md")
         dst = str(file_env / "subdir" / "moved.md")
-        result = file_move(src, dst)
+        result = note_move(src, dst)
 
         assert "Successfully moved" in result
         assert os.path.exists(dst)
 
-    def test_move_fails_dest_dir_missing(self, file_env):
+    def test_move_fails_dest_folder_missing(self, file_env):
         src = str(file_env / "alpha.md")
         dst = str(file_env / "nodir" / "file.md")
-        result = file_move(src, dst)
+        result = note_move(src, dst)
 
         assert "Error" in result
         assert "does not exist" in result
 
 
-class TestFileDelete:
-    def test_delete_removes_file(self, file_env):
+class TestNoteDelete:
+    def test_delete_removes_note(self, file_env):
         path = str(file_env / "alpha.md")
-        result = file_delete(path)
+        result = note_delete(path)
 
         assert "Successfully deleted" in result
         assert not os.path.exists(path)
@@ -79,7 +79,7 @@ class TestFileDelete:
     def test_delete_creates_backup(self, file_env):
         path = str(file_env / "alpha.md")
         original = open(path).read()
-        result = file_delete(path)
+        result = note_delete(path)
 
         assert "Backup saved to:" in result
         backup_line = [l for l in result.split("\n") if "Backup" in l][0]
@@ -89,17 +89,17 @@ class TestFileDelete:
 
     def test_delete_removes_from_index(self, file_env):
         path = str(file_env / "alpha.md")
-        file_delete(path)
+        note_delete(path)
 
         paths = [fp for _, fp in FileTag._index]
         assert path not in paths
 
     def test_delete_fails_nonexistent(self, file_env):
-        result = file_delete(str(file_env / "missing.md"))
+        result = note_delete(str(file_env / "missing.md"))
         assert "Error" in result
         assert "does not exist" in result
 
     def test_delete_rejects_outside_indexed(self, file_env):
-        result = file_delete("/tmp/not-indexed/file.md")
+        result = note_delete("/tmp/not-indexed/file.md")
         assert "Error" in result
-        assert "not within an indexed directory" in result
+        assert "not within an indexed folder" in result

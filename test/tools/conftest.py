@@ -1,4 +1,4 @@
-"""Shared fixtures for file tool tests."""
+"""Shared fixtures for note tool tests."""
 
 import pytest
 from unittest.mock import MagicMock
@@ -8,7 +8,7 @@ from macllm.core.agent_status import AgentStatusManager
 
 
 class DummyApp:
-    """Minimal stand-in for MacLLM used by file tool tests."""
+    """Minimal stand-in for MacLLM used by note tool tests."""
 
     class _Args:
         debug = False

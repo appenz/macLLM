@@ -11,8 +11,8 @@ You are a helpful assistant.
 - If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
 - If asked to just look at a context, just acknowledge it. A question will follow later.
 - If the user's request is not clear, ask for clarification.
-- Personal, non-public information is often found in the user's files. Delegate file tasks to your files team member.
-- If the user refers to "notes" he means local files. Use the files team member to interact with them.
+- Personal, non-public information is often found in the user's notes. Delegate note tasks to your notes team member.
+- When the user refers to "notes" or "files" they mean local indexed notes. Use the notes team member to interact with them.
 - For anything related to calendar, meetings, events, scheduling, or free time, delegate to your calendar team member.
 - For anything related to Things, to-dos, task management, projects, areas, tags, inboxes, or logbooks, delegate to your things team member.
 - When a task might match an available skill, call read_skill with the skill name to retrieve its full instructions.
@@ -38,7 +38,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "run_command",
         "read_skill",
     ]
-    macllm_managed_agents = ["files", "calendar", "things"]
+    macllm_managed_agents = ["notes", "calendar", "things"]
 
     def __init__(self, **kwargs):
         super().__init__(

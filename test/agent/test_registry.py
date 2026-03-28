@@ -10,7 +10,7 @@ from macllm.agents import (
 from macllm.agents.base import MacLLMAgent
 from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
 from macllm.agents.smolagent import MacLLMSmolAgent
-from macllm.agents.file_agent import FileAgent
+from macllm.agents.note_agent import NoteAgent
 
 
 class TestAgentDiscovery:
@@ -24,8 +24,8 @@ class TestAgentDiscovery:
     def test_smolagent_registered(self):
         assert get_agent_class("smolagent") is MacLLMSmolAgent
 
-    def test_file_agent_registered(self):
-        assert get_agent_class("files") is FileAgent
+    def test_note_agent_registered(self):
+        assert get_agent_class("notes") is NoteAgent
 
     def test_unknown_raises(self):
         with pytest.raises(KeyError):
@@ -40,7 +40,7 @@ class TestAgentDiscovery:
         names = {a.macllm_name for a in agents}
         assert "default" in names
         assert "smolagent" in names
-        assert "files" in names
+        assert "notes" in names
 
 
 class TestAgentDefinitions:
@@ -51,29 +51,29 @@ class TestAgentDefinitions:
         assert "get_current_time" in MacLLMDefaultAgent.macllm_tools
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
 
-    def test_default_agent_uses_files_subagent(self):
-        assert "files" in MacLLMDefaultAgent.macllm_managed_agents
+    def test_default_agent_uses_notes_subagent(self):
+        assert "notes" in MacLLMDefaultAgent.macllm_managed_agents
 
-    def test_default_agent_no_file_tools(self):
-        for tool_name in ["search_files", "read_file", "file_append", "file_create"]:
+    def test_default_agent_no_note_tools(self):
+        for tool_name in ["search_notes", "read_note", "note_append", "note_create"]:
             assert tool_name not in MacLLMDefaultAgent.macllm_tools
 
     def test_smolagent_attributes(self):
         assert MacLLMSmolAgent.macllm_name == "smolagent"
         assert len(MacLLMSmolAgent.macllm_tools) > 0
-        assert "files" in MacLLMSmolAgent.macllm_managed_agents
+        assert "notes" in MacLLMSmolAgent.macllm_managed_agents
 
-    def test_file_agent_attributes(self):
-        assert FileAgent.macllm_name == "files"
-        assert len(FileAgent.macllm_description) > 0
+    def test_note_agent_attributes(self):
+        assert NoteAgent.macllm_name == "notes"
+        assert len(NoteAgent.macllm_description) > 0
         expected_tools = [
-            "search_files", "read_file", "file_create", "file_append",
-            "file_modify", "file_move", "file_delete",
-            "list_directory", "view_directory_structure",
+            "search_notes", "read_note", "note_create", "note_append",
+            "note_modify", "note_move", "note_delete",
+            "list_folder", "view_folder_structure",
         ]
         for tool_name in expected_tools:
-            assert tool_name in FileAgent.macllm_tools
-        assert len(FileAgent.macllm_managed_agents) == 0
+            assert tool_name in NoteAgent.macllm_tools
+        assert len(NoteAgent.macllm_managed_agents) == 0
 
     def test_all_agents_inherit_from_base(self):
         for agent_cls in list_agents():

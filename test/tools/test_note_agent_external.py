@@ -1,7 +1,7 @@
-"""External tests for the file subagent with real LLM calls.
+"""External tests for the note subagent with real LLM calls.
 
 These tests create a temporary notes directory, index it, and run the
-FileAgent (and DefaultAgent) against real LLM APIs.
+NoteAgent (and DefaultAgent) against real LLM APIs.
 
 Run with: make test-external
 """
@@ -84,12 +84,12 @@ def _skip_if_no_gemini():
 
 
 @pytest.mark.external
-def test_file_agent_search(notes_env):
-    """FileAgent can find a file by semantic search."""
+def test_note_agent_search(notes_env):
+    """NoteAgent can find a note by semantic search."""
     _skip_if_no_gemini()
 
-    from macllm.agents.file_agent import FileAgent
-    agent = create_agent(agent_cls=FileAgent, speed="normal")
+    from macllm.agents.note_agent import NoteAgent
+    agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
         "Search for the user's travel plans and tell me the hotel name.",
         max_steps=5,
@@ -99,12 +99,12 @@ def test_file_agent_search(notes_env):
 
 
 @pytest.mark.external
-def test_file_agent_read(notes_env):
-    """FileAgent can read a specific file and extract information."""
+def test_note_agent_read(notes_env):
+    """NoteAgent can read a specific note and extract information."""
     _skip_if_no_gemini()
 
-    from macllm.agents.file_agent import FileAgent
-    agent = create_agent(agent_cls=FileAgent, speed="normal")
+    from macllm.agents.note_agent import NoteAgent
+    agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
         "Find Bob's phone number from the user's notes.",
         max_steps=5,
@@ -114,14 +114,14 @@ def test_file_agent_read(notes_env):
 
 
 @pytest.mark.external
-def test_file_agent_creates_file(notes_env):
-    """FileAgent can create a new file."""
+def test_note_agent_creates_note(notes_env):
+    """NoteAgent can create a new note."""
     _skip_if_no_gemini()
 
-    from macllm.agents.file_agent import FileAgent
-    agent = create_agent(agent_cls=FileAgent, speed="normal")
+    from macllm.agents.note_agent import NoteAgent
+    agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
-        f"Create a new file at {notes_env}/shopping-list.md with the content:\n"
+        f"Create a new note at {notes_env}/shopping-list.md with the content:\n"
         "# Shopping List\n- Milk\n- Eggs\n- Bread",
         max_steps=5,
     )
@@ -134,12 +134,12 @@ def test_file_agent_creates_file(notes_env):
 
 
 @pytest.mark.external
-def test_file_agent_appends(notes_env):
-    """FileAgent can append to an existing file found by search."""
+def test_note_agent_appends(notes_env):
+    """NoteAgent can append to an existing note found by search."""
     _skip_if_no_gemini()
 
-    from macllm.agents.file_agent import FileAgent
-    agent = create_agent(agent_cls=FileAgent, speed="normal")
+    from macllm.agents.note_agent import NoteAgent
+    agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
         "Find the recipes file and append a new recipe:\n"
         "## Scrambled Eggs\nEggs, butter, salt.",
@@ -151,8 +151,8 @@ def test_file_agent_appends(notes_env):
 
 
 @pytest.mark.external
-def test_default_agent_delegates_file_task(notes_env):
-    """DefaultAgent delegates a file question to the files subagent."""
+def test_default_agent_delegates_note_task(notes_env):
+    """DefaultAgent delegates a note question to the notes subagent."""
     _skip_if_no_gemini()
 
     from macllm.agents.default import MacLLMDefaultAgent

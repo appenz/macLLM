@@ -69,30 +69,30 @@ The agent has access to the following tools:
 | Tool | Description |
 |---|---|
 | **web_search** | Searches the web via Brave Search. The agent can issue multiple queries per request. |
-| **search_files** | Semantic search across your indexed notes and files. |
-| **read_full_file** | Reads the full content of an indexed file. |
-| **file_append** | Appends text to an existing file. |
-| **file_create** | Creates a new file with the given content. |
+| **search_notes** | Semantic search across your indexed notes. |
+| **read_note** | Reads the full content of an indexed note. |
+| **note_append** | Appends text to an existing note. |
+| **note_create** | Creates a new note with the given content. |
 | **get_current_time** | Returns the current date and time. |
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
 
-## Searching Your Notes and Files
+## Searching Your Notes
 
-macLLM can index directories of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_files` to find relevant documents and `read_full_file` to read them.
+macLLM can index folders of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_notes` to find relevant notes and `read_note` to read them.
 
-To set up indexing, add `@IndexFiles` entries in a TOML config file under `~/.config/macllm/`:
+To set up indexing, add folders to the `index_dirs` list in `~/.config/macllm/config.toml`:
 
 ```toml
-shortcuts = [
-  ["@IndexFiles", "/Users/you/Notes"],
-  ["@IndexFiles", "/Users/you/Work/Docs"],
+index_dirs = [
+  "/Users/you/Notes",
+  "/Users/you/Work/Docs",
 ]
 ```
 
 This recursively indexes all `.txt` and `.md` files. The index rebuilds automatically every 5 minutes, or you can type `/reindex` to trigger it manually.
 
-When typing `@` followed by 3+ characters, autocomplete suggests matching files from the index. Selecting one inserts it as context for the conversation.
+When typing `@` followed by 3+ characters, autocomplete suggests matching notes from the index. Selecting one inserts it as context for the conversation.
 
 ## Web Search
 
