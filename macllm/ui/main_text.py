@@ -75,9 +75,11 @@ class MainTextHandler:
         _append("\n\n", muted)
 
         if status_mgr.plan:
+            aborting = status_mgr.plan.startswith("Stopping")
             _append("Plan\n", muted, font_sm_bold)
+            plan_color = red if aborting else light
             for line in status_mgr.plan.split('\n'):
-                _append(f"  {line}\n", light)
+                _append(f"  {line}\n", plan_color)
 
         if status_mgr.tool_calls:
             if status_mgr.plan:

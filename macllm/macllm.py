@@ -154,6 +154,7 @@ class MacLLM:
         if not self.is_agent_running():
             return
         self._abort_event.set()
+        self.status_manager.set_plan("Stopping…")
         if self.status_manager.pending_approval is not None:
             self.status_manager.resolve_approval("deny")
         if self.chat_history.agent:

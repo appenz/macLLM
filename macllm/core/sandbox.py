@@ -29,6 +29,8 @@ SYSTEM_READ_ONLY_PATHS = [
     "/dev",
 ]
 
+UV_TOOLCHAIN_PATH = "~/.local/share/uv"
+
 TEMP_PATHS = [
     "/tmp",
     "/private/tmp",
@@ -118,10 +120,13 @@ def build_profile(
         "(allow process-fork)",
         "(allow process-info*)",
         "(allow sysctl-read)",
+        "(allow network*)",
         "",
     ]
 
-    sys_subpaths = " ".join(_sb_subpath(p) for p in SYSTEM_READ_ONLY_PATHS)
+    expanded_uv = _expand(UV_TOOLCHAIN_PATH)
+    sys_ro = list(SYSTEM_READ_ONLY_PATHS) + ([expanded_uv] if os.path.isdir(expanded_uv) else [])
+    sys_subpaths = " ".join(_sb_subpath(p) for p in sys_ro)
     lines.append(f"(allow file-read* process-exec* {sys_subpaths})")
 
     setuid_bins = _find_setuid_binaries()
@@ -152,6 +157,17 @@ def build_profile(
     return "\n".join(lines)
 
 
+_STRIPPED_ENV_VARS = [
+    "VIRTUAL_ENV",
+    "UV_ENV_FILE",
+]
+
+
+def _clean_env() -> dict[str, str]:
+    """Return a copy of ``os.environ`` without macLLM-process-specific vars."""
+    return {k: v for k, v in os.environ.items() if k not in _STRIPPED_ENV_VARS}
+
+
 def run_sandboxed(
     command: str,
     granted_dirs: list[str],
@@ -169,6 +185,7 @@ def run_sandboxed(
     Extra *kwargs* are forwarded to :func:`subprocess.run`.
     """
     profile = build_profile(granted_dirs, read_only_paths, denied_paths)
+    kwargs.setdefault("env", _clean_env())
     return subprocess.run(
         ["sandbox-exec", "-p", profile, "/bin/sh", "-c", command],
         capture_output=True,

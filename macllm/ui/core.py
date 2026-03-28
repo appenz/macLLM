@@ -164,8 +164,9 @@ class MacLLMUI:
     input_field_x = padding + fudge
 
     # Define colors for the status icon
-    status_ready   = "🟢 LLM"
-    status_working = "🟡 LLM"
+    status_ready    = "🟢 LLM"
+    status_working  = "🟡 LLM"
+    status_aborting = "🔴 LLM"
 
     # Colors
     white = NSColor.whiteColor()
@@ -262,6 +263,8 @@ class MacLLMUI:
     def handle_user_input(self, text):
         if self.macllm.is_agent_running():
             self.macllm.abort_agent()
+            self.delegate.status_item.setTitle_(MacLLMUI.status_aborting)
+            self.update_window()
             return
         if text == "":
             return

@@ -22,6 +22,14 @@ def _make_tool_id() -> str:
     return f"run_command_{_tool_call_counter}_{int(time.time() * 1000)}"
 
 
+def _debug_log(message: str, level: int = 0) -> None:
+    from macllm.macllm import MacLLM
+
+    app = MacLLM._instance
+    if app is not None:
+        app.debug_log(message, level)
+
+
 def _status_manager():
     from macllm.macllm import MacLLM
 
@@ -150,14 +158,19 @@ def run_command(command: str, working_directory: str = "") -> str:
         if result.returncode == 0:
             status.complete_tool_call(tool_id, exit_info)
         else:
+            _debug_log(f"Shell: exit {result.returncode} — {command!r} (cwd={cwd})", 2)
+            if result.stderr:
+                _debug_log(f"Shell stderr: {result.stderr.rstrip()}", 2)
             status.fail_tool_call(tool_id, exit_info)
 
         return output
 
     except subprocess.TimeoutExpired:
+        _debug_log(f"Shell: timed out after {COMMAND_TIMEOUT}s: {command!r}", 2)
         status.fail_tool_call(tool_id, f"timed out after {COMMAND_TIMEOUT}s")
         return f"Command timed out after {COMMAND_TIMEOUT} seconds: {command}"
     except Exception as exc:
+        _debug_log(f"Shell: exception: {exc}", 2)
         status.fail_tool_call(tool_id, str(exc)[:80])
         raise
 
