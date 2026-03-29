@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -38,9 +39,11 @@ class SkillsRegistry:
             root = Path(dir_path)
             if not root.exists() or not root.is_dir():
                 continue
-            for md in sorted(root.rglob("*.md")):
-                loaded_files += 1
-                cls._load_markdown_file(md)
+            for dirpath, _dirnames, filenames in os.walk(root, followlinks=True):
+                for fn in sorted(filenames):
+                    if fn.endswith(".md"):
+                        loaded_files += 1
+                        cls._load_markdown_file(Path(dirpath) / fn)
 
         cls._loaded = True
         cls._last_summary = (
@@ -48,6 +51,13 @@ class SkillsRegistry:
         )
         if cls._errors:
             cls._last_summary += f" ({len(cls._errors)} parse warnings)"
+        names = ", ".join(sorted(cls._skills.keys())) or "(none)"
+        try:
+            from macllm.macllm import MacLLM
+            if MacLLM._instance is not None:
+                MacLLM._instance.debug_log(f"[skills] {cls._last_summary}: {names}")
+        except Exception:
+            pass
         return cls._last_summary
 
     @classmethod

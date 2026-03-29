@@ -46,7 +46,7 @@ There are two runtime paths.
 
 For manual use, `SkillsRegistry.expand_manual_invocation()` rewrites a leading `/skill` invocation into the skill body, optionally appending an `ARGUMENTS:` section.
 
-For agent use, `read_skill` in `macllm/tools/skills.py` exposes model-invocable skills. Agents that include `read_skill` also receive a generated skill catalog in their instructions.
+For agent use, `read_skill` in `macllm/tools/skills.py` exposes model-invocable skills. It can return the skill body (with a listing of additional files in the skill directory) or the content of a specific file within the skill directory. Agents that include `read_skill` also receive a generated skill catalog in their instructions.
 
 ## Boundary to Plugins
 
@@ -69,7 +69,14 @@ If user input starts with / and matches a loaded skill name, `expand_manual_invo
 
 ## Model invocation
 
-`read_skill` (tools/skills.py) returns full text for a model-invocable skill (honours `disable-model-invocation`). Empty name returns a list summary.
+`read_skill(name, file="")` (tools/skills.py) serves two purposes:
+
+- `read_skill(name="my-skill")` — returns the skill body. If the skill directory contains additional files (references, scripts, assets), a listing is appended so the agent knows what is available.
+- `read_skill(name="my-skill", file="references/workflows.md")` — returns the content of a specific file from the skill directory. Paths are relative to the skill root and validated against traversal.
+
+The `name` parameter is required. Skill discovery (listing available skills) is handled by the harness: `MacLLMAgent.__init__` injects the catalog from `SkillsRegistry.model_catalog_text()` into the agent's system prompt.
+
+`read_skill` honours `disable-model-invocation`.
 
 Autocomplete / pill rendering for / uses `list_manual_commands` (skill commands plus built-ins such as /reload).
 
