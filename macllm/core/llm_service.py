@@ -60,7 +60,7 @@ def refresh_models():
     )
     MODELS['slow'] = (
         LiteLLMModel(
-            model_id='gpt-5',
+            model_id='gpt-5.4',
             api_key=openai_key,
             api_base='https://api.openai.com/v1'
         ) if openai_key else None
