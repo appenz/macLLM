@@ -1,6 +1,7 @@
 skills_dirs = [
   "config/skills",
   "~/.config/macllm/skills",
+  "~/.agents/skills",
 ]
 
 [api_keys]
