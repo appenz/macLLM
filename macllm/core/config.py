@@ -31,6 +31,7 @@ class MacLLMConfig:
     api_keys: ApiKeys = field(default_factory=ApiKeys)
     skills_dirs: list[str] = field(default_factory=list)
     index_dirs: list[str] = field(default_factory=list)
+    memory_dir: str = ""
     shell: ShellConfig = field(default_factory=ShellConfig)
 
     def resolved_skills_dirs(self, project_root: Path | None = None) -> list[str]:
@@ -38,6 +39,13 @@ class MacLLMConfig:
 
     def resolved_index_dirs(self, project_root: Path | None = None) -> list[str]:
         return _resolve_paths(self.index_dirs, project_root)
+
+    def resolved_memory_dir(self, project_root: Path | None = None) -> str:
+        """Return the absolute memory directory path, or ``""`` if unset."""
+        if not self.memory_dir:
+            return ""
+        resolved = _resolve_paths([self.memory_dir], project_root)
+        return resolved[0] if resolved else ""
 
 
 _RUNTIME_CONFIG: MacLLMConfig | None = None
@@ -112,6 +120,7 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
         ),
         skills_dirs=[str(x) for x in (data.get("skills_dirs", []) or [])],
         index_dirs=[str(x) for x in (data.get("index_dirs", []) or [])],
+        memory_dir=str(data.get("memory_dir", "") or ""),
         shell=ShellConfig(
             allowed_commands=shell_data.get("allowed_commands")
             or list(_DEFAULT_ALLOWED_COMMANDS),

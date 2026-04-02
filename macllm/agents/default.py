@@ -16,6 +16,7 @@ You are a helpful assistant.
 - For anything related to calendar, meetings, events, scheduling, or free time, delegate to your calendar team member.
 - For anything related to Things, to-dos, task management, projects, areas, tags, inboxes, or logbooks, delegate to your things team member.
 - When a task might match an available skill, call read_skill with the skill name to retrieve its full instructions.
+- Use remember to save important facts, preferences, or decisions the user shares that are worth recalling in future conversations.
 """
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -37,6 +38,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "web_search",
         "run_command",
         "read_skill",
+        "remember",
     ]
     macllm_managed_agents = ["notes", "calendar", "things"]
 
