@@ -25,24 +25,14 @@ _tool_call_counter = {
     "things_cancel_item": 0,
 }
 
-_database_singleton = None
-
-
 def _things():
     import things
 
     return things
 
 
-def _get_database(force_refresh: bool = False):
-    global _database_singleton
-    if force_refresh or _database_singleton is None:
-        _database_singleton = _things().Database()
-    return _database_singleton
-
-
-def _refresh_database():
-    return _get_database(force_refresh=True)
+def _get_database():
+    return _things().Database()
 
 
 def _status_manager():
@@ -95,7 +85,6 @@ def _open_things_url(command: str, uuid: str | None = None, **query_parameters) 
         raise RuntimeError(f"Failed to open Things URL: {stderr}")
 
     time.sleep(0.2)
-    _refresh_database()
     return uri
 
 
@@ -212,7 +201,6 @@ def _wait_for_item(item_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]
     last_error = None
     while time.time() < deadline:
         try:
-            _refresh_database()
             return _load_item(item_id, include_items=True)
         except Exception as exc:
             last_error = exc
@@ -256,7 +244,6 @@ def _wait_for_recent_created_item(
 ) -> dict[str, Any] | None:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        _refresh_database()
         item = _find_recent_created_item(
             title=title,
             item_type=item_type,
