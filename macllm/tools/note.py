@@ -1,4 +1,4 @@
-"""Note tools: search, read, write, move, delete, and browse indexed notes."""
+"""Note tools: search, read, write, move, delete, browse, and manage folders for indexed notes."""
 
 import os
 import shutil
@@ -22,6 +22,8 @@ _tool_call_counter = {
     "note_delete": 0,
     "list_folder": 0,
     "view_folder_structure": 0,
+    "folder_create": 0,
+    "folder_delete": 0,
 }
 
 
@@ -61,6 +63,31 @@ def backup_file(filepath: str) -> str:
         backup_path = os.path.join(BACKUP_DIR, f"{base_name}-{counter}")
 
     shutil.copy2(filepath, backup_path)
+    return backup_path
+
+
+def backup_folder(folderpath: str) -> str:
+    """Copy *folderpath* (entire tree) into ``~/.macllm-backup/`` before a destructive operation.
+
+    Backup directory names follow the pattern ``YYYY-MM-DD-HH:MM <foldername>``
+    with ``-1``, ``-2``, … appended for collision avoidance.
+
+    Returns the backup path on success.
+    Raises ``OSError`` if the backup cannot be written.
+    """
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+
+    foldername = Path(folderpath).name
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H:%M")
+    base_name = f"{timestamp} {foldername}"
+    backup_path = os.path.join(BACKUP_DIR, base_name)
+
+    counter = 0
+    while os.path.exists(backup_path):
+        counter += 1
+        backup_path = os.path.join(BACKUP_DIR, f"{base_name}-{counter}")
+
+    shutil.copytree(folderpath, backup_path)
     return backup_path
 
 
@@ -379,6 +406,112 @@ def note_delete(path: str) -> str:
     except Exception as e:
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error deleting note: {e}"
+
+
+# --- folder tools ---
+
+
+@tool
+def folder_create(path: str) -> str:
+    """
+    Create a new empty folder inside an indexed directory. The parent folder must already exist.
+
+    Args:
+        path: The folder path (must be within an indexed folder).
+
+    Returns:
+        Success message with the folder path, or an error description.
+    """
+    _tool_call_counter["folder_create"] += 1
+    tool_id = f"folder_create_{_tool_call_counter['folder_create']}_{int(time.time() * 1000)}"
+    status = _status_manager()
+
+    expanded = validate_indexed_path(path)
+    if expanded is None:
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
+
+    if os.path.exists(expanded):
+        if os.path.isdir(expanded):
+            status.fail_tool_call(tool_id, "Folder exists")
+            return f"Error: Folder already exists: {expanded}"
+        status.fail_tool_call(tool_id, "Path exists as file")
+        return f"Error: Path exists but is not a folder: {expanded}"
+
+    parent = Path(expanded).parent
+    if not parent.exists():
+        status.fail_tool_call(tool_id, "Parent not found")
+        return f"Error: Parent folder does not exist: {parent}"
+
+    try:
+        os.mkdir(expanded)
+        dir_name = Path(expanded).name
+        status.complete_tool_call(tool_id, dir_name)
+        return f"Successfully created folder: {expanded}"
+    except Exception as e:
+        status.fail_tool_call(tool_id, str(e)[:30])
+        return f"Error creating folder: {e}"
+
+
+@tool
+def folder_delete(path: str) -> str:
+    """
+    Delete a folder and all of its contents. A backup of the entire folder tree is saved first.
+
+    Cannot delete a root indexed folder (only subfolders within it).
+
+    Args:
+        path: The folder path to delete (must be within an indexed folder, not the indexed root).
+
+    Returns:
+        Success message with the backup location, or an error description.
+    """
+    _tool_call_counter["folder_delete"] += 1
+    tool_id = f"folder_delete_{_tool_call_counter['folder_delete']}_{int(time.time() * 1000)}"
+    status = _status_manager()
+
+    expanded = validate_indexed_path(path)
+    if expanded is None:
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
+
+    if expanded in FileTag._indexed_directories:
+        status.fail_tool_call(tool_id, "Cannot delete root")
+        return f"Error: Cannot delete indexed root folder: {expanded}"
+
+    if not os.path.exists(expanded):
+        status.fail_tool_call(tool_id, "Folder not found")
+        return f"Error: Folder does not exist: {expanded}"
+
+    if not os.path.isdir(expanded):
+        status.fail_tool_call(tool_id, "Not a folder")
+        return f"Error: Not a folder: {expanded}. Use note_delete to remove a note file."
+
+    try:
+        backup_path = backup_folder(expanded)
+    except OSError as e:
+        status.fail_tool_call(tool_id, "Backup failed")
+        return f"Error: Could not create backup before deletion: {e}"
+
+    try:
+        prefix = expanded + os.sep
+        FileTag._index = [
+            (name, fp)
+            for name, fp in FileTag._index
+            if fp != expanded and not fp.startswith(prefix)
+        ]
+        FileTag._filepath_to_idx = {
+            fp: idx for idx, (_, fp) in enumerate(FileTag._index)
+        }
+
+        shutil.rmtree(expanded)
+
+        dir_name = Path(expanded).name
+        status.complete_tool_call(tool_id, dir_name)
+        return f"Successfully deleted folder: {expanded}\nBackup saved to: {backup_path}"
+    except Exception as e:
+        status.fail_tool_call(tool_id, str(e)[:30])
+        return f"Error deleting folder: {e}"
 
 
 # --- note browse tools ---

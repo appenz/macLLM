@@ -21,10 +21,11 @@ Tools return human-readable strings and report progress directly to `AgentStatus
 The current tool set is organized by domain:
 
 - general utilities such as time and web search
-- file tools for local notes and indexed files
+- file tools for local notes and indexed files (including `folder_create` / `folder_delete` for subfolders under indexed roots; deletes are backed up like note deletes)
 - calendar tools for scheduling and event lookup
 - Things tools for task management
 - skill tools such as `read_skill`
+- memory tools for long-term agent recall
 
 Files and calendar have deeper subsystem docs because they combine tools with additional indexing or agent structure. The rest of the tool layer is intentionally lightweight.
 
@@ -42,6 +43,7 @@ Tools are smolagents `@tool` callables exported from macllm/tools/ and reference
 - Files — Index-backed search/read and filesystem mutators scoped to agent rules (see [files.md](files.md)).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
+- Memory — `remember` appends to a daily markdown file for long-term recall.
 
 ## Side effects and status
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from macllm.tools.note import validate_indexed_path, backup_file, BACKUP_DIR
+from macllm.tools.note import validate_indexed_path, backup_file, backup_folder, BACKUP_DIR
 from macllm.tags.file_tag import FileTag
 
 
@@ -80,3 +80,37 @@ class TestBackupFile:
     def test_backup_nonexistent_raises(self, file_env):
         with pytest.raises(FileNotFoundError):
             backup_file(str(file_env / "nonexistent.md"))
+
+
+class TestBackupFolder:
+    def test_creates_backup_tree(self, file_env):
+        folder = str(file_env / "subdir")
+        backup_path = backup_folder(folder)
+
+        assert os.path.isdir(backup_path)
+        assert os.path.exists(os.path.join(backup_path, "gamma.md"))
+        assert open(os.path.join(backup_path, "gamma.md")).read() == "Gamma nested content"
+
+    def test_backup_in_correct_directory(self, file_env):
+        backup_path = backup_folder(str(file_env / "subdir"))
+        assert backup_path.startswith(BACKUP_DIR)
+
+    def test_backup_name_format(self, file_env, monkeypatch):
+        import macllm.tools.note as nu
+        test_backup = str(file_env / "backups")
+        monkeypatch.setattr(nu, "BACKUP_DIR", test_backup)
+
+        backup_path = backup_folder(str(file_env / "subdir"))
+        backup_name = Path(backup_path).name
+        assert "subdir" in backup_name
+        parts = backup_name.split(" ", 1)
+        assert len(parts) == 2
+        assert parts[1] == "subdir"
+
+    def test_collision_avoidance(self, file_env):
+        folder = str(file_env / "subdir")
+        b1 = backup_folder(folder)
+        b2 = backup_folder(folder)
+        assert b1 != b2
+        assert os.path.isdir(b1)
+        assert os.path.isdir(b2)

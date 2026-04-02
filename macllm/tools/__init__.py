@@ -10,6 +10,8 @@ from macllm.tools.note import (
     note_delete,
     list_folder,
     view_folder_structure,
+    folder_create,
+    folder_delete,
 )
 from macllm.tools.calendar import (
     cal_list_calendars,
@@ -36,6 +38,7 @@ from macllm.tools.things import (
 )
 from macllm.tools.shell import run_command
 from macllm.tools.skills import read_skill
+from macllm.tools.memory import remember
 # Note: reset_search_counter is NOT in __all__ because it's a utility function,
 # not a tool. Import it directly when needed.
 __all__ = [
@@ -50,6 +53,8 @@ __all__ = [
     "note_delete",
     "list_folder",
     "view_folder_structure",
+    "folder_create",
+    "folder_delete",
     "cal_list_calendars",
     "cal_get_events",
     "cal_find_events",
@@ -71,4 +76,5 @@ __all__ = [
     "things_cancel_item",
     "run_command",
     "read_skill",
+    "remember",
 ]

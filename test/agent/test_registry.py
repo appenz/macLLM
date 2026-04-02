@@ -70,6 +70,7 @@ class TestAgentDefinitions:
             "search_notes", "read_note", "note_create", "note_append",
             "note_modify", "note_move", "note_delete",
             "list_folder", "view_folder_structure",
+            "folder_create", "folder_delete",
         ]
         for tool_name in expected_tools:
             assert tool_name in NoteAgent.macllm_tools

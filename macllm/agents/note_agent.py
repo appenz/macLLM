@@ -2,13 +2,15 @@ from macllm.agents.base import MacLLMAgent
 
 NOTE_AGENT_INSTRUCTIONS = """\
 You are a notes management assistant.
-- You can search, read, create, append to, modify, move, and delete notes.
+- You can search, read, create, append to, modify, move, and delete notes, and create or delete folders.
 - All note operations are scoped to the user's indexed folders.
 - If you can't find a note right away, try up to 5 different search queries and then ask the user for additional information.
 - Never create a note without the user's explicit instructions.
 - If asked to append to a note that doesn't exist, report the error -- do not create it.
-- note_modify and note_delete automatically create backups. Mention the backup in your response.
+- note_modify, note_delete, and folder_delete automatically create backups. Mention the backup in your response.
 - note_move will refuse to overwrite an existing note. Suggest a different name if there is a conflict.
+- folder_create requires the parent folder to exist (create nested folders one level at a time).
+- folder_delete cannot remove a root indexed folder; only subfolders.
 - Provide the note path in your response so the user knows which note was affected.
 """
 
@@ -23,7 +25,7 @@ class NoteAgent(MacLLMAgent):
     macllm_name = "notes"
     macllm_description = (
         "Searches, reads, creates, modifies, moves, and deletes "
-        "the user's local notes."
+        "the user's local notes; creates and deletes folders within indexed roots."
     )
     macllm_tools = [
         "search_notes",
@@ -35,6 +37,8 @@ class NoteAgent(MacLLMAgent):
         "note_delete",
         "list_folder",
         "view_folder_structure",
+        "folder_create",
+        "folder_delete",
     ]
 
     def __init__(self, **kwargs):
