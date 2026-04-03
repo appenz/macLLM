@@ -6,7 +6,6 @@ NoteAgent (and DefaultAgent) against real LLM APIs.
 Run with: make test-external
 """
 
-import os
 import time
 
 import pytest
@@ -79,8 +78,9 @@ def notes_env(tmp_path):
 
 
 def _skip_if_no_gemini():
-    if not os.getenv("GEMINI_API_KEY"):
-        pytest.skip("GEMINI_API_KEY not set")
+    from macllm.core.config import get_runtime_config
+    if not get_runtime_config().api_keys.gemini:
+        pytest.skip("gemini API key not configured")
 
 
 @pytest.mark.external

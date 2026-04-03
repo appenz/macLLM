@@ -1,4 +1,3 @@
-import os
 import re
 from datetime import datetime
 
@@ -29,8 +28,9 @@ def test_get_current_time():
 
 @pytest.mark.external
 def test_agent_uses_time_tool():
-    if not os.getenv("GEMINI_API_KEY"):
-        pytest.skip("GEMINI_API_KEY not set")
+    from macllm.core.config import get_runtime_config
+    if not get_runtime_config().api_keys.gemini:
+        pytest.skip("gemini API key not configured")
 
     from macllm.macllm import MacLLM
     from macllm.agents.default import MacLLMDefaultAgent

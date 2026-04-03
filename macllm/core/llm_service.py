@@ -1,4 +1,3 @@
-import os
 import litellm
 from litellm import completion
 from smolagents.models import LiteLLMModel
@@ -30,20 +29,11 @@ MODELS = {
 }
 
 
-def _fallback_env_keys() -> dict[str, str]:
-    return {
-        "inception": os.getenv("INCEPTION_API_KEY", ""),
-        "openai": os.getenv("OPENAI_API_KEY", ""),
-        "gemini": os.getenv("GEMINI_API_KEY", ""),
-    }
-
-
 def refresh_models():
     cfg = get_runtime_config()
-    env = _fallback_env_keys()
-    inception_key = cfg.api_keys.inception or env["inception"]
-    openai_key = cfg.api_keys.openai or env["openai"]
-    gemini_key = cfg.api_keys.gemini or env["gemini"]
+    inception_key = cfg.api_keys.inception
+    openai_key = cfg.api_keys.openai
+    gemini_key = cfg.api_keys.gemini
 
     MODELS['fast'] = (
         LiteLLMModel(

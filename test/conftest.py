@@ -1,4 +1,3 @@
-import os
 import pytest
 from unittest.mock import Mock, patch
 
@@ -28,8 +27,9 @@ def app_fake(app_mocked):
 @pytest.fixture
 def app_real():
     """Fixture for external tests - calls real LLM APIs."""
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set – skipping external tests")
+    from macllm.core.config import get_runtime_config
+    if not get_runtime_config().api_keys.openai:
+        pytest.skip("openai API key not configured – skipping external tests")
     return create_macllm(debug=True)
 
 

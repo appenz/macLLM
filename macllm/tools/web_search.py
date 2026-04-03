@@ -1,4 +1,4 @@
-import os
+
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -80,11 +80,10 @@ def web_search(queries: list[str]) -> str:
     
     try:
         cfg = get_runtime_config()
-        env_brave = os.getenv("BRAVE_API_KEY")
-        api_key = cfg.api_keys.brave or env_brave
+        api_key = cfg.api_keys.brave
         if not api_key:
             raise ValueError(
-                "BRAVE_API_KEY is not set (or config.toml api_keys.brave is empty)"
+                "brave API key is not configured in config.toml"
             )
         
         if not queries:
