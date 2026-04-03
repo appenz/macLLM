@@ -32,12 +32,14 @@ def file_tag_with_files(tmp_path):
     doc3.write_text("Plain text document about databases and SQL.")
 
     tag = FileTag(DummyApp())
-    tag.on_config_tag("@IndexFiles", str(tmp_path))
+    FileTag._mount_points = {"TestNotes": str(tmp_path)}
+    FileTag._indexed_directories = [str(tmp_path)]
     FileTag.build_index()
 
     yield tag, tmp_path
 
     FileTag._index = []
+    FileTag._mount_points = {}
     FileTag._indexed_directories = []
     FileTag._embeddings = None
     FileTag._embedding_ready = threading.Event()

@@ -51,6 +51,7 @@ class FileTag(TagPlugin):
 
     # Class-level state for file index and embeddings
     _macllm = None
+    _mount_points: dict[str, str] = {}
     _index: list[tuple[str, str]] = []
     _indexed_directories: list[str] = []
     _embeddings: Optional[txtai.Embeddings] = None
@@ -67,6 +68,7 @@ class FileTag(TagPlugin):
     def __init__(self, macllm):
         super().__init__(macllm)
         FileTag._macllm = macllm
+        FileTag._mount_points = {}
         FileTag._index = []
         FileTag._indexed_directories = []
         FileTag._embeddings = None
@@ -110,6 +112,31 @@ class FileTag(TagPlugin):
         # Sort alphabetically by basename for deterministic ordering
         cls._index.sort(key=lambda t: t[0])
         cls._filepath_to_idx = {fp: idx for idx, (_, fp) in enumerate(cls._index)}
+
+    # ------------------------------------------------------------------
+    # Mount-point resolution
+    # ------------------------------------------------------------------
+    @classmethod
+    def resolve_mount_path(cls, mount_path: str) -> str | None:
+        """Resolve a mount-relative path like ``Notes/todo.md`` to an absolute path."""
+        parts = mount_path.split("/", 1)
+        mount_name = parts[0]
+        rest = parts[1] if len(parts) > 1 else ""
+
+        abs_root = cls._mount_points.get(mount_name)
+        if abs_root is None:
+            return None
+        return os.path.join(abs_root, rest) if rest else abs_root
+
+    @classmethod
+    def to_mount_path(cls, abs_path: str) -> str | None:
+        """Convert an absolute path to its mount-relative form, or ``None``."""
+        for name, root in cls._mount_points.items():
+            if abs_path == root:
+                return name
+            if abs_path.startswith(root + os.sep):
+                return name + "/" + abs_path[len(root) + 1:]
+        return None
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion

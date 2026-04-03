@@ -73,6 +73,15 @@ The agent has access to the following tools:
 | **read_note** | Reads the full content of an indexed note. |
 | **note_append** | Appends text to an existing note. |
 | **note_create** | Creates a new note with the given content. |
+| **note_modify** | Replaces the content of an existing note (with automatic backup). |
+| **note_move** | Moves or renames a note within indexed folders. |
+| **note_delete** | Deletes a note (with automatic backup). |
+| **note_resolve_path** | Resolves a mount-relative note path to its absolute filesystem path. |
+| **list_folder** | Lists notes and subfolders in a specific folder. |
+| **find_folder** | Searches for folders by name (case-insensitive substring) across all mounts. |
+| **view_folder_structure** | Shows the full folder tree of all indexed mounts. |
+| **folder_create** | Creates a new subfolder inside an indexed directory. |
+| **folder_delete** | Deletes a subfolder and its contents (with automatic backup). |
 | **get_current_time** | Returns the current date and time. |
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
@@ -81,14 +90,15 @@ Tools are called automatically by the agent. While the agent is working, the UI 
 
 macLLM can index folders of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_notes` to find relevant notes and `read_note` to read them.
 
-To set up indexing, add folders to the `index_dirs` list in `~/.config/macllm/config.toml`:
+To set up indexing, add named mount points under `[index_dirs]` in `~/.config/macllm/config.toml`:
 
 ```toml
-index_dirs = [
-  "/Users/you/Notes",
-  "/Users/you/Work/Docs",
-]
+[index_dirs]
+Notes = "~/Notes"
+Work = "~/Work/Docs"
 ```
+
+Each entry maps a logical mount name to a directory. The agent sees short mount-relative paths like `Notes/todo.md` instead of full absolute paths.
 
 This recursively indexes all `.txt` and `.md` files. The index rebuilds automatically every 5 minutes, or you can type `/reindex` to trigger it manually.
 

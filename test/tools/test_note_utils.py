@@ -8,15 +8,29 @@ import pytest
 from macllm.tools.note import validate_indexed_path, backup_file, backup_folder, BACKUP_DIR
 from macllm.tags.file_tag import FileTag
 
+from .conftest import MOUNT_NAME
+
 
 class TestValidateIndexedPath:
-    def test_valid_path_in_indexed_folder(self, file_env):
-        result = validate_indexed_path(str(file_env / "alpha.md"))
+    def test_mount_path_resolves(self, file_env):
+        result = validate_indexed_path(f"{MOUNT_NAME}/alpha.md")
         assert result == str(file_env / "alpha.md")
 
-    def test_valid_nested_path(self, file_env):
-        result = validate_indexed_path(str(file_env / "subdir" / "gamma.md"))
-        assert result is not None
+    def test_mount_path_nested(self, file_env):
+        result = validate_indexed_path(f"{MOUNT_NAME}/subdir/gamma.md")
+        assert result == str(file_env / "subdir" / "gamma.md")
+
+    def test_mount_root_resolves(self, file_env):
+        result = validate_indexed_path(MOUNT_NAME)
+        assert result == str(file_env)
+
+    def test_unknown_mount_returns_none(self, file_env):
+        result = validate_indexed_path("BadMount/file.md")
+        assert result is None
+
+    def test_absolute_path_still_works(self, file_env):
+        result = validate_indexed_path(str(file_env / "alpha.md"))
+        assert result == str(file_env / "alpha.md")
 
     def test_rejects_outside_indexed(self, file_env):
         result = validate_indexed_path("/tmp/not-indexed/file.md")
@@ -30,9 +44,11 @@ class TestValidateIndexedPath:
         FileTag._indexed_directories = [str(file_env)]
 
     def test_empty_indexed_folders(self, file_env):
+        FileTag._mount_points = {}
         FileTag._indexed_directories = []
-        result = validate_indexed_path(str(file_env / "alpha.md"))
+        result = validate_indexed_path(f"{MOUNT_NAME}/alpha.md")
         assert result is None
+        FileTag._mount_points = {MOUNT_NAME: str(file_env)}
         FileTag._indexed_directories = [str(file_env)]
 
 

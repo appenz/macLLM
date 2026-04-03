@@ -21,7 +21,7 @@ Tools return human-readable strings and report progress directly to `AgentStatus
 The current tool set is organized by domain:
 
 - general utilities such as time and web search
-- file tools for local notes and indexed files (including `folder_create` / `folder_delete` for subfolders under indexed roots; deletes are backed up like note deletes)
+- note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
 - calendar tools for scheduling and event lookup
 - Things tools for task management
 - skill tools such as `read_skill`
@@ -40,7 +40,7 @@ Tools are smolagents `@tool` callables exported from macllm/tools/ and reference
 ## Families (structural)
 
 - General — e.g. time, web search.
-- Files — Index-backed search/read and filesystem mutators scoped to agent rules (see [files.md](files.md)).
+- Files — Mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
 - Memory — `remember` appends to a daily markdown file for long-term recall.

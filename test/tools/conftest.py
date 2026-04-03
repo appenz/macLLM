@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 from macllm.tags.file_tag import FileTag
 from macllm.core.agent_status import AgentStatusManager
 
+MOUNT_NAME = "Notes"
+
 
 class DummyApp:
     """Minimal stand-in for MacLLM used by note tool tests."""
@@ -43,6 +45,7 @@ def file_env(tmp_path):
     dummy = DummyApp()
     FileTag._macllm = dummy
     MacLLM._instance = dummy
+    FileTag._mount_points = {MOUNT_NAME: str(tmp_path)}
     FileTag._indexed_directories = [str(tmp_path)]
     FileTag._index = [
         ("alpha.md", str(tmp_path / "alpha.md")),
@@ -58,6 +61,7 @@ def file_env(tmp_path):
     yield tmp_path
 
     FileTag._index = []
+    FileTag._mount_points = {}
     FileTag._indexed_directories = []
     FileTag._filepath_to_idx = {}
     FileTag._macllm = None

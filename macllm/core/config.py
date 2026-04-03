@@ -30,15 +30,16 @@ class ShellConfig:
 class MacLLMConfig:
     api_keys: ApiKeys = field(default_factory=ApiKeys)
     skills_dirs: list[str] = field(default_factory=list)
-    index_dirs: list[str] = field(default_factory=list)
+    index_dirs: dict[str, str] = field(default_factory=dict)
     memory_dir: str = ""
     shell: ShellConfig = field(default_factory=ShellConfig)
 
     def resolved_skills_dirs(self, project_root: Path | None = None) -> list[str]:
         return _resolve_paths(self.skills_dirs, project_root)
 
-    def resolved_index_dirs(self, project_root: Path | None = None) -> list[str]:
-        return _resolve_paths(self.index_dirs, project_root)
+    def resolved_index_dirs(self, project_root: Path | None = None) -> dict[str, str]:
+        resolved = _resolve_paths(list(self.index_dirs.values()), project_root)
+        return dict(zip(self.index_dirs.keys(), resolved))
 
     def resolved_memory_dir(self, project_root: Path | None = None) -> str:
         """Return the absolute memory directory path, or ``""`` if unset."""
@@ -108,6 +109,29 @@ _DEFAULT_READ_ONLY_PATHS = [
 ]
 
 
+def _parse_index_dirs(raw) -> dict[str, str]:
+    """Parse ``index_dirs`` from TOML config.
+
+    Accepts either the new dict format ``{Name = "~/path"}`` or the legacy
+    list format ``["~/path"]``.  For the list form, mount names are derived
+    from directory basenames.
+    """
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    if isinstance(raw, list):
+        result: dict[str, str] = {}
+        for entry in raw:
+            path_str = str(entry)
+            name = Path(path_str).name or path_str
+            base_name, counter = name, 1
+            while name in result:
+                counter += 1
+                name = f"{base_name}_{counter}"
+            result[name] = path_str
+        return result
+    return {}
+
+
 def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
     api = data.get("api_keys", {}) or {}
     shell_data = data.get("shell", {}) or {}
@@ -119,7 +143,7 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
             gemini=str(api.get("gemini", "") or ""),
         ),
         skills_dirs=[str(x) for x in (data.get("skills_dirs", []) or [])],
-        index_dirs=[str(x) for x in (data.get("index_dirs", []) or [])],
+        index_dirs=_parse_index_dirs(data.get("index_dirs", {}) or {}),
         memory_dir=str(data.get("memory_dir", "") or ""),
         shell=ShellConfig(
             allowed_commands=shell_data.get("allowed_commands")

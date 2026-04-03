@@ -18,9 +18,11 @@ _tool_call_counter = {
     "note_modify": 0,
     "search_notes": 0,
     "read_note": 0,
+    "note_resolve_path": 0,
     "note_move": 0,
     "note_delete": 0,
     "list_folder": 0,
+    "find_folder": 0,
     "view_folder_structure": 0,
     "folder_create": 0,
     "folder_delete": 0,
@@ -28,17 +30,26 @@ _tool_call_counter = {
 
 
 def validate_indexed_path(path: str) -> str | None:
-    """Validate that *path* is inside an indexed folder.
+    """Resolve *path* to an absolute path inside an indexed folder.
 
-    Expands ``~`` and resolves the path.  Returns the absolute path string
-    if it falls within one of ``FileTag._indexed_directories``, otherwise
-    ``None``.
+    Accepts mount-relative paths (``Notes/todo.md``) as well as absolute
+    paths for backward compatibility.  Returns the absolute path string
+    on success, ``None`` otherwise.
     """
+    resolved = FileTag.resolve_mount_path(path)
+    if resolved is not None:
+        return resolved
+
     expanded = os.path.abspath(os.path.expanduser(path))
     for indexed_dir in FileTag._indexed_directories:
         if expanded.startswith(indexed_dir + os.sep) or expanded == indexed_dir:
             return expanded
     return None
+
+
+def _display_path(abs_path: str) -> str:
+    """Return the mount-relative form of *abs_path*, falling back to the raw path."""
+    return FileTag.to_mount_path(abs_path) or abs_path
 
 
 def backup_file(filepath: str) -> str:
@@ -113,7 +124,7 @@ def note_append(path: str, text: str) -> str:
     Append text to an existing note.
 
     Args:
-        path: The note path (must be within an indexed folder).
+        path: The note path, e.g. "Notes/todo.md" (mount-name/relative-path).
         text: The text content to append to the note.
 
     Returns:
@@ -129,10 +140,12 @@ def note_append(path: str, text: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if not os.path.exists(expanded):
-        _debug_log(f"note_append: not found – {expanded}", 2)
+        _debug_log(f"note_append: not found – {display}", 2)
         status.fail_tool_call(tool_id, "Note not found")
-        return f"Error: Note does not exist: {expanded}. Use note_create to create new notes."
+        return f"Error: Note does not exist: {display}. Use note_create to create new notes."
 
     try:
         has_content = os.path.getsize(expanded) > 0
@@ -142,7 +155,7 @@ def note_append(path: str, text: str) -> str:
             f.write(text)
         filename = Path(expanded).name
         status.complete_tool_call(tool_id, filename)
-        return f"Successfully appended to: {expanded}"
+        return f"Successfully appended to: {display}"
     except Exception as e:
         _debug_log(f"note_append: write failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -155,7 +168,7 @@ def note_create(path: str, text: str) -> str:
     Create a new note with the given content. Fails if the note already exists.
 
     Args:
-        path: The note path (must be within an indexed folder). Extension .md is added if missing.
+        path: The note path, e.g. "Notes/todo.md" (mount-name/relative-path). Extension .md is added if missing.
         text: The text content to write to the new note.
 
     Returns:
@@ -174,16 +187,18 @@ def note_create(path: str, text: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if os.path.exists(expanded):
-        _debug_log(f"note_create: already exists – {expanded}", 2)
+        _debug_log(f"note_create: already exists – {display}", 2)
         status.fail_tool_call(tool_id, "Note exists")
-        return f"Error: Note already exists: {expanded}. Use note_append to add content."
+        return f"Error: Note already exists: {display}. Use note_append to add content."
 
     parent = Path(expanded).parent
     if not parent.exists():
-        _debug_log(f"note_create: folder not found – {parent}", 2)
+        _debug_log(f"note_create: folder not found – {_display_path(str(parent))}", 2)
         status.fail_tool_call(tool_id, "Folder not found")
-        return f"Error: Folder does not exist: {parent}"
+        return f"Error: Folder does not exist: {_display_path(str(parent))}"
 
     try:
         with open(expanded, "w", encoding="utf-8") as f:
@@ -192,7 +207,7 @@ def note_create(path: str, text: str) -> str:
         FileTag._index.sort(key=lambda t: t[0])
         filename = Path(expanded).name
         status.complete_tool_call(tool_id, filename)
-        return f"Successfully created: {expanded}"
+        return f"Successfully created: {display}"
     except Exception as e:
         _debug_log(f"note_create: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -205,7 +220,7 @@ def note_modify(path: str, new_content: str) -> str:
     Replace the entire content of an existing note. A backup of the original is saved automatically.
 
     Args:
-        path: The note path (must be within an indexed folder).
+        path: The note path, e.g. "Notes/todo.md" (mount-name/relative-path).
         new_content: The new content that will replace the note's current content.
 
     Returns:
@@ -221,10 +236,12 @@ def note_modify(path: str, new_content: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if not os.path.exists(expanded):
-        _debug_log(f"note_modify: not found – {expanded}", 2)
+        _debug_log(f"note_modify: not found – {display}", 2)
         status.fail_tool_call(tool_id, "Note not found")
-        return f"Error: Note does not exist: {expanded}."
+        return f"Error: Note does not exist: {display}."
 
     try:
         backup_path = backup_file(expanded)
@@ -238,7 +255,7 @@ def note_modify(path: str, new_content: str) -> str:
             f.write(new_content)
         filename = Path(expanded).name
         status.complete_tool_call(tool_id, filename)
-        return f"Successfully modified: {expanded}\nBackup saved to: {backup_path}"
+        return f"Successfully modified: {display}\nBackup saved to: {backup_path}"
     except Exception as e:
         _debug_log(f"note_modify: write failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -272,10 +289,11 @@ def search_notes(query: str) -> str:
 
         output_parts = []
         for _file_id, score, filepath, preview, truncated in results:
+            display = _display_path(filepath)
             filename = Path(filepath).name
             note_status = "(truncated)" if truncated else "(complete)"
             output_parts.append(
-                f"[{filepath}] {filename} {note_status}\n"
+                f"[{display}] {filename} {note_status}\n"
                 f"Score: {score:.3f}\n{preview}\n"
             )
 
@@ -294,7 +312,7 @@ def read_note(path: str) -> str:
     Read the full content of a note by its path.
 
     Args:
-        path: The note path (as returned by search_notes).
+        path: The note path, e.g. "Notes/todo.md" (mount-name/relative-path).
 
     Returns:
         The full content of the note (up to 10,000 characters).
@@ -309,10 +327,12 @@ def read_note(path: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if not Path(expanded).is_file():
-        _debug_log(f"read_note: not found – {expanded}", 2)
+        _debug_log(f"read_note: not found – {display}", 2)
         status.fail_tool_call(tool_id, "Note not found")
-        return f"Error: Note not found: {expanded}"
+        return f"Error: Note not found: {display}"
 
     try:
         with open(expanded, "r", encoding="utf-8") as f:
@@ -326,6 +346,32 @@ def read_note(path: str) -> str:
         return f"Error reading note: {e}"
 
 
+@tool
+def note_resolve_path(path: str) -> str:
+    """
+    Resolve a note path to its absolute filesystem path.
+
+    Args:
+        path: The note path, e.g. "Notes/todo.md" (mount-name/relative-path).
+
+    Returns:
+        The absolute filesystem path, or an error if the path is not in an indexed folder.
+    """
+    _tool_call_counter["note_resolve_path"] += 1
+    tool_id = f"note_resolve_path_{_tool_call_counter['note_resolve_path']}_{int(time.time() * 1000)}"
+    status = _status_manager()
+
+    expanded = validate_indexed_path(path)
+    if expanded is None:
+        _debug_log(f"note_resolve_path: path not indexed – {path}", 2)
+        status.fail_tool_call(tool_id, "Not in indexed folders")
+        return f"Error: Path '{path}' is not within an indexed folder."
+
+    filename = Path(expanded).name
+    status.complete_tool_call(tool_id, filename)
+    return expanded
+
+
 # --- note ops tools ---
 
 
@@ -335,8 +381,8 @@ def note_move(source_path: str, dest_path: str) -> str:
     Move or rename a note within indexed folders. Fails if the destination already exists.
 
     Args:
-        source_path: The current note path (must exist, must be in an indexed folder).
-        dest_path: The new note path (must be in an indexed folder, must not already exist).
+        source_path: The current note path, e.g. "Notes/old.md" (mount-name/relative-path).
+        dest_path: The new note path, e.g. "Notes/new.md" (mount-name/relative-path).
 
     Returns:
         Success message, or an error description.
@@ -351,10 +397,12 @@ def note_move(source_path: str, dest_path: str) -> str:
         status.fail_tool_call(tool_id, "Source not in indexed folders")
         return f"Error: Source path '{source_path}' is not within an indexed folder."
 
+    src_display = _display_path(src)
+
     if not os.path.exists(src):
-        _debug_log(f"note_move: source not found – {src}", 2)
+        _debug_log(f"note_move: source not found – {src_display}", 2)
         status.fail_tool_call(tool_id, "Source not found")
-        return f"Error: Source note does not exist: {src}"
+        return f"Error: Source note does not exist: {src_display}"
 
     dst = validate_indexed_path(dest_path)
     if dst is None:
@@ -362,16 +410,18 @@ def note_move(source_path: str, dest_path: str) -> str:
         status.fail_tool_call(tool_id, "Dest not in indexed folders")
         return f"Error: Destination path '{dest_path}' is not within an indexed folder."
 
+    dst_display = _display_path(dst)
+
     if os.path.exists(dst):
-        _debug_log(f"note_move: dest exists – {dst}", 2)
+        _debug_log(f"note_move: dest exists – {dst_display}", 2)
         status.fail_tool_call(tool_id, "Dest exists")
-        return f"Error: Destination already exists: {dst}. Will not overwrite."
+        return f"Error: Destination already exists: {dst_display}. Will not overwrite."
 
     dst_parent = Path(dst).parent
     if not dst_parent.exists():
-        _debug_log(f"note_move: dest folder not found – {dst_parent}", 2)
+        _debug_log(f"note_move: dest folder not found – {_display_path(str(dst_parent))}", 2)
         status.fail_tool_call(tool_id, "Dest folder not found")
-        return f"Error: Destination folder does not exist: {dst_parent}"
+        return f"Error: Destination folder does not exist: {_display_path(str(dst_parent))}"
 
     try:
         shutil.move(src, dst)
@@ -385,7 +435,7 @@ def note_move(source_path: str, dest_path: str) -> str:
         src_name = Path(src).name
         dst_name = Path(dst).name
         status.complete_tool_call(tool_id, f"{src_name} -> {dst_name}")
-        return f"Successfully moved: {src} -> {dst}"
+        return f"Successfully moved: {src_display} -> {dst_display}"
     except Exception as e:
         _debug_log(f"note_move: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -398,7 +448,7 @@ def note_delete(path: str) -> str:
     Delete a note. A backup is saved automatically before deletion.
 
     Args:
-        path: The note path to delete (must be within an indexed folder).
+        path: The note path to delete, e.g. "Notes/todo.md" (mount-name/relative-path).
 
     Returns:
         Success message with the backup location, or an error description.
@@ -413,10 +463,12 @@ def note_delete(path: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if not os.path.exists(expanded):
-        _debug_log(f"note_delete: not found – {expanded}", 2)
+        _debug_log(f"note_delete: not found – {display}", 2)
         status.fail_tool_call(tool_id, "Note not found")
-        return f"Error: Note does not exist: {expanded}"
+        return f"Error: Note does not exist: {display}"
 
     try:
         backup_path = backup_file(expanded)
@@ -434,7 +486,7 @@ def note_delete(path: str) -> str:
 
         filename = Path(expanded).name
         status.complete_tool_call(tool_id, filename)
-        return f"Successfully deleted: {expanded}\nBackup saved to: {backup_path}"
+        return f"Successfully deleted: {display}\nBackup saved to: {backup_path}"
     except Exception as e:
         _debug_log(f"note_delete: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -450,7 +502,7 @@ def folder_create(path: str) -> str:
     Create a new empty folder inside an indexed directory. The parent folder must already exist.
 
     Args:
-        path: The folder path (must be within an indexed folder).
+        path: The folder path, e.g. "Notes/projects" (mount-name/relative-path).
 
     Returns:
         Success message with the folder path, or an error description.
@@ -465,26 +517,28 @@ def folder_create(path: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if os.path.exists(expanded):
         if os.path.isdir(expanded):
-            _debug_log(f"folder_create: already exists – {expanded}", 2)
+            _debug_log(f"folder_create: already exists – {display}", 2)
             status.fail_tool_call(tool_id, "Folder exists")
-            return f"Error: Folder already exists: {expanded}"
-        _debug_log(f"folder_create: path is a file – {expanded}", 2)
+            return f"Error: Folder already exists: {display}"
+        _debug_log(f"folder_create: path is a file – {display}", 2)
         status.fail_tool_call(tool_id, "Path exists as file")
-        return f"Error: Path exists but is not a folder: {expanded}"
+        return f"Error: Path exists but is not a folder: {display}"
 
     parent = Path(expanded).parent
     if not parent.exists():
-        _debug_log(f"folder_create: parent not found – {parent}", 2)
+        _debug_log(f"folder_create: parent not found – {_display_path(str(parent))}", 2)
         status.fail_tool_call(tool_id, "Parent not found")
-        return f"Error: Parent folder does not exist: {parent}"
+        return f"Error: Parent folder does not exist: {_display_path(str(parent))}"
 
     try:
         os.mkdir(expanded)
         dir_name = Path(expanded).name
         status.complete_tool_call(tool_id, dir_name)
-        return f"Successfully created folder: {expanded}"
+        return f"Successfully created folder: {display}"
     except Exception as e:
         _debug_log(f"folder_create: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -496,10 +550,10 @@ def folder_delete(path: str) -> str:
     """
     Delete a folder and all of its contents. A backup of the entire folder tree is saved first.
 
-    Cannot delete a root indexed folder (only subfolders within it).
+    Cannot delete a mount-point root (only subfolders within it).
 
     Args:
-        path: The folder path to delete (must be within an indexed folder, not the indexed root).
+        path: The folder path to delete, e.g. "Notes/old-project" (mount-name/relative-path).
 
     Returns:
         Success message with the backup location, or an error description.
@@ -514,20 +568,22 @@ def folder_delete(path: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if expanded in FileTag._indexed_directories:
-        _debug_log(f"folder_delete: cannot delete root – {expanded}", 2)
+        _debug_log(f"folder_delete: cannot delete root – {display}", 2)
         status.fail_tool_call(tool_id, "Cannot delete root")
-        return f"Error: Cannot delete indexed root folder: {expanded}"
+        return f"Error: Cannot delete indexed root folder: {display}"
 
     if not os.path.exists(expanded):
-        _debug_log(f"folder_delete: not found – {expanded}", 2)
+        _debug_log(f"folder_delete: not found – {display}", 2)
         status.fail_tool_call(tool_id, "Folder not found")
-        return f"Error: Folder does not exist: {expanded}"
+        return f"Error: Folder does not exist: {display}"
 
     if not os.path.isdir(expanded):
-        _debug_log(f"folder_delete: not a folder – {expanded}", 2)
+        _debug_log(f"folder_delete: not a folder – {display}", 2)
         status.fail_tool_call(tool_id, "Not a folder")
-        return f"Error: Not a folder: {expanded}. Use note_delete to remove a note file."
+        return f"Error: Not a folder: {display}. Use note_delete to remove a note file."
 
     try:
         backup_path = backup_folder(expanded)
@@ -551,7 +607,7 @@ def folder_delete(path: str) -> str:
 
         dir_name = Path(expanded).name
         status.complete_tool_call(tool_id, dir_name)
-        return f"Successfully deleted folder: {expanded}\nBackup saved to: {backup_path}"
+        return f"Successfully deleted folder: {display}\nBackup saved to: {backup_path}"
     except Exception as e:
         _debug_log(f"folder_delete: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
@@ -586,7 +642,7 @@ def list_folder(path: str) -> str:
     List all indexed notes in a specific folder (non-recursive).
 
     Args:
-        path: The folder path to list (must be within an indexed folder).
+        path: The folder path to list, e.g. "Notes" or "Notes/projects" (mount-name/relative-path).
 
     Returns:
         A list of note names in the folder, or an error description.
@@ -601,23 +657,80 @@ def list_folder(path: str) -> str:
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
+    display = _display_path(expanded)
+
     if not os.path.isdir(expanded):
-        _debug_log(f"list_folder: not a folder – {expanded}", 2)
+        _debug_log(f"list_folder: not a folder – {display}", 2)
         status.fail_tool_call(tool_id, "Not a folder")
-        return f"Error: Not a folder: {expanded}"
+        return f"Error: Not a folder: {display}"
+
+    subdirs = []
+    try:
+        for entry in os.scandir(expanded):
+            if entry.is_dir() and not entry.name.startswith("."):
+                subdirs.append(entry.name)
+    except OSError:
+        pass
 
     files = []
+    expanded_path = Path(expanded)
     for _basename, filepath in FileTag._index:
-        if Path(filepath).parent == Path(expanded):
+        if Path(filepath).parent == expanded_path:
             files.append(Path(filepath).name)
 
-    if not files:
+    if not subdirs and not files:
         status.complete_tool_call(tool_id, "Empty")
-        return f"No indexed notes in: {expanded}"
+        return f"No indexed notes or subfolders in: {display}"
 
-    files.sort()
-    status.complete_tool_call(tool_id, f"{len(files)} notes")
-    return f"Folder: {expanded}\n\n" + "\n".join(files)
+    lines = []
+    for d in sorted(subdirs):
+        lines.append(f"{d}/")
+    for f in sorted(files):
+        lines.append(f)
+
+    status.complete_tool_call(tool_id, f"{len(subdirs)} folders, {len(files)} notes")
+    return f"Folder: {display}\n\n" + "\n".join(lines)
+
+
+@tool
+def find_folder(query: str) -> str:
+    """
+    Search for folders by name across all indexed mounts. Case-insensitive substring match.
+
+    Args:
+        query: The folder name to search for, e.g. "pitches" matches "Pitches", "Active Pitch Docs", etc.
+
+    Returns:
+        A list of matching folder paths (mount-relative), or a message if none found.
+    """
+    _tool_call_counter["find_folder"] += 1
+    tool_id = f"find_folder_{_tool_call_counter['find_folder']}_{int(time.time() * 1000)}"
+    status = _status_manager()
+    status.start_tool_call(tool_id, "find_folder", {"query": query})
+
+    query_lower = query.lower()
+    matches = []
+
+    for mount_name, root_dir in FileTag._mount_points.items():
+        if query_lower in mount_name.lower():
+            matches.append(mount_name)
+
+        for dirpath, dirnames, _ in os.walk(root_dir):
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            for d in dirnames:
+                if query_lower in d.lower():
+                    abs_path = os.path.join(dirpath, d)
+                    mount_path = FileTag.to_mount_path(abs_path)
+                    if mount_path:
+                        matches.append(mount_path)
+
+    if not matches:
+        status.complete_tool_call(tool_id, "No matches")
+        return "No matching folders found"
+
+    matches.sort()
+    status.complete_tool_call(tool_id, f"{len(matches)} found")
+    return "\n".join(matches)
 
 
 @tool
@@ -632,7 +745,7 @@ def view_folder_structure() -> str:
     tool_id = f"view_folder_structure_{_tool_call_counter['view_folder_structure']}_{int(time.time() * 1000)}"
     status = _status_manager()
 
-    if not FileTag._indexed_directories:
+    if not FileTag._mount_points:
         status.complete_tool_call(tool_id, "No folders")
         return "No folders are currently indexed."
 
@@ -645,8 +758,8 @@ def view_folder_structure() -> str:
         tree[parent].append(Path(filepath).name)
 
     lines = []
-    for root_dir in FileTag._indexed_directories:
-        lines.append(f"{root_dir}/")
+    for mount_name, root_dir in FileTag._mount_points.items():
+        lines.append(f"{mount_name}/")
         _render_subtree(lines, root_dir, tree, indent=1)
 
     status.complete_tool_call(tool_id, f"{len(FileTag._index)} notes")

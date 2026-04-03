@@ -103,11 +103,15 @@ class MacLLM:
 
     def _apply_index_dirs_from_config(self):
         from macllm.tags.file_tag import FileTag
+        FileTag._mount_points = {}
         FileTag._indexed_directories = []
-        for plugin in getattr(self, "plugins", []):
-            for d in self.config.resolved_index_dirs():
-                if hasattr(plugin, "on_config_tag"):
-                    plugin.on_config_tag("@IndexFiles", d)
+        for name, path in self.config.resolved_index_dirs().items():
+            if not os.path.isdir(path):
+                self.debug_log(f"@IndexFiles: Not a directory – {path}", 2)
+                continue
+            FileTag._mount_points[name] = path
+            if path not in FileTag._indexed_directories:
+                FileTag._indexed_directories.append(path)
 
     def __init__(self, args=None):
         MacLLM._instance = self
