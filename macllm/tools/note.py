@@ -96,6 +96,14 @@ def _status_manager():
     return MacLLM.get_status_manager()
 
 
+def _debug_log(message: str, level: int = 0) -> None:
+    from macllm.macllm import MacLLM
+
+    app = MacLLM._instance
+    if app is not None:
+        app.debug_log(message, level)
+
+
 # --- note write tools ---
 
 
@@ -117,10 +125,12 @@ def note_append(path: str, text: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"note_append: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
+        _debug_log(f"note_append: not found – {expanded}", 2)
         status.fail_tool_call(tool_id, "Note not found")
         return f"Error: Note does not exist: {expanded}. Use note_create to create new notes."
 
@@ -134,6 +144,7 @@ def note_append(path: str, text: str) -> str:
         status.complete_tool_call(tool_id, filename)
         return f"Successfully appended to: {expanded}"
     except Exception as e:
+        _debug_log(f"note_append: write failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error writing to note: {e}"
 
@@ -159,15 +170,18 @@ def note_create(path: str, text: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"note_create: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if os.path.exists(expanded):
+        _debug_log(f"note_create: already exists – {expanded}", 2)
         status.fail_tool_call(tool_id, "Note exists")
         return f"Error: Note already exists: {expanded}. Use note_append to add content."
 
     parent = Path(expanded).parent
     if not parent.exists():
+        _debug_log(f"note_create: folder not found – {parent}", 2)
         status.fail_tool_call(tool_id, "Folder not found")
         return f"Error: Folder does not exist: {parent}"
 
@@ -180,6 +194,7 @@ def note_create(path: str, text: str) -> str:
         status.complete_tool_call(tool_id, filename)
         return f"Successfully created: {expanded}"
     except Exception as e:
+        _debug_log(f"note_create: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error creating note: {e}"
 
@@ -202,16 +217,19 @@ def note_modify(path: str, new_content: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"note_modify: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
+        _debug_log(f"note_modify: not found – {expanded}", 2)
         status.fail_tool_call(tool_id, "Note not found")
         return f"Error: Note does not exist: {expanded}."
 
     try:
         backup_path = backup_file(expanded)
     except OSError as e:
+        _debug_log(f"note_modify: backup failed – {e}", 2)
         status.fail_tool_call(tool_id, "Backup failed")
         return f"Error: Could not create backup: {e}"
 
@@ -222,6 +240,7 @@ def note_modify(path: str, new_content: str) -> str:
         status.complete_tool_call(tool_id, filename)
         return f"Successfully modified: {expanded}\nBackup saved to: {backup_path}"
     except Exception as e:
+        _debug_log(f"note_modify: write failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error modifying note: {e}"
 
@@ -264,6 +283,7 @@ def search_notes(query: str) -> str:
         return "\n---\n".join(output_parts)
 
     except Exception as e:
+        _debug_log(f"search_notes: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:50])
         raise
 
@@ -285,10 +305,12 @@ def read_note(path: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"read_note: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if not Path(expanded).is_file():
+        _debug_log(f"read_note: not found – {expanded}", 2)
         status.fail_tool_call(tool_id, "Note not found")
         return f"Error: Note not found: {expanded}"
 
@@ -299,6 +321,7 @@ def read_note(path: str) -> str:
         status.complete_tool_call(tool_id, filename)
         return f"Note: {filename}\n\n{content}"
     except Exception as e:
+        _debug_log(f"read_note: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:50])
         return f"Error reading note: {e}"
 
@@ -324,24 +347,29 @@ def note_move(source_path: str, dest_path: str) -> str:
 
     src = validate_indexed_path(source_path)
     if src is None:
+        _debug_log(f"note_move: source not indexed – {source_path}", 2)
         status.fail_tool_call(tool_id, "Source not in indexed folders")
         return f"Error: Source path '{source_path}' is not within an indexed folder."
 
     if not os.path.exists(src):
+        _debug_log(f"note_move: source not found – {src}", 2)
         status.fail_tool_call(tool_id, "Source not found")
         return f"Error: Source note does not exist: {src}"
 
     dst = validate_indexed_path(dest_path)
     if dst is None:
+        _debug_log(f"note_move: dest not indexed – {dest_path}", 2)
         status.fail_tool_call(tool_id, "Dest not in indexed folders")
         return f"Error: Destination path '{dest_path}' is not within an indexed folder."
 
     if os.path.exists(dst):
+        _debug_log(f"note_move: dest exists – {dst}", 2)
         status.fail_tool_call(tool_id, "Dest exists")
         return f"Error: Destination already exists: {dst}. Will not overwrite."
 
     dst_parent = Path(dst).parent
     if not dst_parent.exists():
+        _debug_log(f"note_move: dest folder not found – {dst_parent}", 2)
         status.fail_tool_call(tool_id, "Dest folder not found")
         return f"Error: Destination folder does not exist: {dst_parent}"
 
@@ -359,6 +387,7 @@ def note_move(source_path: str, dest_path: str) -> str:
         status.complete_tool_call(tool_id, f"{src_name} -> {dst_name}")
         return f"Successfully moved: {src} -> {dst}"
     except Exception as e:
+        _debug_log(f"note_move: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error moving note: {e}"
 
@@ -380,16 +409,19 @@ def note_delete(path: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"note_delete: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.exists(expanded):
+        _debug_log(f"note_delete: not found – {expanded}", 2)
         status.fail_tool_call(tool_id, "Note not found")
         return f"Error: Note does not exist: {expanded}"
 
     try:
         backup_path = backup_file(expanded)
     except OSError as e:
+        _debug_log(f"note_delete: backup failed – {e}", 2)
         status.fail_tool_call(tool_id, "Backup failed")
         return f"Error: Could not create backup before deletion: {e}"
 
@@ -404,6 +436,7 @@ def note_delete(path: str) -> str:
         status.complete_tool_call(tool_id, filename)
         return f"Successfully deleted: {expanded}\nBackup saved to: {backup_path}"
     except Exception as e:
+        _debug_log(f"note_delete: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error deleting note: {e}"
 
@@ -428,18 +461,22 @@ def folder_create(path: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"folder_create: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if os.path.exists(expanded):
         if os.path.isdir(expanded):
+            _debug_log(f"folder_create: already exists – {expanded}", 2)
             status.fail_tool_call(tool_id, "Folder exists")
             return f"Error: Folder already exists: {expanded}"
+        _debug_log(f"folder_create: path is a file – {expanded}", 2)
         status.fail_tool_call(tool_id, "Path exists as file")
         return f"Error: Path exists but is not a folder: {expanded}"
 
     parent = Path(expanded).parent
     if not parent.exists():
+        _debug_log(f"folder_create: parent not found – {parent}", 2)
         status.fail_tool_call(tool_id, "Parent not found")
         return f"Error: Parent folder does not exist: {parent}"
 
@@ -449,6 +486,7 @@ def folder_create(path: str) -> str:
         status.complete_tool_call(tool_id, dir_name)
         return f"Successfully created folder: {expanded}"
     except Exception as e:
+        _debug_log(f"folder_create: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error creating folder: {e}"
 
@@ -472,24 +510,29 @@ def folder_delete(path: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"folder_delete: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if expanded in FileTag._indexed_directories:
+        _debug_log(f"folder_delete: cannot delete root – {expanded}", 2)
         status.fail_tool_call(tool_id, "Cannot delete root")
         return f"Error: Cannot delete indexed root folder: {expanded}"
 
     if not os.path.exists(expanded):
+        _debug_log(f"folder_delete: not found – {expanded}", 2)
         status.fail_tool_call(tool_id, "Folder not found")
         return f"Error: Folder does not exist: {expanded}"
 
     if not os.path.isdir(expanded):
+        _debug_log(f"folder_delete: not a folder – {expanded}", 2)
         status.fail_tool_call(tool_id, "Not a folder")
         return f"Error: Not a folder: {expanded}. Use note_delete to remove a note file."
 
     try:
         backup_path = backup_folder(expanded)
     except OSError as e:
+        _debug_log(f"folder_delete: backup failed – {e}", 2)
         status.fail_tool_call(tool_id, "Backup failed")
         return f"Error: Could not create backup before deletion: {e}"
 
@@ -510,6 +553,7 @@ def folder_delete(path: str) -> str:
         status.complete_tool_call(tool_id, dir_name)
         return f"Successfully deleted folder: {expanded}\nBackup saved to: {backup_path}"
     except Exception as e:
+        _debug_log(f"folder_delete: failed – {e}", 2)
         status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error deleting folder: {e}"
 
@@ -553,10 +597,12 @@ def list_folder(path: str) -> str:
 
     expanded = validate_indexed_path(path)
     if expanded is None:
+        _debug_log(f"list_folder: path not indexed – {path}", 2)
         status.fail_tool_call(tool_id, "Not in indexed folders")
         return f"Error: Path '{path}' is not within an indexed folder."
 
     if not os.path.isdir(expanded):
+        _debug_log(f"list_folder: not a folder – {expanded}", 2)
         status.fail_tool_call(tool_id, "Not a folder")
         return f"Error: Not a folder: {expanded}"
 
