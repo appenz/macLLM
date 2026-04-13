@@ -1,8 +1,10 @@
 import os
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
+from PIL import Image
 
+from macllm.core.user_request import UserRequest
 from macllm.tags.file_tag import FileTag
 
 
@@ -91,3 +93,91 @@ def test_display_string_for_directory(tmp_path):
     display = tag.display_string(suggestion)
     assert display.startswith("📁")
     assert "mydir" in display
+
+
+# ------------------------------------------------------------------
+# Image file tests
+# ------------------------------------------------------------------
+
+def _make_conversation_stub():
+    conv = Mock()
+    conv.context_history = []
+    conv.add_context = Mock(return_value="img-ctx")
+    return conv
+
+
+def test_expand_image_file(tmp_path):
+    img_path = tmp_path / "photo.png"
+    Image.new("RGB", (4, 4), color="blue").save(str(img_path))
+
+    tag = FileTag(DummyApp())
+    conv = _make_conversation_stub()
+    request = UserRequest("test")
+
+    result = tag.expand(f"@{img_path}", conv, request)
+
+    assert len(request.images) == 1
+    assert isinstance(request.images[0], Image.Image)
+    assert "[Attached image: photo.png]" in result
+    conv.add_context.assert_called_once()
+    assert conv.add_context.call_args[1].get("icon") == "🖼️"
+
+
+def test_expand_image_file_jpeg(tmp_path):
+    img_path = tmp_path / "pic.jpg"
+    Image.new("RGB", (4, 4), color="red").save(str(img_path))
+
+    tag = FileTag(DummyApp())
+    conv = _make_conversation_stub()
+    request = UserRequest("test")
+
+    result = tag.expand(f"@{img_path}", conv, request)
+
+    assert len(request.images) == 1
+    assert "[Attached image: pic.jpg]" in result
+
+
+def test_expand_text_file_not_treated_as_image(tmp_path):
+    txt_path = tmp_path / "notes.txt"
+    txt_path.write_text("hello world")
+
+    tag = FileTag(DummyApp())
+    conv = _make_conversation_stub()
+    request = UserRequest("test")
+
+    result = tag.expand(f"@{txt_path}", conv, request)
+
+    assert len(request.images) == 0
+    assert "hello world" in result
+
+
+# ------------------------------------------------------------------
+# External (real LLM) image test
+# ------------------------------------------------------------------
+
+@pytest.mark.external
+def test_file_image_real(app_real, tmp_path):
+    """Send a solid-red image to the real LLM and verify it identifies the color."""
+    import time
+
+    img_path = tmp_path / "red_square.png"
+    Image.new("RGB", (64, 64), color="red").save(str(img_path))
+
+    app_real.handle_instructions(
+        f"What color is this image? Answer with just the color name. @{img_path}"
+    )
+
+    max_wait = 20
+    waited = 0
+    while waited < max_wait:
+        if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
+            last_msg = app_real.chat_history.messages[-1]
+            if last_msg["role"] == "assistant" and last_msg["content"] != "How can I help you?":
+                assert "red" in last_msg["content"].lower(), (
+                    f"Expected 'red' in response, got: {last_msg['content']}"
+                )
+                return
+        time.sleep(0.5)
+        waited += 0.5
+
+    assert False, "Agent did not complete within timeout"

@@ -41,6 +41,7 @@ class FileTag(TagPlugin):
     # at least *MIN_CHARS* characters after the leading "@".
     MIN_CHARS = 3
     EXTENSIONS = (".txt", ".md")
+    IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".tiff", ".bmp")
     MAX_CONTEXT_LEN = 200 * 1024  # cap identical to old PathTag
     MAX_FULL_FILE_LEN = 10 * 1000
     SEARCH_PREVIEW_LEN = 1000
@@ -211,6 +212,20 @@ class FileTag(TagPlugin):
                 icon="📂",
             )
             return f"\n\n--- context:{context_name} (directory: {path_spec}) ---\nDirectory access granted.\n--- end context:{context_name} ---"
+
+        if Path(path_spec).suffix.lower() in self.IMAGE_EXTENSIONS:
+            from PIL import Image
+            try:
+                img = Image.open(path_spec)
+                img.load()
+            except Exception as exc:
+                FileTag._macllm.debug_exception(exc)
+                return tag
+            request.images.append(img)
+            context_name = conversation.add_context(
+                Path(path_spec).name, path_spec, "image", "[image]", icon="🖼️",
+            )
+            return f"\n\n[Attached image: {Path(path_spec).name}]"
 
         try:
             content = self._read_file(path_spec)

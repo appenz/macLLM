@@ -28,6 +28,13 @@ MODELS = {
     'slow': None,
 }
 
+# Explicit vision overrides for models where litellm.supports_vision()
+# can't determine capabilities (e.g. custom api_base endpoints).
+# True = force vision on, False = force vision off, absent = ask LiteLLM.
+_VISION_OVERRIDES: dict[str, bool] = {
+    'openai/mercury': False,
+}
+
 
 def refresh_models():
     cfg = get_runtime_config()
@@ -64,6 +71,24 @@ def get_model_for_speed(speed: str) -> str:
     if model_obj is None:
         return "unknown"
     return model_obj.model_id
+
+
+def model_supports_vision(speed: str = "normal") -> bool:
+    """Check whether the model for *speed* accepts image inputs.
+
+    Uses an explicit override table first (for custom-endpoint models that
+    LiteLLM doesn't know about), then falls back to ``litellm.supports_vision``.
+    """
+    model_obj = MODELS.get(speed.lower(), MODELS['normal'])
+    if model_obj is None:
+        return False
+    model_id = model_obj.model_id
+    if model_id in _VISION_OVERRIDES:
+        return _VISION_OVERRIDES[model_id]
+    try:
+        return litellm.supports_vision(model=model_id)
+    except Exception:
+        return False
 
 
 def generate(messages: list[dict], speed: str = "normal", debug_logger=None) -> tuple[str, dict]:

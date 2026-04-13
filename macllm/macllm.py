@@ -252,7 +252,11 @@ class MacLLM:
                     
                     run_kwargs = dict(max_steps=10, reset=False)
                     if request.images:
-                        run_kwargs["images"] = request.images
+                        from macllm.core.llm_service import model_supports_vision
+                        if model_supports_vision(self.chat_history.speed_level):
+                            run_kwargs["images"] = request.images
+                        else:
+                            self.debug_log("Current model does not support images; ignoring attached images", 1)
                     result = self.chat_history.agent.run(request.expanded_prompt, **run_kwargs)
                     
                     if isinstance(result, str):

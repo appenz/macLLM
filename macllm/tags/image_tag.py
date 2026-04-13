@@ -20,20 +20,20 @@ class ImageTag(TagPlugin):
         else:
             return tag  # fallback
 
-        # Read bytes and add as context
         try:
-            with open(self.tmp_image, "rb") as f:
-                img_bytes = f.read()
-        except FileNotFoundError:
+            from PIL import Image
+            img = Image.open(self.tmp_image)
+            img.load()
+        except (FileNotFoundError, Exception):
             return tag
 
+        request.images.append(img)
         conversation.add_context(
             "Screenshot",
             tag,
             "image",
-            img_bytes,
+            "[image]",
         )
-        # Return a human-readable placeholder
         return "the image"
 
     # ------------------------------------------------------------------
