@@ -54,3 +54,5 @@ def get_context_blocks_from_messages(messages: list[dict]) -> dict[str, str]:
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "external: tests that hit external services")
+    config.addinivalue_line("markers", "uitest: tests that open the macLLM UI window")
+    config.addinivalue_line("markers", "uitest_external: UI tests that call an external vision LLM")

@@ -24,12 +24,14 @@ dependencies = [
 
 
 [tool.pytest.ini_options]
-addopts = "-m 'not external and not calendar and not things'"
+addopts = "-m 'not external and not calendar and not things and not uitest and not uitest_external'"
 markers = [
     "external: tests that hit external services",
     "calendar: tests that access macOS calendar (requires permissions)",
     "things: tests that access the real Things app and database (requires Things URLs auth)",
     "sandbox: tests that exercise macOS sandbox-exec (requires macOS)",
+    "uitest: tests that open the macLLM UI window (excluded from default test run)",
+    "uitest_external: UI tests that call an external vision LLM for visual regression",
 ]
 filterwarnings = [
     "ignore::UserWarning:pydantic.*",

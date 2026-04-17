@@ -16,6 +16,8 @@ multiple choice UI.
 ### How to Test:
 - Run "make test" for the usual test suite
 - Run "make test-calendar" for calendar-specific tests
+- Run "make test-ui" for UI tests (opens a real window, drives keyboard input)
+- Run "make test-ui-external" for visual regression UI tests (requires API keys, uses vision LLM)
 - Run "make debug-render" to test rendering, it will delete the old screenshot and take a new one
 
 ### IMPORTANT: Always use `make` targets, never call tools directly

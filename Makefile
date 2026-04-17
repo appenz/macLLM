@@ -1,4 +1,4 @@
-.PHONY: run test screenshot test-llm test-calendar test-things debug-render
+.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render
 
 uv = /opt/homebrew/bin/uv
 
@@ -24,6 +24,12 @@ test-calendar:
 
 test-things:
 	$(uv) run python -m pytest -v -m things
+
+test-ui:
+	$(uv) run python -m pytest -v -m uitest
+
+test-ui-external:
+	$(uv) run python -m pytest -v -m uitest_external
 
 screenshot:
 	$(uv) run -m macllm --show-window &
