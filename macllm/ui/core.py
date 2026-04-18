@@ -65,7 +65,29 @@ class QuickWindowPanel(NSPanel):
                     self.macllm_ui.macllm.cycle_conversation(delta)
                     self.macllm_ui.update_window()
                     return True
-        return objc.super(QuickWindowPanel, self).performKeyEquivalent_(event)
+
+        handled = objc.super(QuickWindowPanel, self).performKeyEquivalent_(event)
+        if handled:
+            return True
+
+        # Borderless panels have no Edit menu, so Cmd+C / Cmd+A never reach
+        # the first responder through the normal menu-dispatch path.  Handle
+        # them here as a fallback for any NSTextView with a text selection.
+        flags = event.modifierFlags()
+        if flags & (1 << 20):  # NSCommandKeyMask
+            chars = event.charactersIgnoringModifiers()
+            if chars:
+                key = chars.lower()
+                responder = self.firstResponder()
+                if key == "c" and hasattr(responder, "selectedRange"):
+                    if responder.selectedRange().length > 0:
+                        responder.copy_(None)
+                        return True
+                if key == "a" and hasattr(responder, "selectAll_"):
+                    responder.selectAll_(None)
+                    return True
+
+        return False
 
 class AppDelegate(NSObject):
 
