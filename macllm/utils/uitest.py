@@ -18,6 +18,8 @@ from Cocoa import (
     NSKeyUp,
     NSCommandKeyMask,
     NSShiftKeyMask,
+    NSAlternateKeyMask,
+    NSControlKeyMask,
     NSPasteboard,
     NSStringPboardType,
 )
@@ -99,9 +101,67 @@ class UITestDriver:
         self._post_key_event(key.lower(), modifier_mask=NSCommandKeyMask)
         self.spin(0.05)
 
+    def new_conversation(self) -> None:
+        """Create a new conversation (equivalent to Cmd+N)."""
+        self._ui.macllm.new_conversation()
+        from macllm.ui.input_field import InputFieldHandler
+        InputFieldHandler.clear_input_field(self._ui.input_field)
+        self._ui.update_window()
+        self.spin(0.1)
+
+    def close_conversation(self, index: int) -> None:
+        """Close (delete) the conversation at *index*."""
+        self._ui.close_conversation(index)
+        self.spin(0.1)
+
+    def close_active_tab(self) -> None:
+        """Close the active conversation (equivalent to Cmd+W)."""
+        active_idx = self._ui.macllm.conversation_history.active_index
+        self._ui.close_conversation(active_idx)
+        from macllm.ui.input_field import InputFieldHandler
+        InputFieldHandler.clear_input_field(self._ui.input_field)
+        self.spin(0.1)
+
     def press_shift_key(self, name: str) -> None:
         """Press Shift+<named key> via a synthetic NSEvent."""
         self._post_key_event(name.lower(), modifier_mask=NSShiftKeyMask)
+        self.spin(0.05)
+
+    def press_option(self, name: str) -> None:
+        """Press Option+<named key> by calling the delegate with the
+        corresponding word-movement selector (Option-Left -> moveWordLeft:,
+        Option-Right -> moveWordRight:)."""
+        option_selectors = {
+            "left": "moveWordLeft:",
+            "right": "moveWordRight:",
+        }
+        selector = option_selectors.get(name.lower())
+        if selector is None:
+            raise ValueError(f"No Option+ mapping for {name!r}")
+        delegate = self._ui.window_delegate
+        delegate.textView_doCommandBySelector_(self._ui.input_field, selector)
+        self.spin(0.05)
+
+    def press_ctrl_tab(self) -> None:
+        """Simulate Ctrl+Tab to switch to the next (older) conversation tab."""
+        self._send_ctrl_tab(shift=False)
+
+    def press_ctrl_shift_tab(self) -> None:
+        """Simulate Ctrl+Shift+Tab to switch to the previous (newer) conversation tab."""
+        self._send_ctrl_tab(shift=True)
+
+    def _send_ctrl_tab(self, shift: bool) -> None:
+        """Build a synthetic Ctrl+Tab event and deliver it directly to the
+        window's performKeyEquivalent_ for test reliability."""
+        flags = NSControlKeyMask
+        if shift:
+            flags |= NSShiftKeyMask
+        window = self._ui.quick_window
+        win_num = window.windowNumber() if window else 0
+        event = NSEvent.keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode_(
+            NSKeyDown, (0, 0), flags, 0, win_num, None, "\t", "\t", False, 0x30,
+        )
+        window.performKeyEquivalent_(event)
         self.spin(0.05)
 
     def select_text(self, view, start: int, length: int) -> None:
@@ -147,6 +207,16 @@ class UITestDriver:
     def status_title(self) -> str:
         """Current menu bar status text."""
         return str(self._ui.delegate.status_item.title())
+
+    def tab_count(self) -> int:
+        """Number of tab views currently rendered in the tab bar."""
+        views = getattr(self._ui, "_tab_views", [])
+        return len(views)
+
+    def active_tab_title(self) -> str:
+        """Title of the currently active conversation."""
+        conv = self._ui.macllm.chat_history
+        return getattr(conv, "title", "New")
 
     # ------------------------------------------------------------------
     # Visual capture

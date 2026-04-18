@@ -13,6 +13,14 @@ def get_latest_path() -> Path:
     return get_storage_dir() / "latest.pkl"
 
 
+def get_conversations_path() -> Path:
+    return get_storage_dir() / "conversations.pkl"
+
+
+# ---------------------------------------------------------------------------
+# Single-conversation persistence (kept for backward compat / migration)
+# ---------------------------------------------------------------------------
+
 def save_conversation(conversation) -> bool:
     if conversation.agent is None:
         return False
@@ -39,7 +47,6 @@ def load_conversation(conversation) -> bool:
         with open(path, 'rb') as f:
             data = pickle.load(f)
         if isinstance(data, dict):
-            # Restore agent class from saved name (old pickles default to "default")
             agent_name = data.get('agent_name', 'default')
             try:
                 from macllm.agents import get_agent_class
@@ -66,3 +73,96 @@ def clear_conversation() -> bool:
         except Exception:
             return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Multi-conversation persistence
+# ---------------------------------------------------------------------------
+
+def _serialize_conversation(conversation) -> dict | None:
+    """Serialize a single Conversation to a plain dict."""
+    if conversation.agent is None:
+        return None
+    try:
+        return {
+            'steps': conversation.agent.memory.steps,
+            'messages': conversation.messages,
+            'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
+            'title': getattr(conversation, 'title', 'New'),
+        }
+    except Exception:
+        return None
+
+
+def save_all_conversations(conversation_history) -> bool:
+    """Persist every conversation in *conversation_history* to disk."""
+    try:
+        entries = []
+        for conv in conversation_history.conversations:
+            entry = _serialize_conversation(conv)
+            if entry is not None:
+                entries.append(entry)
+        data = {
+            'conversations': entries,
+            'active_index': conversation_history.active_index,
+        }
+        with open(get_conversations_path(), 'wb') as f:
+            pickle.dump(data, f)
+        return True
+    except Exception:
+        return False
+
+
+def load_all_conversations(conversation_history) -> bool:
+    """Restore conversations from disk into *conversation_history*.
+
+    Falls back to migrating the legacy single-conversation file if the
+    multi-conversation file doesn't exist yet.
+    """
+    from macllm.core.chat_history import Conversation
+
+    path = get_conversations_path()
+
+    # Migration path: legacy latest.pkl -> single conversation
+    if not path.exists():
+        legacy = get_latest_path()
+        if not legacy.exists():
+            return False
+        conv = conversation_history.get_current_conversation()
+        if conv is None:
+            conv = conversation_history.add_conversation()
+        ok = load_conversation(conv)
+        if ok:
+            conv.title = "Restored"
+        return ok
+
+    try:
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+
+        entries = data.get('conversations', [])
+        if not entries:
+            return False
+
+        conversation_history.conversations.clear()
+        conversation_history.active_index = -1
+
+        for entry in entries:
+            conv = Conversation()
+            agent_name = entry.get('agent_name', 'default')
+            try:
+                from macllm.agents import get_agent_class
+                conv.agent_cls = get_agent_class(agent_name)
+                conv._create_agent()
+            except KeyError:
+                pass
+            conv.agent.memory.steps = entry.get('steps', [])
+            conv.messages = entry.get('messages', [])
+            conv.title = entry.get('title', 'New')
+            conversation_history.conversations.append(conv)
+
+        saved_index = data.get('active_index', len(entries) - 1)
+        conversation_history.active_index = max(0, min(saved_index, len(entries) - 1))
+        return True
+    except Exception:
+        return False

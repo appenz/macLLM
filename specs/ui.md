@@ -72,6 +72,35 @@ It shows:
 
 Long-running agent activity is not shown in the top bar. It is rendered in the conversation view by `MainTextHandler`, using structured state from `AgentStatusManager`.
 
+## Tab Bar
+
+The tab bar is a horizontal strip between the top bar and the main text area. It displays conversation tabs for switching between recent conversations.
+
+`TabBarHandler` in `macllm/ui/tab_bar.py` renders the strip. It is called from `MacLLMUI.update_window()` on every layout pass.
+
+### Tab Selection Logic
+
+By default, the tab bar shows the last 5 conversations with the newest on the left. If the active conversation is older and falls outside this window, the bar centers on the active conversation with up to 2 tabs on each side.
+
+### Visual Style
+
+Tabs are Chrome-style rounded pills inside the strip:
+
+- the active tab has a white fill with dark text (prominent)
+- inactive tabs have a medium grey fill with subdued text (dimmer)
+- titles are center-aligned and truncated to fit
+
+### Keyboard Navigation
+
+- **Option-Left** cycles to an older conversation
+- **Option-Right** cycles to a newer conversation
+
+These shortcuts only fire when the input field is empty. When text is present, the default word-jump behavior is preserved.
+
+### Click Handling
+
+Each tab is a `_ClickableTab` (NSView subclass) that calls `MacLLMUI.switch_conversation(index)` on `mouseDown`. Switching is blocked while an agent is running.
+
 ## History Browsing
 
 History browsing is a separate interaction mode layered on top of the conversation view.
@@ -86,6 +115,7 @@ The UI uses:
 
 - a fixed-width quick-entry window
 - a top bar
+- a conversation tab bar
 - a scrollable main text area
 - a multi-line input area
 

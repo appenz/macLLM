@@ -28,10 +28,10 @@ def test_escape_closes_window(ui):
 
 @pytest.mark.uitest
 def test_window_initial_state(ui):
-    """Window opens with empty input and a welcome message."""
+    """Window opens with empty input and an empty conversation area."""
     assert ui.window_open()
     assert ui.input_text() == ""
-    assert "How can I help you?" in ui.conversation_text()
+    assert ui.conversation_text().strip() == ""
 
 
 @pytest.mark.uitest

@@ -16,7 +16,7 @@ from macllm.ui import MacLLMUI  # noqa: F401
 from macllm.core.user_request import UserRequest
 from macllm.core.chat_history import ConversationHistory
 from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug, refresh_models
-from macllm.core.memory import save_conversation, load_conversation
+from macllm.core.memory import save_conversation, load_conversation, save_all_conversations, load_all_conversations
 from macllm.core.agent_status import AgentStatusManager
 from macllm.core.config import load_runtime_config
 from macllm.core.skills import SkillsRegistry
@@ -132,12 +132,15 @@ class MacLLM:
         
         # Initialize conversation history (multiple conversations)
         self.conversation_history = ConversationHistory()
-        self.chat_history = self.conversation_history.get_current_conversation() or self.conversation_history.add_conversation()
-        self.chat_history.ui_update_callback = self._update_ui_from_callback
-
         self.ephemeral = bool(getattr(self.args, 'query', None))
         if not self.ephemeral:
-            load_conversation(self.chat_history)
+            loaded = load_all_conversations(self.conversation_history)
+            if not loaded:
+                self.conversation_history.add_conversation()
+        else:
+            self.conversation_history.add_conversation()
+        self.chat_history = self.conversation_history.get_current_conversation()
+        self.chat_history.ui_update_callback = self._update_ui_from_callback
         
         # Initialize metadata for UI display (default speed is Normal)
         self.llm_metadata = {'provider': 'OpenAI', 'model': get_model_for_speed('normal'), 'input_tokens': 0, 'output_tokens': 0}
@@ -146,6 +149,67 @@ class MacLLM:
     def is_agent_running(self):
         """Check if an agent is currently executing."""
         return self._agent_thread is not None and self._agent_thread.is_alive()
+
+    def switch_to_conversation(self, index: int) -> bool:
+        """Switch the active conversation by index. No-op while an agent is running."""
+        if self.is_agent_running():
+            return False
+        if not self.ephemeral:
+            save_all_conversations(self.conversation_history)
+        if not self.conversation_history.set_active(index):
+            return False
+        self.chat_history = self.conversation_history.get_current_conversation()
+        self.chat_history.ui_update_callback = self._update_ui_from_callback
+        speed = getattr(self.chat_history, 'speed_level', 'normal') or 'normal'
+        self.llm_metadata['model'] = get_model_for_speed(speed)
+        self.llm_metadata['input_tokens'] = 0
+        self.llm_metadata['output_tokens'] = 0
+        return True
+
+    def new_conversation(self):
+        """Create a new conversation, make it active, and save the old one."""
+        if self.is_agent_running():
+            return
+        if not self.ephemeral:
+            save_all_conversations(self.conversation_history)
+        conv = self.conversation_history.add_conversation()
+        self.chat_history = conv
+        self.chat_history.ui_update_callback = self._update_ui_from_callback
+        self.llm_metadata['model'] = get_model_for_speed('normal')
+        self.llm_metadata['input_tokens'] = 0
+        self.llm_metadata['output_tokens'] = 0
+        self._update_ui_from_callback()
+
+    def cycle_conversation(self, delta: int):
+        """Cycle through conversations by *delta* (+1 = newer, -1 = older)."""
+        if self.is_agent_running():
+            return
+        if self.conversation_history.cycle(delta):
+            if not self.ephemeral:
+                save_all_conversations(self.conversation_history)
+            self.chat_history = self.conversation_history.get_current_conversation()
+            self.chat_history.ui_update_callback = self._update_ui_from_callback
+            speed = getattr(self.chat_history, 'speed_level', 'normal') or 'normal'
+            self.llm_metadata['model'] = get_model_for_speed(speed)
+            self.llm_metadata['input_tokens'] = 0
+            self.llm_metadata['output_tokens'] = 0
+            self._update_ui_from_callback()
+
+    def delete_conversation(self, index: int):
+        """Remove the conversation at *index* and switch to the new active one."""
+        if self.is_agent_running():
+            return
+        if not self.conversation_history.remove_conversation(index):
+            return
+        self.chat_history = self.conversation_history.get_current_conversation()
+        self.chat_history.ui_update_callback = self._update_ui_from_callback
+        speed = getattr(self.chat_history, 'speed_level', 'normal') or 'normal'
+        self.llm_metadata['model'] = get_model_for_speed(speed)
+        self.llm_metadata['input_tokens'] = 0
+        self.llm_metadata['output_tokens'] = 0
+        if not self.ephemeral:
+            save_all_conversations(self.conversation_history)
+        self._update_ui_from_callback()
 
     def abort_agent(self):
         """Signal the running agent to abort after the current step completes.
@@ -185,7 +249,44 @@ class MacLLM:
             self.debug_exception(summary_error)
             self.chat_history.add_assistant_message("[Interrupted]")
         if not self.ephemeral:
-            save_conversation(self.chat_history)
+            save_all_conversations(self.conversation_history)
+
+    def _maybe_generate_title(self):
+        """Generate a short title for the conversation after the first exchange.
+
+        Uses :func:`llm_service.generate` which passes the correct API key
+        for the conversation's speed level.
+        """
+        conv = self.chat_history
+        if conv.title != "New Agent":
+            return
+        user_msgs = [m for m in conv.messages if m["role"] == "user"]
+        asst_msgs = [m for m in conv.messages if m["role"] == "assistant"]
+        if len(user_msgs) != 1 or len(asst_msgs) != 1:
+            return
+        try:
+            from macllm.core.llm_service import generate
+            user_text = user_msgs[0]["content"][:200]
+            asst_text = asst_msgs[0]["content"][:200]
+            prompt = (
+                "Generate a 2-3 word title for this conversation. "
+                "Reply with ONLY the title, nothing else.\n\n"
+                f"User: {user_text}\n"
+                f"Assistant: {asst_text}"
+            )
+            speed = getattr(conv, 'speed_level', 'normal') or 'normal'
+            title_text, _ = generate(
+                messages=[{"role": "user", "content": prompt}],
+                speed=speed,
+            )
+            title = title_text.strip().strip('"').strip("'")
+            if title:
+                conv.title = title[:30]
+                if not self.ephemeral:
+                    save_all_conversations(self.conversation_history)
+                self._update_ui_from_callback()
+        except Exception as e:
+            self.debug_log(f"Title generation failed: {e}", 0)
 
     def handle_instructions(self, user_input):
         self.req = self.req+1
@@ -207,7 +308,7 @@ class MacLLM:
                 self.chat_history.add_assistant_message(summary)
                 self._update_ui_from_callback()
                 if not self.ephemeral:
-                    save_conversation(self.chat_history)
+                    save_all_conversations(self.conversation_history)
                 return None
 
             # Step 1: expand slash skill invocations.
@@ -268,7 +369,10 @@ class MacLLM:
                         self.chat_history.add_assistant_message("Error: No output from agent")
                     
                     if not self.ephemeral:
-                        save_conversation(self.chat_history)
+                        save_all_conversations(self.conversation_history)
+
+                    self._maybe_generate_title()
+
                     self.status_manager.reset()
                     
                     self.debug_log(f'Output: {result}\n')
@@ -279,7 +383,7 @@ class MacLLM:
                         self.debug_exception(e)
                         self.chat_history.add_assistant_message(f"Error: {str(e)}")
                         if not self.ephemeral:
-                            save_conversation(self.chat_history)
+                            save_all_conversations(self.conversation_history)
                     self.status_manager.reset()
                 finally:
                     self._agent_thread = None

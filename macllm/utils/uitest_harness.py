@@ -45,8 +45,14 @@ def ui(_macllm_app, tmp_path):
         app.ui.update_window()
         driver.spin(0.3)
 
-    # Reset conversation and input for a clean slate
-    app.chat_history.reset(clear_persisted=False)
+    # Reset conversation history to a single fresh conversation
+    from macllm.core.chat_history import Conversation
+    app.conversation_history.conversations.clear()
+    app.conversation_history.active_index = -1
+    app.conversation_history.add_conversation()
+    app.chat_history = app.conversation_history.get_current_conversation()
+    app.chat_history.ui_update_callback = app._update_ui_from_callback
+
     from macllm.ui.input_field import InputFieldHandler
     InputFieldHandler.clear_input_field(app.ui.input_field)
     InputFieldHandler.focus_input_field(app.ui.input_field)

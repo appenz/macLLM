@@ -1,5 +1,11 @@
 # MacLLM Overview
 
+**INPORTANT:** 
+Before writing any code or making architecture decisions, read:
+1. This Overview spec
+2. Any relevant specs in the `specs/` folder.
+3. If you are writing tests, any relevant spec in the `test/specs` folder
+
 MacLLM is a macOS-native LLM assistant written in Python with a Cocoa UI through PyObjC.
 The application is organized around an agent runtime, a plugin-based request expansion layer,
 and a small set of domain tools for file, web, skill, and calendar work.
@@ -100,5 +106,3 @@ The current model IDs are configured in code, not in TOML.
 
 Run and test the project through `make` targets. The repository includes targets for normal
 execution, local tests, external-model tests, calendar-specific tests, and render/debug workflows.
-
-Additional subsystem details live in the `specs/` folder.

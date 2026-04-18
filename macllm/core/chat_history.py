@@ -7,6 +7,7 @@ class Conversation:
         self.agent = None
         self.agent_cls = None  # set lazily in reset() or by caller
         self.ui_update_callback = None
+        self.title = "New Agent"
         self.reset()
     
     def add_user_message(self, content: str) -> None:
@@ -105,10 +106,9 @@ class Conversation:
         self.context_history = []
         self.granted_dirs: list[str] = []
         self.speed_level = "normal"
+        self.title = "New Agent"
 
         self._get_agent_cls()
-        
-        self.add_assistant_message("How can I help you?")
         
         if self.agent is not None:
             self.agent.memory.steps = []
@@ -143,16 +143,49 @@ class Conversation:
 class ConversationHistory:
     def __init__(self):
         self.conversations = []
+        self.active_index = -1
 
     def add_conversation(self, conversation=None):
-        """Add a new Conversation object and make it the current conversation. Optionally accept an existing Conversation."""
+        """Add a new Conversation object and make it the current (active) conversation."""
         if conversation is None:
             conversation = Conversation()
         self.conversations.append(conversation)
+        self.active_index = len(self.conversations) - 1
         return conversation
 
     def get_current_conversation(self):
-        """Return the most recent Conversation object, or None if none exists."""
-        if self.conversations:
-            return self.conversations[-1]
+        """Return the active Conversation object, or None if none exists."""
+        if self.conversations and 0 <= self.active_index < len(self.conversations):
+            return self.conversations[self.active_index]
         return None
+
+    def set_active(self, index: int) -> bool:
+        """Switch the active conversation by index. Returns True on success."""
+        if 0 <= index < len(self.conversations):
+            self.active_index = index
+            return True
+        return False
+
+    def cycle(self, delta: int) -> bool:
+        """Move active index by delta (clamped to bounds). Returns True if changed."""
+        if not self.conversations:
+            return False
+        new_index = max(0, min(len(self.conversations) - 1, self.active_index + delta))
+        if new_index == self.active_index:
+            return False
+        self.active_index = new_index
+        return True
+
+    def remove_conversation(self, index: int) -> bool:
+        """Remove conversation at *index*, ensuring at least one always exists."""
+        if index < 0 or index >= len(self.conversations):
+            return False
+        self.conversations.pop(index)
+        if not self.conversations:
+            self.add_conversation()
+            return True
+        if index < self.active_index:
+            self.active_index -= 1
+        elif index == self.active_index:
+            self.active_index = min(self.active_index, len(self.conversations) - 1)
+        return True

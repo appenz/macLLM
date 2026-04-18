@@ -212,6 +212,7 @@ Both `/` and `@` use an autocomplete popup:
 ## Conversations and History
 
 - macLLM maintains a full conversation history in the main text area.
+- Conversation tabs at the top of the window show recent conversations; click a tab or press **Option-Left** / **Option-Right** to switch.
 - Context attached via tags persists for the current conversation.
 - **⌘N** starts a new conversation and clears context.
 - Press **⬆** when the cursor is on the first line to browse previous messages.

@@ -22,6 +22,7 @@ from Cocoa import NSMutableAttributedString
 
 from macllm.ui.main_text import MainTextHandler
 from macllm.ui.top_bar import TopBarHandler
+from macllm.ui.tab_bar import TabBarHandler
 from macllm.ui.history_browse import HistoryBrowseDelegate
 from macllm.ui.input_field import InputFieldHandler
 
@@ -46,11 +47,25 @@ _ui_updater = _UIUpdater.alloc().init()
 # key window and main window
 
 class QuickWindowPanel(NSPanel):
+    macllm_ui = None
+
     def canBecomeKeyWindow(self):
         return True
-    
+
     def canBecomeMainWindow(self):
         return True
+
+    def performKeyEquivalent_(self, event):
+        if event.keyCode() == 0x30:  # Tab key
+            flags = event.modifierFlags()
+            if flags & (1 << 18):  # NSControlKeyMask
+                if self.macllm_ui and self.macllm_ui.macllm:
+                    shift = flags & (1 << 17)  # NSShiftKeyMask
+                    delta = 1 if shift else -1
+                    self.macllm_ui.macllm.cycle_conversation(delta)
+                    self.macllm_ui.update_window()
+                    return True
+        return objc.super(QuickWindowPanel, self).performKeyEquivalent_(event)
 
 class AppDelegate(NSObject):
 
@@ -146,6 +161,7 @@ class MacLLMUI:
     # Layout of the window - updated to match specification
     padding = 4
     top_bar_height = 48  # Updated to match new specification
+    tab_bar_height = 24  # Conversation tab strip
     text_area_width = 640   # Width for 80 characters
     input_field_height = 90  # 5 lines visible
     input_field_width = text_area_width
@@ -323,31 +339,44 @@ class MacLLMUI:
         textbox_x_fudge = 3
         textbox_y_fudge = 3
         top_bar_height = MacLLMUI.top_bar_height
+        tab_bar_height = MacLLMUI.tab_bar_height
         entry_height = MacLLMUI.input_field_height
-        # There are 4 paddings: top, between top bar and main, between main and entry, bottom
+        # 4 paddings: top, top-bar/tab-bar, main/entry, bottom
+        # (tab bar sits directly on top of main area with no gap)
         total_padding = padding * 4
-        
-        # Calculate optimal main area height based on minimum text height
-        # Add some padding for the text container and scroll view
-        text_container_padding = text_corner_radius * 2  # Padding inside the container
-        optimal_main_area_height = minimum_text_height + text_container_padding
-        
-        # Calculate total window height needed
-        total_ui_height = top_bar_height + optimal_main_area_height + entry_height + total_padding + padding_internal_fudge*2
-        
-        # Use the smaller of: optimal height or max window height
-        window_height = min(total_ui_height, max_window_height)
-        main_area_height = window_height - (top_bar_height + entry_height + total_padding + padding_internal_fudge*2)
+
+        conv_has_messages = bool(
+            self.macllm.chat_history.get_displayable_messages()
+        )
+
+        if conv_has_messages:
+            # Calculate optimal main area height based on minimum text height
+            text_container_padding = text_corner_radius * 2
+            optimal_main_area_height = minimum_text_height + text_container_padding
+
+            total_ui_height = top_bar_height + tab_bar_height + optimal_main_area_height + entry_height + total_padding + padding_internal_fudge
+            window_height = min(total_ui_height, max_window_height)
+            main_area_height = window_height - (top_bar_height + tab_bar_height + entry_height + total_padding + padding_internal_fudge)
+        else:
+            # Tab bar sits flush on top of the input field when empty
+            main_area_height = 0
+            window_height = top_bar_height + tab_bar_height + entry_height + padding * 3
 
         # --- Y COORDINATES ---
         # Y=0 is at the bottom
         input_field_y = padding
-        main_area_y = input_field_y + entry_height + padding + padding_internal_fudge
-        top_bar_y = window_height - padding - top_bar_height
+        if conv_has_messages:
+            main_area_y = input_field_y + entry_height + padding + padding_internal_fudge
+            tab_bar_y = main_area_y + main_area_height
+        else:
+            main_area_y = 0  # unused when hidden
+            tab_bar_y = input_field_y + entry_height
+        top_bar_y = tab_bar_y + tab_bar_height + padding
 
         if self.quick_window is None:
             new_window = True
             win = QuickWindowPanel.alloc()
+            win.macllm_ui = self
             self.quick_window = win
 
             # Position window in center of screen
@@ -392,6 +421,8 @@ class MacLLMUI:
         # ----- Top bar with dark grey container, icon, context area, and text field -----
         TopBarHandler.create_or_update_top_bar(self, box, top_bar_y)
 
+        # ----- Tab bar for conversation switching -----
+        TabBarHandler.create_or_update_tab_bar(self, box, tab_bar_y)
 
         # ----- Main conversation area (middle section) as a scrollable NSTextView with rounded corners -------------------
 
@@ -411,6 +442,13 @@ class MacLLMUI:
             # Update existing text container and scroll view frames
             text_container.setFrame_(((MacLLMUI.text_area_x, main_area_y),
                                      (MacLLMUI.text_area_width, main_area_height)))
+            # The active tab pill extends below the tab bar into the text
+            # area region. Re-add text_container so it stays on top in the
+            # sibling z-order and covers the pill overflow.
+            text_container.removeFromSuperview()
+            box.addSubview_(text_container)
+
+        text_container.setHidden_(not conv_has_messages)
 
         if new_window:
             scroll_view = NSScrollView.alloc().initWithFrame_(
@@ -498,6 +536,10 @@ class MacLLMUI:
             # Update existing input field position
             InputFieldHandler.update_input_field_position(
                 self.input_container, self.input_field, (0, input_field_y), self)
+            # Re-add input container so it stays above the tab bar's active
+            # pill overflow in the sibling z-order.
+            self.input_container.removeFromSuperview()
+            box.addSubview_(self.input_container)
 
         if new_window:
             # Move the window to the front and activate it
@@ -692,6 +734,27 @@ class MacLLMUI:
                     (start, length),
                 )
             self.text_area.scrollRangeToVisible_((start, length))
+
+    # ------------------------------------------------------------------
+    # Conversation tab switching
+    # ------------------------------------------------------------------
+    def switch_conversation(self, index):
+        """Switch to the conversation at *index* and refresh the UI."""
+        if self.macllm.is_agent_running():
+            return
+        self.macllm.switch_to_conversation(index)
+        if hasattr(self, "input_field"):
+            InputFieldHandler.clear_input_field(self.input_field)
+        self.update_window()
+
+    def close_conversation(self, index):
+        """Delete the conversation at *index* and refresh the UI."""
+        if self.macllm.is_agent_running():
+            return
+        self.macllm.delete_conversation(index)
+        if hasattr(self, "input_field"):
+            InputFieldHandler.clear_input_field(self.input_field)
+        self.update_window()
 
     # ------------------------------------------------------------------
     # Existing methods

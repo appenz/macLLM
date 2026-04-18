@@ -107,8 +107,16 @@ class InputFieldDelegate(NSObject):
                                 self.text_view.insertText_(clipboard_content)
                         return True
                     if key == 'n':
-                        self.macllm_ui.macllm.chat_history.reset(clear_persisted=True)
+                        self.macllm_ui.macllm.new_conversation()
+                        from macllm.ui.input_field import InputFieldHandler
+                        InputFieldHandler.clear_input_field(self.text_view)
                         self.macllm_ui.update_window()
+                        return True
+                    if key == 'w':
+                        active_idx = self.macllm_ui.macllm.conversation_history.active_index
+                        self.macllm_ui.close_conversation(active_idx)
+                        from macllm.ui.input_field import InputFieldHandler
+                        InputFieldHandler.clear_input_field(self.text_view)
                         return True
                 return False
 
@@ -152,6 +160,8 @@ class InputFieldDelegate(NSObject):
                 
             else:
                 # --- Normal mode, the autocomplete popup is not visible ---------
+                # Tab switching (Ctrl+Tab / Ctrl+Shift+Tab) is handled at the
+                # window level in QuickWindowPanel.performKeyEquivalent_.
                 if commandSelector == 'moveUp:':
                     if self._caret_on_first_line():
                         self.macllm_ui.begin_history_browsing()

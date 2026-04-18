@@ -16,7 +16,7 @@ def test_url_tag_real(app_real):
     while waited < max_wait:
         if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
             last_msg = app_real.chat_history.messages[-1]
-            if last_msg['role'] == 'assistant' and last_msg['content'] != "How can I help you?":
+            if last_msg['role'] == 'assistant':
                 lower = last_msg['content'].lower()
                 assert "vmware" in lower
                 assert "intel" in lower
