@@ -746,6 +746,8 @@ class MacLLMUI:
         if hasattr(self, "input_field"):
             InputFieldHandler.clear_input_field(self.input_field)
         self.update_window()
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
 
     def close_conversation(self, index):
         """Delete the conversation at *index* and refresh the UI."""
@@ -755,6 +757,8 @@ class MacLLMUI:
         if hasattr(self, "input_field"):
             InputFieldHandler.clear_input_field(self.input_field)
         self.update_window()
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
 
     # ------------------------------------------------------------------
     # Existing methods

@@ -111,6 +111,7 @@ class InputFieldDelegate(NSObject):
                         from macllm.ui.input_field import InputFieldHandler
                         InputFieldHandler.clear_input_field(self.text_view)
                         self.macllm_ui.update_window()
+                        InputFieldHandler.focus_input_field(self.macllm_ui.input_field)
                         return True
                     if key == 'w':
                         active_idx = self.macllm_ui.macllm.conversation_history.active_index
