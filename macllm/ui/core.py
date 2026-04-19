@@ -574,6 +574,12 @@ class MacLLMUI:
             # Just refresh the window display for resize
             win.needsDisplay = True
             win.display()
+            # Restore first-responder after removeFromSuperview/re-add
+            # cycles that macOS silently resigned.
+            if self.browsing_history and hasattr(self, 'text_area'):
+                win.makeFirstResponder_(self.text_area)
+            elif hasattr(self, 'input_field'):
+                InputFieldHandler.focus_input_field(self.input_field)
 
     def update_top_bar_text(self):
         if not hasattr(self, "top_bar_text_view"):
