@@ -10,7 +10,7 @@ The agent layer adds:
 - managed-agent delegation for domain-specific work
 - a shared base class for model, tool, and prompt wiring
 - a thin factory used by conversation state
-- status and token callbacks integrated with the UI
+- token callbacks integrated with per-conversation metadata
 
 ## Managed Agents
 
@@ -24,8 +24,8 @@ The parent lists subagents in `macllm_managed_agents`. The base class resolves t
 instantiates the subagents, and passes them to smolagents as `managed_agents`.
 
 At runtime, a parent agent delegates by sending a natural-language task to the managed agent.
-The subagent runs its own tool loop and returns a report. Delegation is also surfaced to
-`AgentStatusManager`, so the UI can show nested subagent activity.
+The subagent runs its own tool loop and returns a report. Delegation is recorded in
+`agent.memory.steps` as `TaskStep` entries, which the UI can render.
 
 ### Registry and Factory
 
@@ -51,16 +51,26 @@ Its architectural contract is:
 - planning and token accounting are reported through shared callbacks
 - managed-agent composition is declared by name, not by direct object wiring
 
-Prompt behavior is split between prompt templates and custom instructions. Planning status is reported
-through `create_step_callback()`. Tool execution status is reported by tools themselves rather than being
-inferred from smolagents action events.
+Prompt behavior is split between prompt templates and custom instructions. Token accounting is reported
+through `create_step_callback()`, which updates `conversation.llm_metadata`. Tool execution progress
+is recorded by smolagents in `agent.memory.steps` and rendered by the UI from there.
+
+## Threading Model
+
+Each conversation runs its agent on its own background thread. Multiple conversations can have
+agents running simultaneously. The agent thread is set up with a thread-local conversation
+context so that tools and step callbacks automatically route to the correct conversation.
+
+Agents themselves are not aware of multi-threading. They run the same smolagents tool-calling
+loop as before. See `specs/parallel_tabs.md` for the full threading design.
 
 ## Current Agent Topology
 
-- `default`: main top-level assistant; uses local prompt templates; delegates to `files` and `calendar`
-- `smolagent`: alternate top-level assistant; uses smolagents default templates; delegates to `files`
-- `files`: specialist for indexed files and notes
+- `default`: main top-level assistant; uses local prompt templates; delegates to `notes`, `calendar`, and `things`
+- `smolagent`: alternate top-level assistant; uses smolagents default templates; delegates to `notes`
+- `notes`: specialist for indexed files and notes
 - `calendar`: specialist for calendar and scheduling work
+- `things`: specialist for Things task management
 
 ## Agent Selection API
 

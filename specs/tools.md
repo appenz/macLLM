@@ -14,7 +14,7 @@ The main design choice is that tools are the operational boundary of the agent s
 - tools perform the concrete work
 - tool names are the stable contract between agent configuration and implementation
 
-Tools return human-readable strings and report progress directly to `AgentStatusManager`.
+Tools return human-readable strings. Tool execution progress is recorded by smolagents in `agent.memory.steps` and rendered by the UI from there. Tools do not report status directly.
 
 ## Tool Families
 
@@ -45,9 +45,13 @@ Tools are smolagents `@tool` callables exported from macllm/tools/ and reference
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
 - Memory — `remember` appends to a daily markdown file for long-term recall.
 
-## Side effects and status
+## Threading and conversation context
 
-Tools may report progress via `AgentStatusManager` (`start` / `complete` / `fail`). Long-running tools typically pair start and end; fast tools may complete without a prior start.
+Tools run on agent background threads. They access the current conversation through `get_current_conversation()` from `macllm/core/context.py`, which uses a thread-local to route to the correct conversation. Tools are completely unaware of multi-threading — they call the same functions regardless of how many agents are running.
+
+## Side effects
+
+Tools that need user approval (e.g., `run_command`) set `conversation.pending_approval` and block until the user decides. This is the only point where a tool blocks on user interaction. See `specs/shell.md` and `specs/parallel_tabs.md` for the approval flow.
 
 ## Boundaries
 

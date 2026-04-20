@@ -29,16 +29,27 @@ At a high level, a request moves through these stages:
 6. The original prompt is stored in the conversation for UI/history.
 7. The expanded prompt is sent to a smolagents-based agent.
 8. The agent calls tools and managed subagents as needed.
-9. `AgentStatusManager` tracks the current plan and tool progress for live UI display.
+9. Tool progress is tracked in `agent.memory.steps` and rendered by the UI.
 10. The final assistant response is appended to the conversation and persisted.
 
 ## Key Objects
 
-- `MacLLM`: application coordinator. Owns runtime config, UI, current conversation state, plugin instances, agent status, and model metadata. Main entry point: `handle_instructions(user_input)`.
-- `Conversation`: active chat session. Stores UI/history messages, context pill state, speed, selected agent class, and the live agent instance. Recreates agents via `_create_agent()`.
-- `ConversationHistory`: container for `Conversation` objects. The most recent conversation is the active one.
+- `MacLLM`: application coordinator. Owns runtime config, UI, conversation history, and plugin instances. Main entry point: `handle_instructions(user_input)`. Does not own per-run agent state; that lives on each `Conversation`.
+- `Conversation`: a chat session with its own agent runtime. Stores UI/history messages, context pills, speed, agent class, live agent instance, agent thread, abort event, token metadata, pending approval, and query queue. Recreates agents via `_create_agent()`.
+- `ConversationHistory`: container for `Conversation` objects. Tracks which conversation is active via `active_index`.
 - `UserRequest`: ephemeral per-request object. Tracks the original prompt, expanded prompt, attached images, selected speed, and selected agent. Handles token scanning and plugin dispatch via `process_tags()`.
-- `AgentStatusManager`: live execution state for an agent run, including current plan, tool calls, and managed-agent nesting. The UI reads it to render the status block.
+
+## Parallel Tab Execution
+
+Multiple conversations can run agents simultaneously. Each conversation owns its own agent thread,
+abort event, token metadata, and pending approval state. The application coordinator (`MacLLM`) no
+longer holds per-run state; it delegates to the active conversation.
+
+Tools are isolated from threading via a thread-local conversation context. They call the same
+lookup functions as before; routing to the correct conversation happens underneath.
+
+The UI is a pure renderer of conversation state. The only signal from agent to UI is a generic
+repaint callback. See `specs/parallel_tabs.md` for the full design.
 
 ## Subsystems
 

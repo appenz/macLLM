@@ -42,7 +42,7 @@ When the agent calls `run_command`, the tool:
 
 ### Approval Flow
 
-The approval prompt renders inline in the agent status area (not a popup).
+The tool sets `conversation.pending_approval` (accessed via thread-local context) and blocks on `pending_approval.event.wait()`. The UI renders the approval prompt inline in the conversation view.
 It shows the full command, highlights the unrecognized executables, and offers three keyboard-driven options:
 
 - **[R]un once** — execute this command but don't remember the executable

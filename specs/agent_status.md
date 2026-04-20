@@ -1,94 +1,46 @@
-# Agent Status
+# Agent Status Display
 
 ## Overview
 
-During agent execution, macLLM shows a live status block in the conversation view.
+During agent execution, macLLM shows live progress in the conversation view.
 
-The status system has two goals:
+The display has two goals:
 
-- show the current plan produced by the agent
 - show the progress of tool calls and managed-agent delegation
+- show pending shell approval requests that need user action
 
-The status model is intentionally simple. It tracks only user-visible execution state, not the
-full internal smolagents trace.
+## Data Source
 
-## Architecture
+All progress data comes from `agent.memory.steps` on the conversation's agent instance.
 
-`AgentStatusManager` in `macllm/core/agent_status.py` is the central status object.
+smolagents records each step as a dataclass in the step list:
 
-It stores:
+- `PlanningStep`: the agent produced a plan (not currently displayed)
+- `ActionStep`: the agent called a tool. Contains `tool_calls` (name, arguments, id), `observations` (tool output), `error` (if failed), and `is_final_answer`
+- `TaskStep`: the agent delegated to a managed subagent
 
-- `plan`: the current extracted plan text
-- `tool_calls`: an ordered log of tool and managed-agent activity
+The UI renders these directly. There is no intermediate status manager object.
 
-Each tool-call entry is represented by `ToolCallEntry`, which captures:
+### Determining tool state from ActionStep
 
-- stable call identity
-- display name
-- summarized arguments
-- running / success / error state
-- optional result or error summary
-- indentation level for nested managed-agent activity
+- `tool_calls` populated, `observations` is None, `error` is None → tool is currently running
+- `observations` is not None → tool completed successfully
+- `error` is not None → tool failed
 
-The manager is owned by `MacLLM` and updated during a single agent run, then reset before the next run.
+### Pending approval
 
-## Status Sources
+Shell approval state lives on `Conversation.pending_approval` (a transient `PendingApproval` dataclass, not persisted). When a tool sets this field and calls `request_update()`, the UI renders the approval widget as the last item in the conversation view. Once the user decides, the field is cleared.
 
-Status comes from two different sources.
+## Rendering
 
-Planning status comes from the smolagents step callback in `macllm/core/agent_service.py`.
-`create_step_callback()` extracts the current plan from `PlanningStep` and forwards it to
-`AgentStatusManager.set_plan()`.
+`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list and pending approval to render:
 
-Execution status comes from tools and managed agents.
+- a `Steps` section with status markers (running, success, error) for each tool call
+- nested indentation for managed-agent delegation (from `TaskStep` entries)
+- an inline approval prompt when `conversation.pending_approval` is set
 
-- tools call `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()` directly
-- managed-agent delegation is reported by `MacLLMAgent.__call__()` through `enter_managed_agent()` and `exit_managed_agent()`
+## Previous Architecture
 
-This split is a key design decision: plan text comes from agent planning events, but tool progress does not.
-Tool progress is owned by the tool implementations themselves.
+The previous `AgentStatusManager` class has been removed. It used to track plan text, tool call entries, and pending approvals as a separate object owned by `MacLLM`. Tools reported their own progress by calling `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()`.
 
-## Managed-Agent Nesting
-
-Managed-agent delegation is represented as part of the same status stream as normal tool calls.
-
-When a parent agent delegates work:
-
-- the status manager inserts a running entry for the managed agent
-- nested tool calls are indented under that managed agent
-- the managed-agent entry is marked complete when control returns
-
-This allows one unified status block in the UI instead of separate views for top-level and delegated work.
-
-## Rendering Model
-
-The status manager exposes a text `render()` method, but the conversation UI does not display that raw text directly.
-
-`MainTextHandler._render_agent_status()` in `macllm/ui/main_text.py` reads the structured state and renders:
-
-- a `Plan` section when `plan` is present
-- a `Steps` section when `tool_calls` is non-empty
-- nested indentation for managed-agent activity
-- visual status markers for running, success, and error states
-
-The UI therefore depends on the structured fields of `AgentStatusManager`, not just on the output of `render()`.
-
-## API Surface
-
-The architectural API of `AgentStatusManager` is:
-
-- `set_plan(plan)`
-- `enter_managed_agent(name, task)`
-- `exit_managed_agent(name)`
-- `start_tool_call(id, name, args)`
-- `complete_tool_call(id, result="")`
-- `fail_tool_call(id, error)`
-- `reset()`
-
-All mutating methods notify the UI through the manager's `ui_update_callback`.
-
-## Design Notes
-
-- The status system is global to the active `MacLLM` instance, not per tool or per UI component.
-- Instant tools can skip `start_tool_call()` and still appear as successful entries when `complete_tool_call()` is called.
-- Error display is intentionally summarized rather than storing full exception traces.
+This was replaced by rendering directly from `agent.memory.steps`, which smolagents already maintains as part of its execution loop. This eliminates a redundant layer and makes the conversation the sole data source for the UI. See `specs/parallel_tabs.md` for context.
