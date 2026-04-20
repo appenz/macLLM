@@ -13,26 +13,33 @@ and a small set of domain tools for file, web, skill, and calendar work.
 
 This document is the architectural entry point for the codebase.
 
+## Key Concept
+
+MacLLM is structured as a number of conversations , each rendered by the UI in a tab. 
+
+- The `UI` is a passive renderer for the `conversation`:
+  - The `UI` reads the `conversation` object and renders it via Cocoa
+  - The `UI` passes user requests to the `agent` via the a queue in the `conversation`
+  - `Tools` that need approval for actions, add an approval request to the `conversation`
+- Each `conversation` has exactly one supervising `agent` 
+  - It can invoke `tools`
+  - It can call `subagents`
+
+Each agents is a separate thread. The UI is a separate thread as well.
+
 ## Main Runtime Flow
 
 At a high level, the flow is as follows:
 
-1. The Cocoa UI shows one or more conversations. The user submits a query via the UI, which calls `conversation.submit(query)`.
-2. If the conversation's agent is already running, the query is enqueued and processed after the current run finishes.
+1. The user submits a query via the UI, which queues it via `conversation.submit(query)`.
+2. The `conversation` checks its queue, and fetches the new `query`
 3. Leading slash skill invocations are expanded by `SkillsRegistry`.
 4. A `UserRequest` scans the prompt for `@...` and `/...` tokens and dispatches them to tag plugins. All slash commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
-5. Plugins may:
-  - add context
-  - select an agent
-  - set the speed tier
-  - attach images
-  - execute side effects (e.g. reload config, rebuild file index)
-  - rewrite or remove tokens in the expanded prompt
-6. The original prompt is stored in the conversation for UI/history.
-7. If the expanded prompt is non-empty, the agent runs on a background thread.
-8. The agent calls tools and managed subagents as needed.
-9. Tool progress is tracked in `agent.memory.steps` and rendered by the UI.
-10. The final assistant response is appended to the conversation and persisted.
+5. The original prompt is stored in the conversation for UI/history.
+6. If the expanded prompt is non-empty, it is passed to the supervising agent of the conversation
+7. The agent calls tools and managed subagents as needed.
+8. Tool progress is tracked in `agent.memory.steps` and rendered by the UI.
+9. The final assistant response is appended to the conversation and persisted.
 
 ## Key Objects
 
