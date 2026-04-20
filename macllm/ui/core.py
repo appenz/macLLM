@@ -201,10 +201,7 @@ class MacLLMUI:
     text_area_x = padding + fudge
     input_field_x = padding + fudge
 
-    # Define colors for the status icon
-    status_ready    = "🟢 LLM"
-    status_working  = "🟡 LLM"
-    status_aborting = "🔴 LLM"
+    status_ready = "LLM"
 
     # Colors
     white = NSColor.whiteColor()
@@ -299,25 +296,20 @@ class MacLLMUI:
     # This is called when the user presses Return in the pop-up window
 
     def handle_user_input(self, text):
-        if self.macllm.is_agent_running():
-            self.macllm.abort_agent()
-            self.delegate.status_item.setTitle_(MacLLMUI.status_aborting)
+        conv = self.macllm.chat_history
+        if conv.is_agent_running():
+            conv.abort()
             self.update_window()
             return
         if text == "":
             return
-        # Send the text to the LLM
-        result = self.macllm.handle_instructions(text)
-        # Resize window to fit new content (this also updates the text area)
+        conv.submit(text)
         self.update_window()
-        # Clear the input field for the next message
         InputFieldHandler.clear_input_field(self.input_field)
 
     def set_status_indicator(self, working: bool):
-        """Update the menu bar status indicator."""
-        if self.delegate and hasattr(self.delegate, 'status_item'):
-            title = MacLLMUI.status_working if working else MacLLMUI.status_ready
-            self.delegate.status_item.setTitle_(title)
+        """No-op — status indicator removed in favour of static label."""
+        pass
 
     def schedule_quit(self, screenshot_path: str | None = None):
         """Schedule optional screenshot + app termination after the query finishes.
@@ -585,9 +577,11 @@ class MacLLMUI:
         if not hasattr(self, "top_bar_text_view"):
             return
 
-        metadata = getattr(self.macllm, 'llm_metadata', {'provider': 'Unknown', 'model': 'unknown', 'input_tokens': 0, 'output_tokens': 0})
-        provider = metadata.get('provider', 'Unknown')
-        model = metadata.get('model', 'unknown')
+        from macllm.core.llm_service import get_model_for_speed
+        conv = self.macllm.chat_history
+        metadata = getattr(conv, 'llm_metadata', {'input_tokens': 0, 'output_tokens': 0})
+        speed = getattr(conv, 'speed_level', 'normal') or 'normal'
+        model = get_model_for_speed(speed)
         input_tokens = metadata.get('input_tokens', 0)
         output_tokens = metadata.get('output_tokens', 0)
 
@@ -766,21 +760,39 @@ class MacLLMUI:
     # ------------------------------------------------------------------
     # Conversation tab switching
     # ------------------------------------------------------------------
+    def _save_input_to_conversation(self):
+        """Persist the current input field text onto the active conversation."""
+        if hasattr(self, 'window_delegate') and self.window_delegate and hasattr(self, 'input_field'):
+            try:
+                text = self.window_delegate._plain_text_from_view(strip_ends=False)
+            except Exception:
+                text = self.input_field.string() if hasattr(self.input_field, 'string') else ""
+            self.macllm.chat_history.saved_input_text = text
+
+    def _restore_input_from_conversation(self):
+        """Restore the input field text from the now-active conversation."""
+        if hasattr(self, 'input_field'):
+            text = self.macllm.chat_history.saved_input_text or ""
+            self.input_field.setString_(text)
+            if text and hasattr(self, 'window_delegate'):
+                try:
+                    self.window_delegate._rebuild_buffer_with_pills()
+                except Exception:
+                    pass
+
     def switch_conversation(self, index):
         """Switch to the conversation at *index* and refresh the UI."""
-        if self.macllm.is_agent_running():
-            return
+        self._save_input_to_conversation()
         self.macllm.switch_to_conversation(index)
         if hasattr(self, "input_field"):
             InputFieldHandler.clear_input_field(self.input_field)
         self.update_window()
+        self._restore_input_from_conversation()
         if hasattr(self, "input_field"):
             InputFieldHandler.focus_input_field(self.input_field)
 
     def close_conversation(self, index):
         """Delete the conversation at *index* and refresh the UI."""
-        if self.macllm.is_agent_running():
-            return
         self.macllm.delete_conversation(index)
         if hasattr(self, "input_field"):
             InputFieldHandler.clear_input_field(self.input_field)

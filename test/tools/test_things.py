@@ -11,8 +11,6 @@ import uuid
 
 import pytest
 
-from macllm.core.agent_status import AgentStatusManager
-
 TEST_PREFIX = f"__macllm_things_test_{uuid.uuid4().hex[:8]}"
 
 
@@ -21,9 +19,6 @@ class DummyApp:
         debug = False
 
     args = _Args()
-
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
 
     def debug_log(self, *a, **kw):
         pass

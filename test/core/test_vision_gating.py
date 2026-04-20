@@ -61,7 +61,7 @@ class TestVisionGatingInHandleInstructions:
             "macllm.core.llm_service.model_supports_vision", lambda speed: False
         )
 
-        app_mocked.handle_instructions("Describe @clipboard")
+        app_mocked.chat_history.submit("Describe @clipboard")
         time.sleep(0.2)
 
         assert len(captured_kwargs) > 0
@@ -88,7 +88,7 @@ class TestVisionGatingInHandleInstructions:
             "macllm.core.llm_service.model_supports_vision", lambda speed: True
         )
 
-        app_mocked.handle_instructions("Describe @clipboard")
+        app_mocked.chat_history.submit("Describe @clipboard")
         time.sleep(0.2)
 
         assert len(captured_kwargs) > 0

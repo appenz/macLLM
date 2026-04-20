@@ -9,22 +9,6 @@ from typing import Any
 
 from smolagents import tool
 
-_tool_call_counter = {
-    "things_list_areas": 0,
-    "things_list_projects": 0,
-    "things_list_tags": 0,
-    "things_list_todos": 0,
-    "things_search": 0,
-    "things_get_item": 0,
-    "things_show_item": 0,
-    "things_create_todo": 0,
-    "things_create_project": 0,
-    "things_update_todo": 0,
-    "things_update_project": 0,
-    "things_complete_item": 0,
-    "things_cancel_item": 0,
-}
-
 def _things():
     import things
 
@@ -33,17 +17,6 @@ def _things():
 
 def _get_database():
     return _things().Database()
-
-
-def _status_manager():
-    from macllm.macllm import MacLLM
-
-    return MacLLM.get_status_manager()
-
-
-def _make_tool_id(name: str) -> str:
-    _tool_call_counter[name] += 1
-    return f"{name}_{_tool_call_counter[name]}_{int(time.time() * 1000)}"
 
 
 def _strip(value: str) -> str:
@@ -396,17 +369,8 @@ def things_list_areas() -> str:
     Returns:
         A formatted list of areas and their IDs.
     """
-    tool_id = _make_tool_id("things_list_areas")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "things_list_areas", {})
-    try:
-        items = _things().areas(database=_get_database())
-        result = _format_items(items, "No Things areas found.")
-        status.complete_tool_call(tool_id, f"{len(items)} areas")
-        return result
-    except Exception as exc:
-        status.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    items = _things().areas(database=_get_database())
+    return _format_items(items, "No Things areas found.")
 
 
 @tool
@@ -421,22 +385,13 @@ def things_list_projects(area: str = "", include_completed: bool = False) -> str
     Returns:
         A formatted list of projects and their IDs.
     """
-    tool_id = _make_tool_id("things_list_projects")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "things_list_projects", {"area": area})
-    try:
-        area_id = _resolve_area_id(area)
-        items = _things().projects(
-            area=area_id,
-            status=None if include_completed else "incomplete",
-            database=_get_database(),
-        )
-        result = _format_items(items, "No Things projects found.")
-        status.complete_tool_call(tool_id, f"{len(items)} projects")
-        return result
-    except Exception as exc:
-        status.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    area_id = _resolve_area_id(area)
+    items = _things().projects(
+        area=area_id,
+        status=None if include_completed else "incomplete",
+        database=_get_database(),
+    )
+    return _format_items(items, "No Things projects found.")
 
 
 @tool
@@ -447,17 +402,8 @@ def things_list_tags() -> str:
     Returns:
         A formatted list of tags.
     """
-    tool_id = _make_tool_id("things_list_tags")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "things_list_tags", {})
-    try:
-        items = _things().tags(database=_get_database())
-        result = _format_items(items, "No Things tags found.")
-        status.complete_tool_call(tool_id, f"{len(items)} tags")
-        return result
-    except Exception as exc:
-        status.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    items = _things().tags(database=_get_database())
+    return _format_items(items, "No Things tags found.")
 
 
 @tool
@@ -483,27 +429,18 @@ def things_list_todos(
     Returns:
         A formatted list of to-dos.
     """
-    tool_id = _make_tool_id("things_list_todos")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_list_todos", {"bucket": bucket or "all"})
-    try:
-        area_id = _resolve_area_id(area)
-        project_id = _resolve_project_id(project)
-        items = _bucket_items(
-            bucket,
-            area=area_id,
-            project=project_id,
-            tag=_strip(tag) or None,
-            status=_normalize_status(status),
-            include_items=include_checklist,
-            database=_get_database(),
-        )
-        result = _format_items(items, "No Things to-dos found.")
-        status_mgr.complete_tool_call(tool_id, f"{len(items)} todos")
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    area_id = _resolve_area_id(area)
+    project_id = _resolve_project_id(project)
+    items = _bucket_items(
+        bucket,
+        area=area_id,
+        project=project_id,
+        tag=_strip(tag) or None,
+        status=_normalize_status(status),
+        include_items=include_checklist,
+        database=_get_database(),
+    )
+    return _format_items(items, "No Things to-dos found.")
 
 
 @tool
@@ -519,23 +456,14 @@ def things_search(query: str, status: str = "", limit: int = 25) -> str:
     Returns:
         A formatted list of matching Things items.
     """
-    tool_id = _make_tool_id("things_search")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_search", {"query": query})
-    try:
-        matches = _things().search(
-            _strip(query),
-            status=_normalize_status(status),
-            trashed=False,
-            database=_get_database(),
-        )
-        matches = matches[:limit]
-        result = _format_items(matches, f"No Things items found matching '{query}'.")
-        status_mgr.complete_tool_call(tool_id, f"{len(matches)} matches")
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    matches = _things().search(
+        _strip(query),
+        status=_normalize_status(status),
+        trashed=False,
+        database=_get_database(),
+    )
+    matches = matches[:limit]
+    return _format_items(matches, f"No Things items found matching '{query}'.")
 
 
 @tool
@@ -550,17 +478,8 @@ def things_get_item(item_id: str, include_items: bool = True) -> str:
     Returns:
         The formatted item details.
     """
-    tool_id = _make_tool_id("things_get_item")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_get_item", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=include_items)
-        result = _format_item(item)
-        status_mgr.complete_tool_call(tool_id, item.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    item = _load_item(_strip(item_id), include_items=include_items)
+    return _format_item(item)
 
 
 @tool
@@ -574,18 +493,9 @@ def things_show_item(item_id: str) -> str:
     Returns:
         The formatted item details after revealing it in Things.
     """
-    tool_id = _make_tool_id("things_show_item")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_show_item", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=True)
-        _open_things_url("show", uuid=item["uuid"])
-        result = "Opened in Things:\n\n" + _format_item(item)
-        status_mgr.complete_tool_call(tool_id, item.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    item = _load_item(_strip(item_id), include_items=True)
+    _open_things_url("show", uuid=item["uuid"])
+    return "Opened in Things:\n\n" + _format_item(item)
 
 
 @tool
@@ -621,54 +531,43 @@ def things_create_todo(
     Returns:
         The created to-do details including its ID when it can be resolved.
     """
-    tool_id = _make_tool_id("things_create_todo")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_create_todo", {"title": title})
-    try:
-        title = _strip(title)
-        if not title:
-            raise ValueError("A Things to-do title is required.")
+    title = _strip(title)
+    if not title:
+        raise ValueError("A Things to-do title is required.")
 
-        resolved_list_id = _resolve_project_or_area_id(list_id, list_name)
-        resolved_heading_id = _resolve_heading_id(resolved_list_id, heading_id, heading)
-        created_after = datetime.now().replace(microsecond=0)
+    resolved_list_id = _resolve_project_or_area_id(list_id, list_name)
+    resolved_heading_id = _resolve_heading_id(resolved_list_id, heading_id, heading)
+    created_after = datetime.now().replace(microsecond=0)
 
-        params: dict[str, Any] = {
-            "title": title,
-            "creation-date": _now_utc_iso(),
-        }
-        _set_if_present(params, "when", when)
-        _set_if_present(params, "deadline", deadline)
-        _set_if_present(params, "notes", notes)
-        _set_if_present(params, "tags", tags)
-        _set_if_present(params, "checklist-items", checklist_items)
-        if resolved_list_id:
-            params["list-id"] = resolved_list_id
-        if resolved_heading_id:
-            params["heading-id"] = resolved_heading_id
-        if reveal:
-            params["reveal"] = True
+    params: dict[str, Any] = {
+        "title": title,
+        "creation-date": _now_utc_iso(),
+    }
+    _set_if_present(params, "when", when)
+    _set_if_present(params, "deadline", deadline)
+    _set_if_present(params, "notes", notes)
+    _set_if_present(params, "tags", tags)
+    _set_if_present(params, "checklist-items", checklist_items)
+    if resolved_list_id:
+        params["list-id"] = resolved_list_id
+    if resolved_heading_id:
+        params["heading-id"] = resolved_heading_id
+    if reveal:
+        params["reveal"] = True
 
-        _open_things_url("add", **params)
-        item = _wait_for_recent_created_item(
-            title=title,
-            item_type="to-do",
-            created_after=created_after,
-            list_id=resolved_list_id,
+    _open_things_url("add", **params)
+    item = _wait_for_recent_created_item(
+        title=title,
+        item_type="to-do",
+        created_after=created_after,
+        list_id=resolved_list_id,
+    )
+    if item is None:
+        return (
+            "To-do created in Things, but the new item could not be resolved from the database yet."
         )
-        if item is None:
-            result = (
-                "To-do created in Things, but the new item could not be resolved from the database yet."
-            )
-            status_mgr.complete_tool_call(tool_id, title[:30])
-            return result
 
-        result = "To-do created:\n\n" + _format_item(item)
-        status_mgr.complete_tool_call(tool_id, title[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    return "To-do created:\n\n" + _format_item(item)
 
 
 @tool
@@ -700,51 +599,40 @@ def things_create_project(
     Returns:
         The created project details including its ID when it can be resolved.
     """
-    tool_id = _make_tool_id("things_create_project")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_create_project", {"title": title})
-    try:
-        title = _strip(title)
-        if not title:
-            raise ValueError("A Things project title is required.")
+    title = _strip(title)
+    if not title:
+        raise ValueError("A Things project title is required.")
 
-        resolved_area_id = _resolve_area_id(area_id or area)
-        created_after = datetime.now().replace(microsecond=0)
+    resolved_area_id = _resolve_area_id(area_id or area)
+    created_after = datetime.now().replace(microsecond=0)
 
-        params: dict[str, Any] = {
-            "title": title,
-            "creation-date": _now_utc_iso(),
-        }
-        _set_if_present(params, "when", when)
-        _set_if_present(params, "deadline", deadline)
-        _set_if_present(params, "notes", notes)
-        _set_if_present(params, "tags", tags)
-        _set_if_present(params, "to-dos", todos)
-        if resolved_area_id:
-            params["area-id"] = resolved_area_id
-        if reveal:
-            params["reveal"] = True
+    params: dict[str, Any] = {
+        "title": title,
+        "creation-date": _now_utc_iso(),
+    }
+    _set_if_present(params, "when", when)
+    _set_if_present(params, "deadline", deadline)
+    _set_if_present(params, "notes", notes)
+    _set_if_present(params, "tags", tags)
+    _set_if_present(params, "to-dos", todos)
+    if resolved_area_id:
+        params["area-id"] = resolved_area_id
+    if reveal:
+        params["reveal"] = True
 
-        _open_things_url("add-project", **params)
-        item = _wait_for_recent_created_item(
-            title=title,
-            item_type="project",
-            created_after=created_after,
-            area_id=resolved_area_id,
+    _open_things_url("add-project", **params)
+    item = _wait_for_recent_created_item(
+        title=title,
+        item_type="project",
+        created_after=created_after,
+        area_id=resolved_area_id,
+    )
+    if item is None:
+        return (
+            "Project created in Things, but the new item could not be resolved from the database yet."
         )
-        if item is None:
-            result = (
-                "Project created in Things, but the new item could not be resolved from the database yet."
-            )
-            status_mgr.complete_tool_call(tool_id, title[:30])
-            return result
 
-        result = "Project created:\n\n" + _format_item(item)
-        status_mgr.complete_tool_call(tool_id, title[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    return "Project created:\n\n" + _format_item(item)
 
 
 @tool
@@ -792,47 +680,38 @@ def things_update_todo(
     Returns:
         The updated to-do details.
     """
-    tool_id = _make_tool_id("things_update_todo")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_update_todo", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=True)
-        if item.get("type") != "to-do":
-            raise ValueError("things_update_todo only works on Things to-dos.")
+    item = _load_item(_strip(item_id), include_items=True)
+    if item.get("type") != "to-do":
+        raise ValueError("things_update_todo only works on Things to-dos.")
 
-        resolved_list_id = _resolve_project_or_area_id(list_id, list_name)
-        heading_project_id = resolved_list_id or item.get("project")
-        resolved_heading_id = _resolve_heading_id(heading_project_id, heading_id, heading)
+    resolved_list_id = _resolve_project_or_area_id(list_id, list_name)
+    heading_project_id = resolved_list_id or item.get("project")
+    resolved_heading_id = _resolve_heading_id(heading_project_id, heading_id, heading)
 
-        params: dict[str, Any] = {}
-        _set_if_present(params, "title", title)
-        _set_if_present_or_clear(params, "when", when)
-        _set_if_present_or_clear(params, "deadline", deadline)
-        _set_if_present_or_clear(params, "notes", notes)
-        _set_if_present(params, "append-notes", append_notes)
-        _set_if_present(params, "prepend-notes", prepend_notes)
-        _set_if_present_or_clear(params, "tags", tags)
-        _set_if_present(params, "add-tags", add_tags)
-        _set_if_present_or_clear(params, "checklist-items", checklist_items)
-        _set_if_present(params, "append-checklist-items", append_checklist_items)
-        _set_if_present(params, "prepend-checklist-items", prepend_checklist_items)
-        if resolved_list_id:
-            params["list-id"] = resolved_list_id
-        if resolved_heading_id:
-            params["heading-id"] = resolved_heading_id
-        if reveal:
-            params["reveal"] = True
-        if not params:
-            raise ValueError("No Things to-do fields were provided to update.")
+    params: dict[str, Any] = {}
+    _set_if_present(params, "title", title)
+    _set_if_present_or_clear(params, "when", when)
+    _set_if_present_or_clear(params, "deadline", deadline)
+    _set_if_present_or_clear(params, "notes", notes)
+    _set_if_present(params, "append-notes", append_notes)
+    _set_if_present(params, "prepend-notes", prepend_notes)
+    _set_if_present_or_clear(params, "tags", tags)
+    _set_if_present(params, "add-tags", add_tags)
+    _set_if_present_or_clear(params, "checklist-items", checklist_items)
+    _set_if_present(params, "append-checklist-items", append_checklist_items)
+    _set_if_present(params, "prepend-checklist-items", prepend_checklist_items)
+    if resolved_list_id:
+        params["list-id"] = resolved_list_id
+    if resolved_heading_id:
+        params["heading-id"] = resolved_heading_id
+    if reveal:
+        params["reveal"] = True
+    if not params:
+        raise ValueError("No Things to-do fields were provided to update.")
 
-        _open_things_url("update", uuid=item["uuid"], **params)
-        updated = _wait_for_item(item["uuid"])
-        result = "To-do updated:\n\n" + _format_item(updated)
-        status_mgr.complete_tool_call(tool_id, updated.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    _open_things_url("update", uuid=item["uuid"], **params)
+    updated = _wait_for_item(item["uuid"])
+    return "To-do updated:\n\n" + _format_item(updated)
 
 
 @tool
@@ -870,39 +749,30 @@ def things_update_project(
     Returns:
         The updated project details.
     """
-    tool_id = _make_tool_id("things_update_project")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_update_project", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=True)
-        if item.get("type") != "project":
-            raise ValueError("things_update_project only works on Things projects.")
+    item = _load_item(_strip(item_id), include_items=True)
+    if item.get("type") != "project":
+        raise ValueError("things_update_project only works on Things projects.")
 
-        resolved_area_id = _resolve_area_id(area_id or area)
-        params: dict[str, Any] = {}
-        _set_if_present(params, "title", title)
-        _set_if_present_or_clear(params, "when", when)
-        _set_if_present_or_clear(params, "deadline", deadline)
-        _set_if_present_or_clear(params, "notes", notes)
-        _set_if_present(params, "append-notes", append_notes)
-        _set_if_present(params, "prepend-notes", prepend_notes)
-        _set_if_present_or_clear(params, "tags", tags)
-        _set_if_present(params, "add-tags", add_tags)
-        if resolved_area_id:
-            params["area-id"] = resolved_area_id
-        if reveal:
-            params["reveal"] = True
-        if not params:
-            raise ValueError("No Things project fields were provided to update.")
+    resolved_area_id = _resolve_area_id(area_id or area)
+    params: dict[str, Any] = {}
+    _set_if_present(params, "title", title)
+    _set_if_present_or_clear(params, "when", when)
+    _set_if_present_or_clear(params, "deadline", deadline)
+    _set_if_present_or_clear(params, "notes", notes)
+    _set_if_present(params, "append-notes", append_notes)
+    _set_if_present(params, "prepend-notes", prepend_notes)
+    _set_if_present_or_clear(params, "tags", tags)
+    _set_if_present(params, "add-tags", add_tags)
+    if resolved_area_id:
+        params["area-id"] = resolved_area_id
+    if reveal:
+        params["reveal"] = True
+    if not params:
+        raise ValueError("No Things project fields were provided to update.")
 
-        _open_things_url("update-project", uuid=item["uuid"], **params)
-        updated = _wait_for_item(item["uuid"])
-        result = "Project updated:\n\n" + _format_item(updated)
-        status_mgr.complete_tool_call(tool_id, updated.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    _open_things_url("update-project", uuid=item["uuid"], **params)
+    updated = _wait_for_item(item["uuid"])
+    return "Project updated:\n\n" + _format_item(updated)
 
 
 @tool
@@ -917,20 +787,11 @@ def things_complete_item(item_id: str, completed: bool = True) -> str:
     Returns:
         The updated item details.
     """
-    tool_id = _make_tool_id("things_complete_item")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_complete_item", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=True)
-        command = _update_command_for_item(item)
-        _open_things_url(command, uuid=item["uuid"], completed=completed)
-        updated = _wait_for_item(item["uuid"])
-        result = "Item updated:\n\n" + _format_item(updated)
-        status_mgr.complete_tool_call(tool_id, updated.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    item = _load_item(_strip(item_id), include_items=True)
+    command = _update_command_for_item(item)
+    _open_things_url(command, uuid=item["uuid"], completed=completed)
+    updated = _wait_for_item(item["uuid"])
+    return "Item updated:\n\n" + _format_item(updated)
 
 
 @tool
@@ -945,17 +806,8 @@ def things_cancel_item(item_id: str, canceled: bool = True) -> str:
     Returns:
         The updated item details.
     """
-    tool_id = _make_tool_id("things_cancel_item")
-    status_mgr = _status_manager()
-    status_mgr.start_tool_call(tool_id, "things_cancel_item", {"item_id": item_id})
-    try:
-        item = _load_item(_strip(item_id), include_items=True)
-        command = _update_command_for_item(item)
-        _open_things_url(command, uuid=item["uuid"], canceled=canceled)
-        updated = _wait_for_item(item["uuid"])
-        result = "Item updated:\n\n" + _format_item(updated)
-        status_mgr.complete_tool_call(tool_id, updated.get("title", item_id)[:30])
-        return result
-    except Exception as exc:
-        status_mgr.fail_tool_call(tool_id, str(exc)[:80])
-        raise
+    item = _load_item(_strip(item_id), include_items=True)
+    command = _update_command_for_item(item)
+    _open_things_url(command, uuid=item["uuid"], canceled=canceled)
+    updated = _wait_for_item(item["uuid"])
+    return "Item updated:\n\n" + _format_item(updated)

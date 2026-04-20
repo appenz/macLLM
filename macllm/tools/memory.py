@@ -1,14 +1,11 @@
 """Memory tool: append timestamped notes to a daily memory file."""
 
 import os
-import time
 from datetime import datetime
 
 from smolagents import tool
 
 from macllm.tags.file_tag import FileTag
-
-_tool_call_counter = {"remember": 0}
 
 MEMORY_SUBFOLDER = "Agent-Memory"
 
@@ -28,11 +25,6 @@ def _memory_dir() -> str | None:
     return None
 
 
-def _status_manager():
-    from macllm.macllm import MacLLM
-    return MacLLM.get_status_manager()
-
-
 @tool
 def remember(text: str) -> str:
     """
@@ -47,19 +39,13 @@ def remember(text: str) -> str:
     Returns:
         Success message, or an error description.
     """
-    _tool_call_counter["remember"] += 1
-    tool_id = f"remember_{_tool_call_counter['remember']}_{int(time.time() * 1000)}"
-    status = _status_manager()
-
     mem_dir = _memory_dir()
     if mem_dir is None:
-        status.fail_tool_call(tool_id, "No memory folder")
         return "Error: No indexed folders configured and no memory_dir set in config."
 
     try:
         os.makedirs(mem_dir, exist_ok=True)
     except OSError as e:
-        status.fail_tool_call(tool_id, "Cannot create folder")
         return f"Error: Could not create memory folder {mem_dir}: {e}"
 
     now = datetime.now()
@@ -73,8 +59,6 @@ def remember(text: str) -> str:
                 f.write("\n")
             f.write(text)
 
-        status.complete_tool_call(tool_id, filename)
         return f"Remembered in {filename}"
     except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:30])
         return f"Error writing memory: {e}"

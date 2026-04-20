@@ -189,26 +189,26 @@ class ApprovalRenderer:
             text_storage.appendAttributedString_(a)
 
     @classmethod
-    def handle_key(cls, key: str, status_mgr) -> bool:
+    def handle_key(cls, key: str, conversation) -> bool:
         """Handle a keypress while an approval is pending.
 
         Returns ``True`` if the key was consumed.
         """
-        if status_mgr.pending_approval is None:
+        if conversation.pending_approval is None:
             return False
 
         key_lower = key.lower()
         if key_lower == "r":
-            status_mgr.resolve_approval("run")
+            conversation.resolve_approval("run")
             return True
         if key_lower == "d":
-            status_mgr.resolve_approval("deny")
+            conversation.resolve_approval("deny")
             return True
         if key_lower == "a":
-            status_mgr.resolve_approval("always_allow")
+            conversation.resolve_approval("always_allow")
             return True
         if key_lower == "h":
-            status_mgr.resolve_approval("grant_home")
+            conversation.resolve_approval("grant_home")
             return True
 
         return False

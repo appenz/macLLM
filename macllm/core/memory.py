@@ -1,6 +1,9 @@
 import os
 import pickle
+import threading
 from pathlib import Path
+
+_save_lock = threading.Lock()
 
 
 def get_storage_dir() -> Path:
@@ -95,22 +98,26 @@ def _serialize_conversation(conversation) -> dict | None:
 
 
 def save_all_conversations(conversation_history) -> bool:
-    """Persist every conversation in *conversation_history* to disk."""
-    try:
-        entries = []
-        for conv in conversation_history.conversations:
-            entry = _serialize_conversation(conv)
-            if entry is not None:
-                entries.append(entry)
-        data = {
-            'conversations': entries,
-            'active_index': conversation_history.active_index,
-        }
-        with open(get_conversations_path(), 'wb') as f:
-            pickle.dump(data, f)
-        return True
-    except Exception:
-        return False
+    """Persist every conversation in *conversation_history* to disk.
+
+    Thread-safe: multiple agent threads may trigger saves concurrently.
+    """
+    with _save_lock:
+        try:
+            entries = []
+            for conv in conversation_history.conversations:
+                entry = _serialize_conversation(conv)
+                if entry is not None:
+                    entries.append(entry)
+            data = {
+                'conversations': entries,
+                'active_index': conversation_history.active_index,
+            }
+            with open(get_conversations_path(), 'wb') as f:
+                pickle.dump(data, f)
+            return True
+        except Exception:
+            return False
 
 
 def load_all_conversations(conversation_history) -> bool:

@@ -28,7 +28,7 @@ def test_one_plus_one_shows_two(ui, tmp_path):
     # Wait for the agent to finish (background thread)
     app = ui._ui.macllm
     done = ui.wait_for(
-        lambda: not app.is_agent_running() and len(app.chat_history.messages) >= 3,
+        lambda: not app.chat_history.is_agent_running() and len(app.chat_history.messages) >= 3,
         timeout=30.0,
         interval=0.5,
     )

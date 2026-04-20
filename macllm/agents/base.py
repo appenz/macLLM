@@ -90,17 +90,4 @@ class MacLLMAgent(ToolCallingAgent):
         )
 
     def __call__(self, *args, **kwargs):
-        """Wrap managed-agent invocation to signal the status manager."""
-        from macllm.macllm import MacLLM
-        task = args[0] if args else kwargs.get("task", "")
-        try:
-            MacLLM.get_status_manager().enter_managed_agent(self.macllm_name, task)
-        except Exception:
-            pass
-        try:
-            return super().__call__(*args, **kwargs)
-        finally:
-            try:
-                MacLLM.get_status_manager().exit_managed_agent(self.macllm_name)
-            except Exception:
-                pass
+        return super().__call__(*args, **kwargs)

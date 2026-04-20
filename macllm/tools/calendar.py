@@ -1,19 +1,9 @@
 """Calendar tools wrapping the maccal library for macOS EventKit access."""
 
-import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from smolagents import tool
-
-_tool_call_counter = {
-    "cal_list_calendars": 0,
-    "cal_get_events": 0,
-    "cal_find_events": 0,
-    "cal_add_event": 0,
-    "cal_update_event": 0,
-    "cal_find_free_time": 0,
-}
 
 _store_singleton = None
 
@@ -26,17 +16,6 @@ def _get_store():
 
         _store_singleton = CalendarStore()
     return _store_singleton
-
-
-def _status_manager():
-    from macllm.macllm import MacLLM
-
-    return MacLLM.get_status_manager()
-
-
-def _make_tool_id(name: str) -> str:
-    _tool_call_counter[name] += 1
-    return f"{name}_{_tool_call_counter[name]}_{int(time.time() * 1000)}"
 
 
 def _local_tz() -> ZoneInfo:
@@ -123,28 +102,17 @@ def cal_list_calendars() -> str:
     Returns:
         A formatted list of calendars showing name, type, and source.
     """
-    tool_id = _make_tool_id("cal_list_calendars")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "cal_list_calendars", {})
-
-    try:
-        store = _get_store()
-        cals = store.list_calendars()
-        if not cals:
-            status.complete_tool_call(tool_id, "0 calendars")
-            return "No calendars found."
-        lines = []
-        for c in cals:
-            parts = [c.title, f"type={c.type.name.lower()}"]
-            if c.source:
-                parts.append(f"source={c.source}")
-            lines.append("- " + ", ".join(parts))
-        result = "\n".join(lines)
-        status.complete_tool_call(tool_id, f"{len(cals)} calendars")
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    store = _get_store()
+    cals = store.list_calendars()
+    if not cals:
+        return "No calendars found."
+    lines = []
+    for c in cals:
+        parts = [c.title, f"type={c.type.name.lower()}"]
+        if c.source:
+            parts.append(f"source={c.source}")
+        lines.append("- " + ", ".join(parts))
+    return "\n".join(lines)
 
 
 @tool
@@ -160,25 +128,14 @@ def cal_get_events(start: str, end: str, calendars: str = "") -> str:
     Returns:
         A formatted list of events in the date range.
     """
-    tool_id = _make_tool_id("cal_get_events")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "cal_get_events", {"start": start, "end": end})
-
-    try:
-        store = _get_store()
-        dt_start = _parse_datetime(start)
-        dt_end = _parse_datetime(end)
-        cal_list = _parse_csv(calendars)
-        events = store.get_events(dt_start, dt_end, calendars=cal_list)
-        if not events:
-            status.complete_tool_call(tool_id, "0 events")
-            return "No events found in this range."
-        result = "\n\n".join(_format_event(ev) for ev in events)
-        status.complete_tool_call(tool_id, f"{len(events)} events")
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    store = _get_store()
+    dt_start = _parse_datetime(start)
+    dt_end = _parse_datetime(end)
+    cal_list = _parse_csv(calendars)
+    events = store.get_events(dt_start, dt_end, calendars=cal_list)
+    if not events:
+        return "No events found in this range."
+    return "\n\n".join(_format_event(ev) for ev in events)
 
 
 @tool
@@ -198,32 +155,21 @@ def cal_find_events(
     Returns:
         A formatted list of matching events, or a message if none found.
     """
-    tool_id = _make_tool_id("cal_find_events")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "cal_find_events", {"query": query})
-
-    try:
-        store = _get_store()
-        dt_start = _parse_datetime(start)
-        dt_end = _parse_datetime(end)
-        cal_list = _parse_csv(calendars)
-        field_list = _parse_csv(fields)
-        events = store.find_events(
-            query,
-            start=dt_start,
-            end=dt_end,
-            calendars=cal_list,
-            fields=field_list,
-        )
-        if not events:
-            status.complete_tool_call(tool_id, "0 matches")
-            return f"No events matching '{query}' found in this range."
-        result = "\n\n".join(_format_event(ev) for ev in events)
-        status.complete_tool_call(tool_id, f"{len(events)} matches")
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    store = _get_store()
+    dt_start = _parse_datetime(start)
+    dt_end = _parse_datetime(end)
+    cal_list = _parse_csv(calendars)
+    field_list = _parse_csv(fields)
+    events = store.find_events(
+        query,
+        start=dt_start,
+        end=dt_end,
+        calendars=cal_list,
+        fields=field_list,
+    )
+    if not events:
+        return f"No events matching '{query}' found in this range."
+    return "\n\n".join(_format_event(ev) for ev in events)
 
 
 @tool
@@ -253,30 +199,20 @@ def cal_add_event(
     Returns:
         The created event details including its event ID.
     """
-    tool_id = _make_tool_id("cal_add_event")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "cal_add_event", {"title": title})
-
-    try:
-        store = _get_store()
-        tz = timezone or None
-        dt_start = _parse_datetime(start, tz)
-        dt_end = _parse_datetime(end, tz)
-        event = store.add_event(
-            title=title,
-            start=dt_start,
-            end=dt_end,
-            calendar=calendar or None,
-            location=location or None,
-            notes=notes or None,
-            is_all_day=is_all_day,
-        )
-        result = "Event created:\n\n" + _format_event(event)
-        status.complete_tool_call(tool_id, title[:30])
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    store = _get_store()
+    tz = timezone or None
+    dt_start = _parse_datetime(start, tz)
+    dt_end = _parse_datetime(end, tz)
+    event = store.add_event(
+        title=title,
+        start=dt_start,
+        end=dt_end,
+        calendar=calendar or None,
+        location=location or None,
+        notes=notes or None,
+        is_all_day=is_all_day,
+    )
+    return "Event created:\n\n" + _format_event(event)
 
 
 @tool
@@ -304,35 +240,25 @@ def cal_update_event(
     Returns:
         The updated event details.
     """
-    tool_id = _make_tool_id("cal_update_event")
-    status = _status_manager()
-    status.start_tool_call(tool_id, "cal_update_event", {"event_id": event_id})
+    store = _get_store()
+    tz = timezone or None
 
-    try:
-        store = _get_store()
-        tz = timezone or None
+    kwargs: dict = {}
+    if title:
+        kwargs["title"] = title
+    if start:
+        kwargs["start"] = _parse_datetime(start, tz)
+    if end:
+        kwargs["end"] = _parse_datetime(end, tz)
 
-        kwargs: dict = {}
-        if title:
-            kwargs["title"] = title
-        if start:
-            kwargs["start"] = _parse_datetime(start, tz)
-        if end:
-            kwargs["end"] = _parse_datetime(end, tz)
+    # Sentinel: \x00 means "not provided" (keep current), empty string means "clear"
+    if location != "\x00":
+        kwargs["location"] = None if location == "CLEAR" else (location or ...)
+    if notes != "\x00":
+        kwargs["notes"] = None if notes == "CLEAR" else (notes or ...)
 
-        # Sentinel: \x00 means "not provided" (keep current), empty string means "clear"
-        if location != "\x00":
-            kwargs["location"] = None if location == "CLEAR" else (location or ...)
-        if notes != "\x00":
-            kwargs["notes"] = None if notes == "CLEAR" else (notes or ...)
-
-        event = store.update_event(event_id, **kwargs)
-        result = "Event updated:\n\n" + _format_event(event)
-        status.complete_tool_call(tool_id, event.title[:30])
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    event = store.update_event(event_id, **kwargs)
+    return "Event updated:\n\n" + _format_event(event)
 
 
 @tool
@@ -356,28 +282,15 @@ def cal_find_free_time(
     Returns:
         A list of free time slots, or a message if none found.
     """
-    tool_id = _make_tool_id("cal_find_free_time")
-    status = _status_manager()
-    status.start_tool_call(
-        tool_id, "cal_find_free_time", {"duration": duration_minutes}
+    store = _get_store()
+    tz = timezone or None
+    dt_start = _parse_datetime(start, tz)
+    dt_end = _parse_datetime(end, tz)
+    duration = timedelta(minutes=duration_minutes)
+    cal_list = _parse_csv(calendars)
+    slots = store.find_free_time(
+        dt_start, dt_end, duration, calendars=cal_list
     )
-
-    try:
-        store = _get_store()
-        tz = timezone or None
-        dt_start = _parse_datetime(start, tz)
-        dt_end = _parse_datetime(end, tz)
-        duration = timedelta(minutes=duration_minutes)
-        cal_list = _parse_csv(calendars)
-        slots = store.find_free_time(
-            dt_start, dt_end, duration, calendars=cal_list
-        )
-        if not slots:
-            status.complete_tool_call(tool_id, "0 slots")
-            return "No free time slots found matching the criteria."
-        result = "\n".join(_format_time_slot(s) for s in slots)
-        status.complete_tool_call(tool_id, f"{len(slots)} slots")
-        return result
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+    if not slots:
+        return "No free time slots found matching the criteria."
+    return "\n".join(_format_time_slot(s) for s in slots)

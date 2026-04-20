@@ -21,7 +21,7 @@ class TestAgentSelection:
             mock_agent.memory = Mock(steps=[])
             mock_create.return_value = mock_agent
 
-            mac.handle_instructions("@agent:smolagent hello")
+            mac.chat_history.submit("@agent:smolagent hello")
             time.sleep(0.3)
 
         assert mac.chat_history.agent_cls is MacLLMSmolAgent
@@ -36,7 +36,7 @@ class TestAgentSelection:
             mock_agent.memory = Mock(steps=[])
             mock_create.return_value = mock_agent
 
-            mac.handle_instructions("@agent:smolagent first message")
+            mac.chat_history.submit("@agent:smolagent first message")
             time.sleep(0.3)
 
         assert mac.chat_history.agent_cls is MacLLMSmolAgent
@@ -48,7 +48,7 @@ class TestAgentSelection:
             mock_agent.memory = Mock(steps=[])
             mock_create.return_value = mock_agent
 
-            mac.handle_instructions("second message without tag")
+            mac.chat_history.submit("second message without tag")
             time.sleep(0.3)
 
         assert mac.chat_history.agent_cls is MacLLMSmolAgent

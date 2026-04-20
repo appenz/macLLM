@@ -9,12 +9,12 @@ def test_url_tag_real(app_real):
         "Answer only with the two company names, nothing else. "
         "Use @https://guido.appenzeller.net/speaker-biography/"
     )
-    app_real.handle_instructions(prompt)
+    app_real.chat_history.submit(prompt)
 
     max_wait = 15
     waited = 0
     while waited < max_wait:
-        if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
+        if not app_real.chat_history.is_agent_running() and len(app_real.chat_history.messages) > 0:
             last_msg = app_real.chat_history.messages[-1]
             if last_msg['role'] == 'assistant':
                 lower = last_msg['content'].lower()

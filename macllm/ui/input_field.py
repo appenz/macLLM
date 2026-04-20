@@ -22,7 +22,6 @@ from macllm.ui.tag_render import (
     build_input_attributed_with_caret,
 )
 from macllm.core.skills import SkillsRegistry
-from macllm.core.llm_service import get_model_for_speed
 import objc
 
 TAG_ATTR_NAME_CONST = TAG_ATTR_NAME
@@ -63,14 +62,12 @@ class InputFieldDelegate(NSObject):
         except Exception as exc:  # pragma: no cover
             self.macllm_ui.macllm.debug_exception(exc)
 
-    # Intercept character input for pending approval prompts
     def textView_shouldChangeTextInRange_replacementString_(self, _view, _range, string):
         try:
             if string and len(string) == 1:
-                from macllm.macllm import MacLLM
                 from macllm.ui.approval import ApprovalRenderer
-                status_mgr = MacLLM.get_status_manager()
-                if ApprovalRenderer.handle_key(string, status_mgr):
+                conv = self.macllm_ui.macllm.chat_history
+                if ApprovalRenderer.handle_key(string, conv):
                     return False
         except Exception:
             pass
@@ -92,7 +89,6 @@ class InputFieldDelegate(NSObject):
                         else:
                             new_speed = 'slow'
                         self.macllm_ui.macllm.chat_history.speed_level = new_speed
-                        self.macllm_ui.macllm.llm_metadata['model'] = get_model_for_speed(new_speed)
                         self.macllm_ui.update_top_bar_text()
                         return True
                     if key == 'c':

@@ -5,21 +5,13 @@ class DummyConversation:
     pass
 
 
-class DummyHistory:
-    def __init__(self, conversation):
-        self._conversation = conversation
-
-    def get_current_conversation(self):
-        return self._conversation
-
-
 class DummyApp:
-    def __init__(self, *, chat_history=None, conversation_history=None):
+    def __init__(self, *, chat_history=None):
         self.chat_history = chat_history
-        self.conversation_history = conversation_history
 
 
 def test_get_conversation_uses_chat_history():
+    """get_current_conversation falls back to MacLLM._instance.chat_history on the main thread."""
     from macllm.macllm import MacLLM
 
     conversation = DummyConversation()
@@ -30,16 +22,17 @@ def test_get_conversation_uses_chat_history():
         MacLLM._instance = None
 
 
-def test_get_conversation_falls_back_to_conversation_history():
-    from macllm.macllm import MacLLM
+def test_get_conversation_uses_thread_local():
+    """When a thread-local conversation is set, it takes priority."""
+    import threading
+    from macllm.core.context import set_current_conversation, _thread_context
 
     conversation = DummyConversation()
-    history = DummyHistory(conversation)
-    MacLLM._instance = DummyApp(chat_history=None, conversation_history=history)
+    set_current_conversation(conversation)
     try:
         assert _get_conversation() is conversation
     finally:
-        MacLLM._instance = None
+        _thread_context.conversation = None
 
 
 class TestFindUngrantedPaths:

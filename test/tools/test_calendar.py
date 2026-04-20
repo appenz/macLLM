@@ -11,8 +11,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from macllm.core.agent_status import AgentStatusManager
-
 # AppKit needs a shared NSApplication for NSColor operations used by maccal
 from AppKit import NSApplication
 NSApplication.sharedApplication()
@@ -25,9 +23,6 @@ class DummyApp:
         debug = False
 
     args = _Args()
-
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
 
     def debug_log(self, *a, **kw):
         pass

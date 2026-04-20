@@ -1,62 +1,280 @@
+from __future__ import annotations
+
 import os
+import threading
+import traceback
 from typing import List, Dict, Optional, Union
+
+from macllm.core.agent_status import PendingApproval
 
 
 class Conversation:
     def __init__(self):
         self.agent = None
-        self.agent_cls = None  # set lazily in reset() or by caller
+        self.agent_cls = None
         self.ui_update_callback = None
         self.title = "New Agent"
+
+        # Per-conversation agent runtime state (transient, not persisted)
+        self.agent_thread: threading.Thread | None = None
+        self.abort_event: threading.Event = threading.Event()
+        self.llm_metadata: dict = {'input_tokens': 0, 'output_tokens': 0}
+        self.pending_approval: PendingApproval | None = None
+        self.query_queue: list = []
+        self.saved_input_text: str = ""
+        self._run_step_offset: int = 0
+
         self.reset()
-    
+
+    def is_agent_running(self) -> bool:
+        return self.agent_thread is not None and self.agent_thread.is_alive()
+
+    # ------------------------------------------------------------------
+    # submit() — the main entry point for user queries
+    # ------------------------------------------------------------------
+
+    def submit(self, user_input: str) -> None:
+        """Submit a user query to this conversation.
+
+        If the agent is already running the query is enqueued and will be
+        processed after the current run finishes.  Otherwise processing
+        starts immediately on a new background thread.
+        """
+        user_input = user_input.strip()
+        if not user_input:
+            return
+
+        if self.is_agent_running():
+            self.query_queue.append(user_input)
+            self.add_user_message(user_input)
+            self._notify_ui()
+            return
+
+        self._process_query(user_input)
+
+    def _process_query(self, user_input: str) -> None:
+        """Expand tags, create agent, and spawn the agent thread."""
+        from macllm.macllm import MacLLM
+        from macllm.core.user_request import UserRequest
+        from macllm.core.skills import SkillsRegistry
+
+        app = MacLLM._instance
+
+        try:
+            expanded_input = SkillsRegistry.expand_manual_invocation(user_input)
+
+            request = UserRequest(expanded_input)
+            if not request.process_tags(app.plugins, self, app.debug_log, app.debug_exception, app._prefix_index):
+                app.debug_log(f'submit: {user_input} - Abort on plugin failure', 1)
+                return
+
+            self.add_user_message(user_input)
+
+            if request.agent_name is not None:
+                from macllm.agents import get_agent_class
+                self.agent_cls = get_agent_class(request.agent_name)
+            if request.speed_level is not None:
+                self.speed_level = request.speed_level
+
+            if not request.expanded_prompt.strip():
+                self._notify_ui()
+                return
+
+            self.llm_metadata['input_tokens'] = 0
+            self.llm_metadata['output_tokens'] = 0
+
+            def token_callback(input_tokens: int, output_tokens: int):
+                self.llm_metadata['input_tokens'] = input_tokens
+                self.llm_metadata['output_tokens'] = output_tokens
+                self._notify_ui()
+
+            self._create_agent(token_callback=token_callback)
+
+            self._start_agent_thread(request, app)
+
+        except Exception as e:
+            app.debug_exception(e)
+
+    def _start_agent_thread(self, request, app) -> None:
+        """Spawn the background agent thread for this conversation."""
+        from macllm.core.context import set_current_conversation
+        from macllm.core.memory import save_all_conversations
+        from macllm.core.llm_service import model_supports_vision
+
+        conversation = self
+
+        def run_agent():
+            set_current_conversation(conversation)
+            try:
+                conversation.abort_event.clear()
+                conversation._run_step_offset = len(conversation.agent.memory.steps)
+
+                run_kwargs = dict(max_steps=10, reset=False)
+                if request.images:
+                    if model_supports_vision(conversation.speed_level):
+                        run_kwargs["images"] = request.images
+                    else:
+                        app.debug_log("Current model does not support images; ignoring attached images", 1)
+
+                result = conversation.agent.run(request.expanded_prompt, **run_kwargs)
+
+                if isinstance(result, str):
+                    result = result.strip()
+
+                if result:
+                    conversation.add_assistant_message(result)
+                else:
+                    conversation.add_assistant_message("Error: No output from agent")
+
+                if not app.ephemeral:
+                    save_all_conversations(app.conversation_history)
+
+                conversation._maybe_generate_title()
+
+                app.debug_log(f'Output: {result}\n')
+            except Exception as e:
+                if conversation.abort_event.is_set():
+                    conversation._handle_abort_summary(request.expanded_prompt, app)
+                else:
+                    app.debug_exception(e)
+                    conversation.add_assistant_message(f"Error: {str(e)}")
+                    if not app.ephemeral:
+                        save_all_conversations(app.conversation_history)
+            finally:
+                conversation.agent_thread = None
+                conversation.abort_event.clear()
+                conversation._notify_ui()
+                if getattr(app.args, 'query', None):
+                    screenshot_path = getattr(app.args, 'screenshot', None)
+                    app.ui.schedule_quit(screenshot_path=screenshot_path)
+                conversation._drain_queue()
+
+        self.agent_thread = threading.Thread(target=run_agent, daemon=True)
+        self.agent_thread.start()
+
+    def _drain_queue(self) -> None:
+        """Process the next queued query, if any."""
+        if self.query_queue:
+            next_query = self.query_queue.pop(0)
+            self._process_query(next_query)
+
+    def abort(self) -> None:
+        """Signal the running agent to abort."""
+        if not self.is_agent_running():
+            return
+        self.abort_event.set()
+        if self.pending_approval is not None:
+            self.resolve_approval("deny")
+        if self.agent:
+            self.agent.interrupt_switch = True
+            for agent in getattr(self.agent, 'managed_agents', {}).values():
+                agent.interrupt_switch = True
+
+    def resolve_approval(self, decision: str) -> None:
+        """Resolve the current pending approval with the user's decision."""
+        if self.pending_approval is not None:
+            self.pending_approval.decision = decision
+            self.pending_approval.event.set()
+            self.pending_approval = None
+            self._notify_ui()
+
+    def _handle_abort_summary(self, task, app) -> None:
+        """After an abort, ask the LLM to summarize partial results."""
+        from macllm.core.memory import save_all_conversations
+        try:
+            self._notify_ui()
+            summary_msg = self.agent.provide_final_answer(task)
+            content = summary_msg.content
+            if isinstance(content, list):
+                content = " ".join(
+                    item.get("text", "") for item in content if isinstance(item, dict)
+                )
+            result = content.strip() if isinstance(content, str) else str(content)
+            prefix = "**Interrupted.** The following is a partial answer based on what I found before being stopped:\n\n"
+            self.add_assistant_message(prefix + result if result else "[Interrupted]")
+        except Exception as summary_error:
+            app.debug_exception(summary_error)
+            self.add_assistant_message("[Interrupted]")
+        if not app.ephemeral:
+            save_all_conversations(app.conversation_history)
+
+    def _maybe_generate_title(self) -> None:
+        """Generate a short title after the first exchange."""
+        if self.title != "New Agent":
+            return
+        user_msgs = [m for m in self.messages if m["role"] == "user"]
+        asst_msgs = [m for m in self.messages if m["role"] == "assistant"]
+        if len(user_msgs) != 1 or len(asst_msgs) != 1:
+            return
+        try:
+            from macllm.macllm import MacLLM
+            from macllm.core.llm_service import generate
+            from macllm.core.memory import save_all_conversations
+            app = MacLLM._instance
+            user_text = user_msgs[0]["content"][:200]
+            asst_text = asst_msgs[0]["content"][:200]
+            prompt = (
+                "Generate a 2-3 word title for this conversation. "
+                "Reply with ONLY the title, nothing else.\n\n"
+                f"User: {user_text}\n"
+                f"Assistant: {asst_text}"
+            )
+            speed = getattr(self, 'speed_level', 'normal') or 'normal'
+            title_text, _ = generate(
+                messages=[{"role": "user", "content": prompt}],
+                speed=speed,
+            )
+            title = title_text.strip().strip('"').strip("'")
+            if title:
+                self.title = title[:30]
+                if app and not app.ephemeral:
+                    save_all_conversations(app.conversation_history)
+                self._notify_ui()
+        except Exception:
+            pass
+
+    def _notify_ui(self) -> None:
+        if self.ui_update_callback:
+            self.ui_update_callback()
+
+    # ------------------------------------------------------------------
+    # Message management
+    # ------------------------------------------------------------------
+
     def add_user_message(self, content: str) -> None:
         """Add a user message (display text only)."""
-        message = {
-            "role": "user",
-            "content": content
-        }
-        self.messages.append(message)
-    
+        self.messages.append({"role": "user", "content": content})
+
     def add_assistant_message(self, content: str) -> None:
         """Add an assistant message."""
-        message = {
-            "role": "assistant",
-            "content": content
-        }
-        self.messages.append(message)
-    
+        self.messages.append({"role": "assistant", "content": content})
+
     def add_system_message(self, content: str) -> None:
         """Add or update system message (typically only at conversation start)."""
         if self.messages and self.messages[0]["role"] == "system":
             self.messages[0]["content"] = content
         else:
-            message = {
-                "role": "system",
-                "content": content
-            }
-            self.messages.insert(0, message)
-    
+            self.messages.insert(0, {"role": "system", "content": content})
+
     def get_displayable_messages(self) -> List[Dict]:
         """Returns messages for UI rendering (user and assistant only)."""
         return [
             m for m in self.messages
             if m["role"] in ("user", "assistant")
         ]
-    
-    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon = None) -> str:
+
+    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon=None) -> str:
         """Add context entry, returns the actual name used. Avoids duplicates based on source."""
         for ctx in self.context_history:
             if ctx['source'] == source:
                 return ctx['name']
-        
+
         actual_name = suggested_name
         counter = 1
-        
         while any(ctx['name'] == actual_name for ctx in self.context_history):
             actual_name = f"{suggested_name}-{counter}"
             counter += 1
-        
+
         if icon is None:
             icon = ""
 
@@ -76,7 +294,7 @@ class Conversation:
             if ctx.get("type") == "path" and ctx.get("source") == path:
                 return True
         return False
-    
+
     def _get_agent_cls(self):
         if self.agent_cls is None:
             from macllm.agents import get_default_agent_class
@@ -92,7 +310,6 @@ class Conversation:
     def get_granted_dirs(self) -> list[str]:
         """Return all granted directories (config defaults + conversation grants)."""
         from macllm.core.config import get_runtime_config
-
         config = get_runtime_config()
         config_dirs = [
             os.path.abspath(os.path.expanduser(d))
@@ -109,33 +326,29 @@ class Conversation:
         self.title = "New Agent"
 
         self._get_agent_cls()
-        
+
         if self.agent is not None:
             self.agent.memory.steps = []
         self._create_agent()
-        
+
         if clear_persisted:
             from macllm.core.memory import clear_conversation
             clear_conversation()
-    
-    def _create_agent(self, token_callback=None):
-        """Create agent instance using the current agent class.
 
-        Routes through :func:`agent_service.create_agent` so tests can
-        monkeypatch a single function to inject mock agents.
-        """
+    def _create_agent(self, token_callback=None):
+        """Create agent instance using the current agent class."""
         from macllm.core.agent_service import create_agent
 
         old_steps = None
         if self.agent is not None:
             old_steps = self.agent.memory.steps
-        
+
         self.agent = create_agent(
             agent_cls=self._get_agent_cls(),
             speed=self.speed_level,
             token_callback=token_callback,
         )
-        
+
         if old_steps is not None:
             self.agent.memory.steps = old_steps
 

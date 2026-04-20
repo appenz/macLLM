@@ -120,10 +120,8 @@ class TestViewFolderStructure:
         result = view_folder_structure()
         assert "No folders" in result
 
-    def test_shows_note_count_in_status(self, file_env):
-        from macllm.macllm import MacLLM
-        view_folder_structure()
-
-        status = MacLLM.get_status_manager()
-        last = status.tool_calls[-1]
-        assert "3 notes" in last.result_summary
+    def test_shows_note_count(self, file_env):
+        result = view_folder_structure()
+        assert "alpha.md" in result
+        assert "beta.txt" in result
+        assert "gamma.md" in result

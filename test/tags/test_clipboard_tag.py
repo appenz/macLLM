@@ -40,7 +40,7 @@ def test_clipboard_tag_context_block(app_mocked, monkeypatch):
     from macllm.core import agent_service
     monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: mock_agent)
     
-    app_mocked.handle_instructions("Summarize the text in @clipboard")
+    app_mocked.chat_history.submit("Summarize the text in @clipboard")
     
     time.sleep(0.1)
     
@@ -68,7 +68,7 @@ def test_clipboard_tag_image(app_mocked, monkeypatch):
     from macllm.core import agent_service
     monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: mock_agent)
 
-    app_mocked.handle_instructions("Describe @clipboard")
+    app_mocked.chat_history.submit("Describe @clipboard")
 
     time.sleep(0.1)
 
@@ -93,7 +93,7 @@ def test_clipboard_tag_text_no_image(app_mocked, monkeypatch):
     from macllm.core import agent_service
     monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: mock_agent)
 
-    app_mocked.handle_instructions("Read @clipboard")
+    app_mocked.chat_history.submit("Read @clipboard")
 
     time.sleep(0.1)
 
@@ -105,13 +105,13 @@ def test_clipboard_tag_text_no_image(app_mocked, monkeypatch):
 def test_clipboard_tag_real(app_real):
     app_real.ui.read_clipboard = lambda: "What is 1+1? Answer only with a number."
     app_real.ui.read_clipboard_image = lambda: None
-    app_real.handle_instructions("Answer the question in @clipboard")
+    app_real.chat_history.submit("Answer the question in @clipboard")
 
     import time
     max_wait = 15
     waited = 0
     while waited < max_wait:
-        if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
+        if not app_real.chat_history.is_agent_running() and len(app_real.chat_history.messages) > 0:
             last_msg = app_real.chat_history.messages[-1]
             if last_msg['role'] == 'assistant':
                 assert "2" in last_msg['content']

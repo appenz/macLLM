@@ -4,7 +4,6 @@ import pytest
 from unittest.mock import MagicMock
 
 from macllm.tags.file_tag import FileTag
-from macllm.core.agent_status import AgentStatusManager
 
 MOUNT_NAME = "Notes"
 
@@ -16,9 +15,6 @@ class DummyApp:
         debug = False
 
     args = _Args()
-
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
 
     def debug_log(self, *a, **kw):
         pass

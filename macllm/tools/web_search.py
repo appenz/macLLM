@@ -6,7 +6,6 @@ import requests
 from smolagents import tool
 from macllm.core.config import get_runtime_config
 
-# Use a mutable container to avoid Python global variable binding issues
 _state = {"search_count": 0, "tool_call_counter": 0}
 MAX_SEARCHES_PER_RUN = 50
 MAX_PARALLEL_SEARCHES = 5
@@ -48,8 +47,7 @@ def _format_results(search_results: list[dict]) -> str:
             output.append("No results found.\n")
             continue
         
-        # Only include the description/content snippets - the agent just needs the facts
-        for result in web_results[:5]:  # Limit to top 5 results per query
+        for result in web_results[:5]:
             description = result.get("description", "")
             if description:
                 output.append(f"- {description}")
@@ -70,62 +68,41 @@ def web_search(queries: list[str]) -> str:
     Returns:
         Search results with relevant content snippets from each result.
     """
-    from macllm.macllm import MacLLM
+    cfg = get_runtime_config()
+    api_key = cfg.api_keys.brave
+    if not api_key:
+        raise ValueError(
+            "brave API key is not configured in config.toml"
+        )
     
-    # Generate unique tool call ID and register start
-    _state["tool_call_counter"] += 1
-    tool_id = f"web_search_{_state['tool_call_counter']}_{int(time.time() * 1000)}"
-    status = MacLLM.get_status_manager()
-    status.start_tool_call(tool_id, "web_search", {"queries": queries})
+    if not queries:
+        return "No queries provided."
     
-    try:
-        cfg = get_runtime_config()
-        api_key = cfg.api_keys.brave
-        if not api_key:
-            raise ValueError(
-                "brave API key is not configured in config.toml"
-            )
+    current_count = _state["search_count"]
+    if current_count + len(queries) > MAX_SEARCHES_PER_RUN:
+        raise ValueError(
+            f"Search limit exceeded: already performed {current_count} searches, "
+            f"requesting {len(queries)} more, but maximum is {MAX_SEARCHES_PER_RUN} per agent run"
+        )
+    
+    results = []
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SEARCHES) as executor:
+        future_to_query = {
+            executor.submit(_search_single_query, query, api_key): query
+            for query in queries
+        }
         
-        if not queries:
-            status.complete_tool_call(tool_id, "No queries")
-            return "No queries provided."
-        
-        # Check if we would exceed the limit
-        current_count = _state["search_count"]
-        if current_count + len(queries) > MAX_SEARCHES_PER_RUN:
-            error_msg = f"Limit exceeded: {current_count}/{MAX_SEARCHES_PER_RUN}"
-            status.fail_tool_call(tool_id, error_msg)
-            raise ValueError(
-                f"Search limit exceeded: already performed {current_count} searches, "
-                f"requesting {len(queries)} more, but maximum is {MAX_SEARCHES_PER_RUN} per agent run"
-            )
-        
-        # Execute searches in parallel with max 5 concurrent
-        results = []
-        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SEARCHES) as executor:
-            future_to_query = {
-                executor.submit(_search_single_query, query, api_key): query
-                for query in queries
-            }
-            
-            for future in as_completed(future_to_query):
-                query = future_to_query[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    results.append({"query": query, "results": {"error": str(e)}})
-        
-        # Update the counter after successful execution
-        _state["search_count"] += len(queries)
-        
-        # Sort results by original query order
-        query_order = {q: i for i, q in enumerate(queries)}
-        results.sort(key=lambda x: query_order.get(x["query"], len(queries)))
-        
-        status.complete_tool_call(tool_id, f"{len(queries)} queries done")
-        return _format_results(results)
-        
-    except Exception as e:
-        status.fail_tool_call(tool_id, str(e)[:50])
-        raise
+        for future in as_completed(future_to_query):
+            query = future_to_query[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                results.append({"query": query, "results": {"error": str(e)}})
+    
+    _state["search_count"] += len(queries)
+    
+    query_order = {q: i for i, q in enumerate(queries)}
+    results.sort(key=lambda x: query_order.get(x["query"], len(queries)))
+    
+    return _format_results(results)

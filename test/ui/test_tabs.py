@@ -227,7 +227,7 @@ def test_title_changes_after_query(ui):
 
     app = ui._ui.macllm
     done = ui.wait_for(
-        lambda: not app.is_agent_running() and len(app.chat_history.messages) >= 3,
+        lambda: not app.chat_history.is_agent_running() and len(app.chat_history.messages) >= 3,
         timeout=30.0,
         interval=0.5,
     )

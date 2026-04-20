@@ -190,8 +190,12 @@ class TabBarHandler:
                 pill.setFillColor_(active_bg)
                 tab_view.addSubview_(pill)
 
-            # Title label
+            # Title label with running/approval indicators
             title = conv.title or "New Agent"
+            if conv.pending_approval:
+                title = "⏸ " + title
+            elif conv.is_agent_running():
+                title = "⟳ " + title
             para = NSMutableParagraphStyle.alloc().init()
             para.setAlignment_(1)
             para.setLineBreakMode_(NSLineBreakByTruncatingTail)

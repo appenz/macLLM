@@ -92,7 +92,7 @@ Visual regression tests capture a screenshot and ask a vision LLM:
 def test_layout_not_broken(ui, tmp_path):
     ui.type_text("test query")
     ui.press_key("return")
-    ui.wait_for(lambda: not ui._ui.macllm.is_agent_running(), timeout=30)
+    ui.wait_for(lambda: not ui._ui.macllm.chat_history.is_agent_running(), timeout=30)
     ui.spin(1.0)
     path = str(tmp_path / "layout.png")
     ui.screenshot(path)

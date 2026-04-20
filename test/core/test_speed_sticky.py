@@ -20,7 +20,7 @@ class TestStickySpeedPreference:
             mock_agent.model.model_id = 'openai/mercury'
             mock_create_agent.return_value = mock_agent
             
-            mac.handle_instructions("Hello /fast")
+            mac.chat_history.submit("Hello /fast")
             assert mac.chat_history.speed_level == "fast"
             time.sleep(0.3)
             assert mock_agent.run.called
@@ -36,7 +36,7 @@ class TestStickySpeedPreference:
             mock_agent.model.model_id = 'openai/mercury'
             mock_create_agent.return_value = mock_agent
             
-            mac.handle_instructions("Second message with no tag")
+            mac.chat_history.submit("Second message with no tag")
             assert mac.chat_history.speed_level == "fast"
             time.sleep(0.3)
 
@@ -48,7 +48,7 @@ class TestStickySpeedPreference:
             mock_agent.model.model_id = 'gpt-5'
             mock_create_agent.return_value = mock_agent
             
-            mac.handle_instructions("Please reason carefully /think")
+            mac.chat_history.submit("Please reason carefully /think")
             assert mac.chat_history.speed_level == "slow"
             time.sleep(0.3)
 
@@ -63,6 +63,6 @@ class TestStickySpeedPreference:
             mock_agent.run = Mock(return_value="MOCK_RESPONSE")
             mock_create_agent.return_value = mock_agent
             
-            mac.handle_instructions("Fresh start")
+            mac.chat_history.submit("Fresh start")
             assert mac.chat_history.speed_level == "normal"
             time.sleep(0.3)

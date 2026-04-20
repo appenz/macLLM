@@ -11,7 +11,6 @@ import time
 import pytest
 
 from macllm.tags.file_tag import FileTag
-from macllm.core.agent_status import AgentStatusManager
 from macllm.core.agent_service import create_agent
 
 
@@ -20,9 +19,6 @@ class DummyApp:
         debug = False
 
     args = _Args()
-
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
 
     def debug_log(self, *a, **kw):
         pass

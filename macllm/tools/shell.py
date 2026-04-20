@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import time
 
 from smolagents import tool
 
@@ -12,14 +11,6 @@ from macllm.core.command_parser import CommandParseError, extract_executables, e
 from macllm.core.sandbox import run_sandboxed
 
 COMMAND_TIMEOUT = 60
-
-_tool_call_counter = 0
-
-
-def _make_tool_id() -> str:
-    global _tool_call_counter
-    _tool_call_counter += 1
-    return f"run_command_{_tool_call_counter}_{int(time.time() * 1000)}"
 
 
 def _debug_log(message: str, level: int = 0) -> None:
@@ -30,28 +21,9 @@ def _debug_log(message: str, level: int = 0) -> None:
         app.debug_log(message, level)
 
 
-def _status_manager():
-    from macllm.macllm import MacLLM
-
-    return MacLLM.get_status_manager()
-
-
 def _get_conversation():
-    from macllm.macllm import MacLLM
-
-    app = MacLLM._instance
-    if app is None:
-        raise RuntimeError("MacLLM is not initialized")
-
-    if getattr(app, "chat_history", None) is not None:
-        return app.chat_history
-
-    if getattr(app, "conversation_history", None) is not None:
-        conversation = app.conversation_history.get_current_conversation()
-        if conversation is not None:
-            return conversation
-
-    raise RuntimeError("No active conversation available for run_command")
+    from macllm.core.context import get_current_conversation
+    return get_current_conversation()
 
 
 def _get_shell_config():
@@ -78,47 +50,43 @@ def run_command(command: str, working_directory: str = "") -> str:
     Returns:
         The command output (stdout, stderr, and exit code).
     """
-    tool_id = _make_tool_id()
-    status = _status_manager()
-    status.start_tool_call(tool_id, "run_command", {"command": command})
-
     try:
         config = _get_shell_config()
         conversation = _get_conversation()
         granted_dirs = conversation.get_granted_dirs()
 
-        # Parse command to extract executables for whitelist check
         try:
             executables = extract_executables(command)
         except CommandParseError:
             executables = []
 
-        # Check which executables need approval
         allowed = set(config.allowed_commands)
         unknown = [exe for exe in executables if exe not in allowed]
         if not executables:
             unknown = ["(unparseable command)"]
 
-        # Check which paths in the command aren't covered by granted dirs
         cmd_paths = extract_paths(command)
         ungranted = _find_ungranted_paths(cmd_paths, granted_dirs)
 
         needs_approval = bool(unknown) or bool(ungranted)
 
         if needs_approval:
-            approval = status.request_approval(
-                command, unknown, tool_id, ungranted_paths=ungranted,
-            )
+            from macllm.core.agent_status import PendingApproval
 
-            entry = _find_entry(status, tool_id)
-            if entry:
-                entry.status = "pending"
-                entry.args_summary = f'"{command}"'
+            approval = PendingApproval(
+                command=command,
+                unknown_executables=unknown,
+                tool_call_id="",
+                ungranted_paths=ungranted,
+            )
+            conversation.pending_approval = approval
+            conversation._notify_ui()
 
             approval.event.wait()
+            conversation.pending_approval = None
+            conversation._notify_ui()
 
             if approval.decision == "deny":
-                status.fail_tool_call(tool_id, "denied")
                 return f"Command denied by user: {command}"
 
             if approval.decision == "always_allow":
@@ -136,10 +104,8 @@ def run_command(command: str, working_directory: str = "") -> str:
                     conversation.grant_directory(path)
                 granted_dirs = conversation.get_granted_dirs()
 
-        # Resolve working directory
         cwd = _resolve_working_directory(working_directory, granted_dirs)
 
-        # Run under sandbox-exec
         result = run_sandboxed(
             command,
             granted_dirs=granted_dirs,
@@ -150,37 +116,19 @@ def run_command(command: str, working_directory: str = "") -> str:
 
         output = _format_result(result)
 
-        entry = _find_entry(status, tool_id)
-        if entry:
-            entry.full_output = output
-
-        exit_info = f"exit {result.returncode}"
-        if result.returncode == 0:
-            status.complete_tool_call(tool_id, exit_info)
-        else:
+        if result.returncode != 0:
             _debug_log(f"Shell: exit {result.returncode} — {command!r} (cwd={cwd})", 2)
             if result.stderr:
                 _debug_log(f"Shell stderr: {result.stderr.rstrip()}", 2)
-            status.fail_tool_call(tool_id, exit_info)
 
         return output
 
     except subprocess.TimeoutExpired:
         _debug_log(f"Shell: timed out after {COMMAND_TIMEOUT}s: {command!r}", 2)
-        status.fail_tool_call(tool_id, f"timed out after {COMMAND_TIMEOUT}s")
         return f"Command timed out after {COMMAND_TIMEOUT} seconds: {command}"
     except Exception as exc:
         _debug_log(f"Shell: exception: {exc}", 2)
-        status.fail_tool_call(tool_id, str(exc)[:80])
         raise
-
-
-def _find_entry(status, tool_id):
-    """Look up a ToolCallEntry by id."""
-    for entry in status.tool_calls:
-        if entry.id == tool_id:
-            return entry
-    return None
 
 
 _SANDBOX_OPEN_PREFIXES = (

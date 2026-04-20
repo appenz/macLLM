@@ -163,14 +163,14 @@ def test_file_image_real(app_real, tmp_path):
     img_path = tmp_path / "red_square.png"
     Image.new("RGB", (64, 64), color="red").save(str(img_path))
 
-    app_real.handle_instructions(
+    app_real.chat_history.submit(
         f"What color is this image? Answer with just the color name. @{img_path}"
     )
 
     max_wait = 20
     waited = 0
     while waited < max_wait:
-        if not app_real.is_agent_running() and len(app_real.chat_history.messages) > 0:
+        if not app_real.chat_history.is_agent_running() and len(app_real.chat_history.messages) > 0:
             last_msg = app_real.chat_history.messages[-1]
             if last_msg["role"] == "assistant":
                 assert "red" in last_msg["content"].lower(), (

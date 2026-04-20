@@ -3,13 +3,11 @@ import importlib
 import pytest
 
 from macllm.tools.web_search import web_search, reset_search_counter, _state
-from macllm.core.agent_status import AgentStatusManager
 from macllm.core.config import MacLLMConfig, ApiKeys
 
 
 class DummyApp:
-    def __init__(self):
-        self.status_manager = AgentStatusManager()
+    pass
 
 
 @pytest.fixture(autouse=True)
