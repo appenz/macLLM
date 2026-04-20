@@ -19,7 +19,7 @@ The base class is `TagPlugin` in `macllm/tags/base.py`. Plugins are discovered f
 
 Request expansion is driven by `UserRequest.process_tags()` in `macllm/core/user_request.py`.
 
-1. `MacLLM.handle_instructions()` builds a `UserRequest`.
+1. `Conversation.submit()` builds a `UserRequest`.
 2. Any leading `/skill` invocation is expanded by `SkillsRegistry`.
 3. `UserRequest.find_shortcuts()` scans the prompt for `@...` and `/...` tokens.
 4. Tokens are matched against the plugin prefix index, longest prefix first.

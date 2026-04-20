@@ -79,4 +79,4 @@ Agents can be selected per request through the `@agent:<name>` tag.
 - the tag is implemented by `AgentTag` in `macllm/tags/agent_tag.py`
 - it validates the name against `AGENT_REGISTRY`
 - it stores the chosen name on `UserRequest`
-- `MacLLM.handle_instructions()` applies that selection by updating `chat_history.agent_cls`
+- `Conversation.submit()` applies that selection by updating `agent_cls` before creating the agent
