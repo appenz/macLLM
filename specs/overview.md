@@ -16,34 +16,35 @@ This document is the architectural entry point for the codebase.
 
 At a high level, a request moves through these stages:
 
-1. The user enters text in the Cocoa UI.
-2. `MacLLM.handle_instructions()` in `macllm/macllm.py` receives the original prompt.
+1. The user submits text in the Cocoa UI. The UI calls `conversation.submit(query)`.
+2. If the conversation's agent is already running, the query is enqueued and processed after the current run finishes.
 3. Leading slash skill invocations are expanded by `SkillsRegistry`.
-4. A `UserRequest` scans the prompt for `@...` and `/...` tokens and dispatches them to tag plugins.
+4. A `UserRequest` scans the prompt for `@...` and `/...` tokens and dispatches them to tag plugins. All slash commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
 5. Plugins may:
    - add context
    - select an agent
    - set the speed tier
    - attach images
+   - execute side effects (e.g. reload config, rebuild file index)
    - rewrite or remove tokens in the expanded prompt
 6. The original prompt is stored in the conversation for UI/history.
-7. The expanded prompt is sent to a smolagents-based agent.
+7. If the expanded prompt is non-empty, the agent runs on a background thread.
 8. The agent calls tools and managed subagents as needed.
 9. Tool progress is tracked in `agent.memory.steps` and rendered by the UI.
 10. The final assistant response is appended to the conversation and persisted.
 
 ## Key Objects
 
-- `MacLLM`: application coordinator. Owns runtime config, UI, conversation history, and plugin instances. Main entry point: `handle_instructions(user_input)`. Does not own per-run agent state; that lives on each `Conversation`.
-- `Conversation`: a chat session with its own agent runtime. Stores UI/history messages, context pills, speed, agent class, live agent instance, agent thread, abort event, token metadata, pending approval, and query queue. Recreates agents via `_create_agent()`.
+- `MacLLM`: application bootstrap and global resource holder. Owns runtime config, UI, conversation history, and plugin instances. Not in the request processing path — the UI calls `conversation.submit()` directly.
+- `Conversation`: a self-contained chat session with its own agent runtime. Entry point: `submit(query)`. Owns UI/history messages, context pills, speed, agent class, live agent instance, agent thread, abort event, token metadata, pending approval, and query queue. Handles tag expansion, agent creation, and the full request lifecycle.
 - `ConversationHistory`: container for `Conversation` objects. Tracks which conversation is active via `active_index`.
 - `UserRequest`: ephemeral per-request object. Tracks the original prompt, expanded prompt, attached images, selected speed, and selected agent. Handles token scanning and plugin dispatch via `process_tags()`.
 
 ## Parallel Tab Execution
 
 Multiple conversations can run agents simultaneously. Each conversation owns its own agent thread,
-abort event, token metadata, and pending approval state. The application coordinator (`MacLLM`) no
-longer holds per-run state; it delegates to the active conversation.
+abort event, token metadata, and pending approval state. `MacLLM` holds no per-run state; it is
+purely a bootstrap and global resource container.
 
 Tools are isolated from threading via a thread-local conversation context. They call the same
 lookup functions as before; routing to the correct conversation happens underneath.
@@ -104,7 +105,7 @@ The current model IDs are configured in code, not in TOML.
 
 ## Code Map
 
-- `macllm/macllm.py`: application coordinator and runtime entry point
+- `macllm/macllm.py`: application bootstrap, global config, and runtime entry point
 - `macllm/core/`: conversation state, request processing, config, persistence, skills, agent services, status
 - `macllm/agents/`: top-level agents, managed agents, prompt templates, registry
 - `macllm/tags/`: tag plugin implementations

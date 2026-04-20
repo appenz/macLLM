@@ -17,15 +17,17 @@ The goal is to allow multiple conversations to run agents simultaneously, with a
 
 ### State that moves from MacLLM to Conversation
 
-Today `MacLLM` owns agent-run state globally. This state moves into `Conversation`:
+Today `MacLLM` owns agent-run state globally and processes requests through `handle_instructions()`. All of this moves into `Conversation`, with `Conversation.submit(query)` as the new entry point. The UI calls `submit()` directly — `MacLLM` is no longer in the request processing path.
 
-| Field | Current owner | New owner |
-|-------|--------------|-----------|
-| `_agent_thread` | `MacLLM` | `Conversation` |
-| `_abort_event` | `MacLLM` | `Conversation` |
-| `status_manager` | `MacLLM` | removed (see below) |
-| `llm_metadata` | `MacLLM` | `Conversation` |
-| `pending_approval` | `AgentStatusManager` | `Conversation` |
+
+| Field              | Current owner        | New owner           |
+| ------------------ | -------------------- | ------------------- |
+| `_agent_thread`    | `MacLLM`             | `Conversation`      |
+| `_abort_event`     | `MacLLM`             | `Conversation`      |
+| `status_manager`   | `MacLLM`             | removed (see below) |
+| `llm_metadata`     | `MacLLM`             | `Conversation`      |
+| `pending_approval` | `AgentStatusManager` | `Conversation`      |
+
 
 New fields on `Conversation`:
 
@@ -140,6 +142,7 @@ If the user is viewing a different tab when approval is requested, the agent thr
 ### Save/reload with pending approval
 
 If the app saves or quits while approval is pending:
+
 - `pending_approval` is not persisted (transient field).
 - The agent thread is a daemon thread and dies on app quit.
 - The in-progress `ActionStep` has not been finalized by smolagents yet, so it is not in `memory.steps`.
@@ -171,6 +174,7 @@ When switching tabs, the UI simply changes `conversation_history.active_index` a
 ### Tab bar indicators
 
 The tab bar iterates all conversations to render:
+
 - Active tab highlight (as today)
 - Running indicator on tabs where `conversation.is_agent_running()` is true
 - Approval-needed indicator on tabs where `conversation.pending_approval is not None`
@@ -184,12 +188,13 @@ Title generation moves out of the agent runtime. The UI notices when a conversat
 Every conversation's runtime signals the UI through one path:
 
 1. Something changes on the conversation (new message, step completed, approval requested, tokens updated).
-2. The code calls `MacLLM._update_ui_from_callback()`.
+2. The conversation calls its `ui_update_callback`.
 3. This calls `ui.request_update()`.
 4. `request_update()` posts to the Cocoa main thread with `waitUntilDone_: False` (non-blocking).
 5. `update_window()` runs on the main thread and re-reads all state from the active conversation.
 
 Properties:
+
 - **Conversations don't know about the UI.** They fire a generic callback.
 - **The UI doesn't know which conversation triggered the update.** It re-reads everything.
 - **Agent threads never block on the UI.** The only blocking point is `pending_approval.event.wait()`, which is waiting for user input, not UI rendering.
@@ -204,6 +209,7 @@ Each conversation's agent thread only writes to its own `Conversation` object. T
 ### Main thread reads
 
 The main thread reads conversation state for display. This is safe without locks because:
+
 - Python's GIL ensures list/dict mutations are atomic at the bytecode level.
 - The UI performs display-only reads (no read-modify-write on conversation data).
 - `messages.append()` and `memory.steps` mutations are atomic from the GIL's perspective.
@@ -220,23 +226,28 @@ The main thread reads conversation state for display. This is safe without locks
 
 ### Files to change
 
-| File | Change |
-|------|--------|
-| `macllm/core/chat_history.py` | Add `agent_thread`, `abort_event`, `llm_metadata`, `pending_approval`, `is_agent_running()`, `query_queue` to `Conversation` |
-| `macllm/core/context.py` | New file: thread-local conversation context (`set_current_conversation`, `get_current_conversation`) |
-| `macllm/macllm.py` | Remove `_agent_thread`, `_abort_event`, `status_manager`, `llm_metadata`. Delegate to active conversation. Update `handle_instructions` to use conversation-scoped state and query queue. Move title generation out. |
-| `macllm/core/agent_service.py` | Simplify `create_step_callback` to only handle token accounting and `request_update()`. Remove plan extraction. |
-| `macllm/core/agent_status.py` | Remove `AgentStatusManager` and `ToolCallEntry`. Keep `PendingApproval` (used by `Conversation.pending_approval`). |
-| `macllm/tools/shell.py` | Use `get_current_conversation()` from context module. Set `conversation.pending_approval` instead of `status_manager.request_approval()`. Remove `_status_manager()` calls. |
-| `macllm/tools/*.py` | Remove all `_status_manager()` helpers and `start_tool_call` / `complete_tool_call` / `fail_tool_call` calls. Tools just do their work and return. |
-| `macllm/agents/base.py` | Remove `MacLLM.get_status_manager()` calls for managed-agent enter/exit. |
-| `macllm/ui/core.py` | Remove `is_agent_running()` guards from tab switching. `handle_user_input` enqueues instead of aborting. Remove `set_status_indicator`. Add explicit interrupt gesture. |
-| `macllm/ui/main_text.py` | Render tool progress from `agent.memory.steps` instead of `AgentStatusManager`. Render approval from `conversation.pending_approval`. Remove plan rendering. |
-| `macllm/ui/tab_bar.py` | Add running/approval indicators on tabs. |
-| `macllm/ui/approval.py` | Update to read from `conversation.pending_approval` instead of `AgentStatusManager`. |
+
+| File                           | Change                                                                                                                                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `macllm/core/chat_history.py`  | Add `agent_thread`, `abort_event`, `llm_metadata`, `pending_approval`, `is_agent_running()`, `query_queue`, and `submit()` to `Conversation`. `submit()` handles tag expansion, agent creation, and thread spawning. |
+| `macllm/core/context.py`       | New file: thread-local conversation context (`set_current_conversation`, `get_current_conversation`)                                                                                                                 |
+| `macllm/macllm.py`             | Remove `_agent_thread`, `_abort_event`, `status_manager`, `llm_metadata`, and `handle_instructions()`. `MacLLM` becomes a bootstrap and global resource holder. Move `/reload` to a tag plugin. Move title generation to the UI. |
+| `macllm/core/agent_service.py` | Simplify `create_step_callback` to only handle token accounting and `request_update()`. Remove plan extraction.                                                                                                      |
+| `macllm/core/agent_status.py`  | Remove `AgentStatusManager` and `ToolCallEntry`. Keep `PendingApproval` (used by `Conversation.pending_approval`).                                                                                                   |
+| `macllm/tools/shell.py`        | Use `get_current_conversation()` from context module. Set `conversation.pending_approval` instead of `status_manager.request_approval()`. Remove `_status_manager()` calls.                                          |
+| `macllm/tools/*.py`            | Remove all `_status_manager()` helpers and `start_tool_call` / `complete_tool_call` / `fail_tool_call` calls. Tools just do their work and return.                                                                   |
+| `macllm/agents/base.py`        | Remove `MacLLM.get_status_manager()` calls for managed-agent enter/exit.                                                                                                                                             |
+| `macllm/ui/core.py`            | Remove `is_agent_running()` guards from tab switching. `handle_user_input` calls `conversation.submit()` directly instead of going through `MacLLM`. Remove `set_status_indicator`. Add explicit interrupt gesture (Escape). |
+| `macllm/ui/main_text.py`       | Render tool progress from `agent.memory.steps` instead of `AgentStatusManager`. Render approval from `conversation.pending_approval`. Remove plan rendering.                                                         |
+| `macllm/ui/tab_bar.py`         | Add running/approval indicators on tabs.                                                                                                                                                                             |
+| `macllm/ui/approval.py`        | Update to read from `conversation.pending_approval` instead of `AgentStatusManager`.                                                                                                                                 |
+
 
 ### Files to remove or gut
 
-| File | Action |
-|------|--------|
+
+| File                          | Action                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------- |
 | `macllm/core/agent_status.py` | Remove `AgentStatusManager`, `ToolCallEntry`. Keep `PendingApproval` dataclass. |
+
+

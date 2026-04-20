@@ -31,18 +31,16 @@ It stores:
 
 `ConversationHistory` is a container for `Conversation` objects. It tracks which conversation is active via `active_index`. The tab bar displays recent conversations and the user can switch between them freely, even while agents are running in other tabs.
 
-## Request vs Stored History
+## Submit and Request Expansion
 
-The current runtime does not store the expanded prompt as the user message.
+The UI calls `conversation.submit(query)` directly. The conversation handles the full lifecycle:
 
-The flow is:
+1. If the agent is running, the query is enqueued and processed later.
+2. Skills and tag plugins expand the prompt into `UserRequest.expanded_prompt`. All `/` commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
+3. The original prompt is appended to `Conversation.messages` for UI/history.
+4. If the expanded prompt is non-empty, the agent runs on a background thread.
 
-1. `MacLLM.handle_instructions()` receives the original prompt.
-2. Skills and tag plugins expand that prompt into `UserRequest.expanded_prompt`.
-3. The original prompt is appended to `Conversation.messages`.
-4. The agent runs on `request.expanded_prompt`.
-
-This means `Conversation.messages` is primarily UI/history state, not the exact payload sent to the agent.
+`MacLLM` is not in this path. `Conversation.messages` is primarily UI/history state, not the exact payload sent to the agent.
 
 ## Context State
 
