@@ -45,6 +45,7 @@ class MacLLMAgent(ToolCallingAgent):
         from macllm.core.agent_service import create_step_callback
         from macllm.tools.web_search import reset_search_counter
         from macllm.core.skills import SkillsRegistry
+        from macllm.core.config import get_runtime_config
 
         reset_search_counter()
 
@@ -55,8 +56,31 @@ class MacLLMAgent(ToolCallingAgent):
         tools = [getattr(tools_module, n) for n in self.macllm_tools]
         step_callback = create_step_callback(token_callback)
 
-        if custom_instructions and "read_skill" in self.macllm_tools:
-            skills_catalog = SkillsRegistry.model_catalog_text()
+        cfg = get_runtime_config()
+        agent_cfg = cfg.agents.get(self.macllm_name)
+
+        if agent_cfg and agent_cfg.instructions:
+            custom_instructions = agent_cfg.instructions
+
+        if agent_cfg and agent_cfg.preload_skill:
+            SkillsRegistry.ensure_loaded()
+            preload = SkillsRegistry.get(agent_cfg.preload_skill)
+            if preload and preload.body:
+                custom_instructions = (
+                    f"{(custom_instructions or '').rstrip()}\n\n{preload.body.strip()}"
+                )
+                self._debug(f"[agent:{self.macllm_name}] preloaded skill '{preload.name}'")
+            else:
+                self._debug(f"[agent:{self.macllm_name}] preload_skill '{agent_cfg.preload_skill}' not found")
+
+        skill_names = agent_cfg.skills if agent_cfg and agent_cfg.skills else None
+        has_read_skill = "read_skill" in self.macllm_tools
+        if skill_names is not None and not has_read_skill:
+            tools.append(getattr(tools_module, "read_skill"))
+            has_read_skill = True
+
+        if custom_instructions and has_read_skill:
+            skills_catalog = SkillsRegistry.model_catalog_text(names=skill_names)
             custom_instructions = (
                 f"{custom_instructions.rstrip()}\n\n"
                 "Skill discovery:\n"
@@ -88,6 +112,15 @@ class MacLLMAgent(ToolCallingAgent):
             },
             **kwargs,
         )
+
+    @staticmethod
+    def _debug(msg: str):
+        try:
+            from macllm.macllm import MacLLM
+            if MacLLM._instance is not None:
+                MacLLM._instance.debug_log(msg)
+        except Exception:
+            pass
 
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)

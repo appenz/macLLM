@@ -39,6 +39,33 @@ The factory lives in `macllm/core/agent_service.py`.
 
 - `create_agent(...)` is the single runtime construction path used by conversation state
 
+## Per-Agent Configuration
+
+Each agent can be configured via `[agents.<name>]` sections in `config.toml`:
+
+```toml
+[agents.notes]
+instructions = "You are a notes management assistant..."
+skills = ["organize-notes", "format-markdown"]
+```
+
+- `instructions` -- custom instructions injected into the agent's system prompt. Overrides any
+  code-level fallback. The project `config/config.toml` ships default instructions for all built-in
+  agents. Users can override per-agent in `~/.config/macllm/config.toml`.
+- `skills` -- list of skill names the agent can access via `read_skill`. When present, the agent
+  receives a filtered skill catalog in its system prompt and `read_skill` is auto-added to its
+  tool set. An empty or absent list means no skill access (unless the agent already has `read_skill`
+  in its `macllm_tools`, in which case it sees all model-invocable skills).
+- `preload_skill` -- name of a skill whose body is appended to the agent's instructions at
+  startup. The skill content is baked into the system prompt, so it is always available as context
+  without the agent needing to call `read_skill`. This is useful for user-specific preferences or
+  conventions that should always apply (e.g. note formatting rules, calendar defaults). The skill
+  is resolved via `SkillsRegistry.get()`, so even skills with `disable-model-invocation: true`
+  can be preloaded.
+
+These sections are optional. When absent, agents fall back to code-level custom instructions
+(if any) and have no config-driven skill access or preloaded skills.
+
 ## Structure
 
 The shared base class is `MacLLMAgent` in `macllm/agents/base.py`.
@@ -47,7 +74,7 @@ Its architectural contract is:
 
 - agent identity is declared at the class level
 - tool membership is declared symbolically and resolved centrally
-- prompt structure and behavioral rules are configured separately
+- instructions and skill access are configured via `[agents.<name>]` in config.toml
 - planning and token accounting are reported through shared callbacks
 - managed-agent composition is declared by name, not by direct object wiring
 

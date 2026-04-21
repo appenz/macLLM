@@ -24,10 +24,7 @@ from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, 
 
 macLLM = None
 
-from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
-
-# Backward-compat alias
-SYSTEM_PROMPT = CUSTOM_INSTRUCTIONS
+from macllm.agents.default import MacLLMDefaultAgent  # noqa: F401
 
 class color:
    RED = '\033[91m'

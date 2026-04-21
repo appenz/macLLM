@@ -1,12 +1,12 @@
 from macllm.agents.base import MacLLMAgent
-from macllm.agents.default import CUSTOM_INSTRUCTIONS
 
 
 class MacLLMSmolAgent(MacLLMAgent):
     """Agent using the upstream smolagents default system prompt templates.
 
     Passes ``prompt_templates=None`` so smolagents applies its own built-in
-    templates.  Uses the same ``custom_instructions`` as MacLLMDefaultAgent.
+    templates.  Uses the same instructions as default (via ``[agents.smolagent]``
+    or ``[agents.default]`` in config.toml).
     """
 
     macllm_name = "smolagent"
@@ -20,7 +20,6 @@ class MacLLMSmolAgent(MacLLMAgent):
 
     def __init__(self, **kwargs):
         super().__init__(
-            custom_instructions=CUSTOM_INSTRUCTIONS,
             prompt_templates=None,
             **kwargs,
         )

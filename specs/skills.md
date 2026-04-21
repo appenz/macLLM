@@ -30,8 +30,27 @@ Each skill has:
 - `body`
 - `source`
 - `disable_model_invocation`
+- `user_invocable`
 
 Skill files use frontmatter-like sections inside markdown. Multiple skills can be defined in one file.
+
+### Visibility Flags
+
+Two independent boolean flags control where a skill is accessible:
+
+- `disable-model-invocation` (default `false`) -- when `true`, agents cannot see or fetch the skill
+  via `read_skill`.
+- `user-invocable` (default `true`) -- when `false`, the skill does not appear in `/` autocomplete
+  and cannot be invoked via `/skillname`.
+
+The four combinations:
+
+| `user-invocable` | `disable-model-invocation` | Effect |
+|---|---|---|
+| true | false | Full access (default) |
+| true | true | Manual-only: user can `/invoke`, agents cannot `read_skill` |
+| false | false | Agent-only: agents can `read_skill`, user cannot `/invoke` |
+| false | true | Hidden: neither path works (drafts / disabled skills) |
 
 ## Loading and Overrides
 
@@ -61,7 +80,7 @@ Skills are reusable instruction snippets stored as Markdown files, discovered fr
 
 `SkillsRegistry` (core/skills.py) scans `skills_dirs` from merged config (`resolved_skills_dirs`), parses YAML frontmatter blocks per file, and indexes skills by `name`.
 
-Frontmatter keys (structural): `name`, `description`, optional `disable-model-invocation` (bool).
+Frontmatter keys (structural): `name`, `description`, optional `disable-model-invocation` (bool, default false), optional `user-invocable` (bool, default true).
 
 ## Manual invocation (/)
 
@@ -78,7 +97,7 @@ The `name` parameter is required. Skill discovery (listing available skills) is 
 
 `read_skill` honours `disable-model-invocation`.
 
-Autocomplete / pill rendering for / uses `list_manual_commands` (skill commands plus built-ins such as /reload).
+Autocomplete / pill rendering for / uses `list_manual_commands` (skill commands plus built-ins such as /reload). Only skills with `user-invocable: true` (the default) appear in autocomplete and can be expanded via `/skillname`.
 
 ## Reload
 

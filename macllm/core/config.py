@@ -27,12 +27,21 @@ class ShellConfig:
 
 
 @dataclass
+class AgentConfig:
+    """Per-agent configuration loaded from ``[agents.<name>]`` TOML sections."""
+    skills: list[str] = field(default_factory=list)
+    instructions: str = ""
+    preload_skill: str = ""
+
+
+@dataclass
 class MacLLMConfig:
     api_keys: ApiKeys = field(default_factory=ApiKeys)
     skills_dirs: list[str] = field(default_factory=list)
     index_dirs: dict[str, str] = field(default_factory=dict)
     memory_dir: str = ""
     shell: ShellConfig = field(default_factory=ShellConfig)
+    agents: dict[str, AgentConfig] = field(default_factory=dict)
 
     def resolved_skills_dirs(self, project_root: Path | None = None) -> list[str]:
         return _resolve_paths(self.skills_dirs, project_root)
@@ -132,6 +141,21 @@ def _parse_index_dirs(raw) -> dict[str, str]:
     return {}
 
 
+def _parse_agents(raw: dict[str, Any] | None) -> dict[str, AgentConfig]:
+    if not raw or not isinstance(raw, dict):
+        return {}
+    agents: dict[str, AgentConfig] = {}
+    for name, agent_data in raw.items():
+        if not isinstance(agent_data, dict):
+            continue
+        agents[name] = AgentConfig(
+            skills=[str(s) for s in (agent_data.get("skills", []) or [])],
+            instructions=str(agent_data.get("instructions", "") or ""),
+            preload_skill=str(agent_data.get("preload_skill", "") or ""),
+        )
+    return agents
+
+
 def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
     api = data.get("api_keys", {}) or {}
     shell_data = data.get("shell", {}) or {}
@@ -153,6 +177,7 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
             read_only_paths=shell_data.get("read_only_paths")
             or list(_DEFAULT_READ_ONLY_PATHS),
         ),
+        agents=_parse_agents(data.get("agents")),
     )
 
 

@@ -13,6 +13,7 @@ class Skill:
     name: str
     description: str
     disable_model_invocation: bool
+    user_invocable: bool
     body: str
     source: str
 
@@ -77,7 +78,7 @@ class SkillsRegistry:
     @classmethod
     def list_manual_commands(cls) -> list[str]:
         cls.ensure_loaded()
-        cmds = [f"/{name}" for name in sorted(cls._skills.keys())]
+        cmds = [f"/{s.name}" for s in cls._skills.values() if s.user_invocable]
         return sorted(set(cmds + cls._builtin_commands))
 
     @classmethod
@@ -109,7 +110,7 @@ class SkillsRegistry:
         token, sep, rest = stripped.partition(" ")
         name = token[1:]
         skill = cls.get(name)
-        if skill is None:
+        if skill is None or not skill.user_invocable:
             return text
         expanded = skill.body.strip()
         if rest.strip():
@@ -117,11 +118,16 @@ class SkillsRegistry:
         return expanded
 
     @classmethod
-    def model_catalog_text(cls, max_chars: int = 5000) -> str:
+    def model_catalog_text(cls, names: list[str] | None = None,
+                           max_chars: int = 5000) -> str:
         cls.ensure_loaded()
+        skills = cls.list_model_invocable()
+        if names is not None:
+            allowed = set(names)
+            skills = [s for s in skills if s.name in allowed]
         lines = [
             f"- {s.name}: {s.description}"
-            for s in cls.list_model_invocable()
+            for s in skills
         ]
         if not lines:
             return "No model-invocable skills are currently available."
@@ -182,6 +188,7 @@ def _parse_skills_from_markdown(text: str, source: str) -> list[Skill]:
         name = fm.get("name", "").strip()
         description = fm.get("description", "").strip()
         disable = _parse_bool(fm.get("disable-model-invocation", "false"))
+        user_invocable = _parse_bool(fm.get("user-invocable", "true"), default=True)
         if not name:
             continue
         body_start = m.end()
@@ -192,6 +199,7 @@ def _parse_skills_from_markdown(text: str, source: str) -> list[Skill]:
                 name=name,
                 description=description,
                 disable_model_invocation=disable,
+                user_invocable=user_invocable,
                 body=body,
                 source=source,
             )

@@ -8,7 +8,7 @@ from macllm.agents import (
     _discover_agents,
 )
 from macllm.agents.base import MacLLMAgent
-from macllm.agents.default import MacLLMDefaultAgent, CUSTOM_INSTRUCTIONS
+from macllm.agents.default import MacLLMDefaultAgent
 from macllm.agents.smolagent import MacLLMSmolAgent
 from macllm.agents.note_agent import NoteAgent
 
@@ -46,8 +46,6 @@ class TestAgentDiscovery:
 class TestAgentDefinitions:
     def test_default_agent_attributes(self):
         assert MacLLMDefaultAgent.macllm_name == "default"
-        assert CUSTOM_INSTRUCTIONS is not None
-        assert len(CUSTOM_INSTRUCTIONS) > 0
         assert "get_current_time" in MacLLMDefaultAgent.macllm_tools
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
 
