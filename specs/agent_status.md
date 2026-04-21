@@ -35,9 +35,20 @@ Shell approval state lives on `Conversation.pending_approval` (a transient `Pend
 
 `MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list and pending approval to render:
 
-- a `Steps` section with status markers (running, success, error) for each tool call
+- **"Thinking..."** when the agent is running but no tool calls have been recorded yet
+- a **"Steps"** section with status markers (running, success, error) once tool calls exist
 - nested indentation for managed-agent delegation (from `TaskStep` entries)
 - an inline approval prompt when `conversation.pending_approval` is set
+
+### Per-tool display formatting
+
+`MainTextHandler._TOOL_DISPLAY` is a UI-local dict mapping tool names to display
+formatter lambdas `(args_dict) -> str`. When a tool name has an entry in this dict,
+the renderer uses its formatter instead of the generic `name(key=value, ...)` display.
+`run_command` is handled separately (monospaced font for the command text).
+
+This keeps the renderer passive — it only reads step data from the conversation and
+applies its own presentation rules. No imports from `macllm.tools`.
 
 ## Previous Architecture
 

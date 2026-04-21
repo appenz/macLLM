@@ -41,6 +41,14 @@ class MainTextHandler:
         for block_id, rel_start, length in get_last_render_block_infos():
             add_code_block_range(block_id, base + rel_start, length)
 
+    _TOOL_DISPLAY = {
+        "web_search": lambda args: (
+            'Searching the web for "'
+            + '", "'.join(str(q) for q in args.get("queries", [])[:3])
+            + '"'
+        ),
+    }
+
     @staticmethod
     def _render_agent_steps(text_view, conversation):
         """Render live agent progress from agent.memory.steps and pending approval."""
@@ -64,16 +72,24 @@ class MainTextHandler:
                 text, {NSForegroundColorAttributeName: color, NSFontAttributeName: font})
             ts.appendAttributedString_(a)
 
-        _append("\n\n", muted)
-        _append("Steps\n", muted, font_sm_bold)
-
         agent = conversation.agent
         if agent is None:
             return
 
-        # Only render steps from the current run
         run_offset = getattr(conversation, '_run_step_offset', 0)
         steps = agent.memory.steps[run_offset:]
+
+        has_tool_calls = any(
+            getattr(s, 'tool_calls', None)
+            for s in steps if isinstance(s, ActionStep)
+        )
+
+        _append("\n\n", muted)
+
+        if has_tool_calls:
+            _append("Steps\n", muted, font_sm_bold)
+        elif not conversation.pending_approval:
+            _append("Thinking...\n", muted, font_sm_bold)
 
         for step in steps:
             if isinstance(step, ActionStep):
@@ -85,8 +101,6 @@ class MainTextHandler:
                     name = tc.get('name', 'tool') if isinstance(tc, dict) else getattr(tc, 'name', 'tool')
                     args = tc.get('arguments', {}) if isinstance(tc, dict) else getattr(tc, 'arguments', {})
 
-                    is_shell = name == "run_command"
-
                     if error:
                         _append("  ✗ ", red, font_sm_bold)
                     elif observations is not None:
@@ -94,14 +108,17 @@ class MainTextHandler:
                     else:
                         _append("  ⟳ ", muted, font_sm_bold)
 
-                    _append(f"{name}", muted)
-
-                    if is_shell:
+                    display_fn = MainTextHandler._TOOL_DISPLAY.get(name)
+                    if display_fn:
+                        _append(f"{display_fn(args)}", light)
+                    elif name == "run_command":
                         cmd = args.get('command', '') if isinstance(args, dict) else ''
+                        display_cmd = cmd if len(cmd) <= 60 else cmd[:57] + "..."
+                        _append(f"{name}", muted)
                         if cmd:
-                            display_cmd = cmd if len(cmd) <= 60 else cmd[:57] + "..."
                             _append(f"({display_cmd})", light, font_mono)
                     else:
+                        _append(f"{name}", muted)
                         summary = ""
                         if isinstance(args, dict):
                             for k, v in list(args.items())[:2]:
