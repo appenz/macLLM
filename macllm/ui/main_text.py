@@ -133,6 +133,10 @@ class MainTextHandler:
                         _append(f" — {err_str}", red)
                     _append("\n", muted)
 
+        for tc in conversation.tool_calls:
+            _append("  ⟳ ", muted, font_sm_bold)
+            _append(f"{tc['message']}\n", light)
+
         if conversation.pending_approval:
             ApprovalRenderer.render_pending(ts, conversation.pending_approval)
 

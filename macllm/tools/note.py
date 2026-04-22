@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from macllm.tags.file_tag import FileTag
-from macllm.tools._debug import macllm_tool
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 BACKUP_DIR = os.path.expanduser("~/.macllm-backup")
 
@@ -107,6 +107,7 @@ def note_append(path: str, text: str) -> str:
     Returns:
         Success message with the note path, or an error description.
     """
+    set_tool_message(f"Appending to {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"note_append: path not indexed – {path}", 2)
@@ -142,6 +143,7 @@ def note_create(path: str, text: str) -> str:
     Returns:
         Success message with the note path, or an error description.
     """
+    set_tool_message(f"Creating {path}")
     if not path.lower().endswith(FileTag.EXTENSIONS):
         path = path + ".md"
 
@@ -184,6 +186,7 @@ def note_modify(path: str, new_content: str) -> str:
     Returns:
         Success message with the note path and backup location, or an error description.
     """
+    set_tool_message(f"Modifying {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"note_modify: path not indexed – {path}", 2)
@@ -224,6 +227,7 @@ def search_notes(query: str) -> str:
     Returns:
         Top 5 matching notes with path, filename, relevance score, and first 1000 characters of content.
     """
+    set_tool_message(f'Searching notes for "{query}"')
     try:
         results = FileTag.search(query)
         if not results:
@@ -257,6 +261,7 @@ def read_note(path: str) -> str:
     Returns:
         The full content of the note (up to 10,000 characters).
     """
+    set_tool_message(f"Reading {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"read_note: path not indexed – {path}", 2)
@@ -289,6 +294,7 @@ def note_resolve_path(path: str) -> str:
     Returns:
         The absolute filesystem path, or an error if the path is not in an indexed folder.
     """
+    set_tool_message(f"Resolving {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"note_resolve_path: path not indexed – {path}", 2)
@@ -312,6 +318,7 @@ def note_move(source_path: str, dest_path: str) -> str:
     Returns:
         Success message, or an error description.
     """
+    set_tool_message(f"Moving {source_path} → {dest_path}")
     src = validate_indexed_path(source_path)
     if src is None:
         _debug_log(f"note_move: source not indexed – {source_path}", 2)
@@ -365,6 +372,7 @@ def note_delete(path: str) -> str:
     Returns:
         Success message with the backup location, or an error description.
     """
+    set_tool_message(f"Deleting {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"note_delete: path not indexed – {path}", 2)
@@ -409,6 +417,7 @@ def folder_create(path: str) -> str:
     Returns:
         Success message with the folder path, or an error description.
     """
+    set_tool_message(f"Creating folder {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"folder_create: path not indexed – {path}", 2)
@@ -449,6 +458,7 @@ def folder_delete(path: str) -> str:
     Returns:
         Success message with the backup location, or an error description.
     """
+    set_tool_message(f"Deleting folder {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"folder_delete: path not indexed – {path}", 2)
@@ -526,6 +536,7 @@ def list_folder(path: str) -> str:
     Returns:
         A list of note names in the folder, or an error description.
     """
+    set_tool_message(f"Listing {path}")
     expanded = validate_indexed_path(path)
     if expanded is None:
         _debug_log(f"list_folder: path not indexed – {path}", 2)
@@ -574,6 +585,7 @@ def find_folder(query: str) -> str:
     Returns:
         A list of matching folder paths (mount-relative), or a message if none found.
     """
+    set_tool_message(f'Finding folder "{query}"')
     query_lower = query.lower()
     matches = []
 
@@ -605,6 +617,7 @@ def view_folder_structure() -> str:
     Returns:
         A tree-style listing of all indexed folders and notes.
     """
+    set_tool_message("Loading folder structure")
     if not FileTag._mount_points:
         return "No folders are currently indexed."
 

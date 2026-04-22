@@ -36,7 +36,7 @@ def create_step_callback(token_callback: Optional[Callable[[int, int], None]] = 
                 input_tokens[0] += step.token_usage.input_tokens
                 output_tokens[0] += step.token_usage.output_tokens
                 token_callback(input_tokens[0], output_tokens[0])
-    
+
     return on_step
 
 

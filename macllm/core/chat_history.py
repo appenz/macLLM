@@ -26,6 +26,27 @@ class Conversation:
 
         self.reset()
 
+    # ------------------------------------------------------------------
+    # Live tool-call tracking (transient, not persisted)
+    # ------------------------------------------------------------------
+
+    tool_calls: list
+
+    def add_tool_call(self, tool_name: str, message: str) -> None:
+        """Append a live tool-call entry and repaint the UI."""
+        self.tool_calls.append({"tool": tool_name, "message": message})
+        self._notify_ui()
+
+    def update_last_tool_message(self, message: str) -> None:
+        """Override the message of the most recent tool-call entry."""
+        if self.tool_calls:
+            self.tool_calls[-1]["message"] = message
+            self._notify_ui()
+
+    def clear_tool_calls(self) -> None:
+        """Reset the live tool-call list (e.g. after a step completes)."""
+        self.tool_calls.clear()
+
     def is_agent_running(self) -> bool:
         return self.agent_thread is not None and self.agent_thread.is_alive()
 
@@ -107,6 +128,7 @@ class Conversation:
             set_current_conversation(conversation)
             try:
                 conversation.abort_event.clear()
+                conversation.clear_tool_calls()
                 conversation._run_step_offset = len(conversation.agent.memory.steps)
 
                 run_kwargs = dict(max_steps=10, reset=False)
@@ -324,6 +346,7 @@ class Conversation:
         self.granted_dirs: list[str] = []
         self.speed_level = "normal"
         self.title = "New Agent"
+        self.tool_calls = []
 
         self._get_agent_cls()
 
