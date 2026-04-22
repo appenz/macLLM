@@ -5,9 +5,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from smolagents import tool
-
 from macllm.tags.file_tag import FileTag
+from macllm.tools._debug import macllm_tool
 
 BACKUP_DIR = os.path.expanduser("~/.macllm-backup")
 
@@ -96,7 +95,7 @@ def _debug_log(message: str, level: int = 0) -> None:
 # --- note write tools ---
 
 
-@tool
+@macllm_tool
 def note_append(path: str, text: str) -> str:
     """
     Append text to an existing note.
@@ -131,7 +130,7 @@ def note_append(path: str, text: str) -> str:
         return f"Error writing to note: {e}"
 
 
-@tool
+@macllm_tool
 def note_create(path: str, text: str) -> str:
     """
     Create a new note with the given content. Fails if the note already exists.
@@ -173,7 +172,7 @@ def note_create(path: str, text: str) -> str:
         return f"Error creating note: {e}"
 
 
-@tool
+@macllm_tool
 def note_modify(path: str, new_content: str) -> str:
     """
     Replace the entire content of an existing note. A backup of the original is saved automatically.
@@ -214,7 +213,7 @@ def note_modify(path: str, new_content: str) -> str:
 # --- note search tools ---
 
 
-@tool
+@macllm_tool
 def search_notes(query: str) -> str:
     """
     Search indexed notes using semantic similarity.
@@ -247,7 +246,7 @@ def search_notes(query: str) -> str:
         raise
 
 
-@tool
+@macllm_tool
 def read_note(path: str) -> str:
     """
     Read the full content of a note by its path.
@@ -279,7 +278,7 @@ def read_note(path: str) -> str:
         return f"Error reading note: {e}"
 
 
-@tool
+@macllm_tool
 def note_resolve_path(path: str) -> str:
     """
     Resolve a note path to its absolute filesystem path.
@@ -301,7 +300,7 @@ def note_resolve_path(path: str) -> str:
 # --- note ops tools ---
 
 
-@tool
+@macllm_tool
 def note_move(source_path: str, dest_path: str) -> str:
     """
     Move or rename a note within indexed folders. Fails if the destination already exists.
@@ -355,7 +354,7 @@ def note_move(source_path: str, dest_path: str) -> str:
         return f"Error moving note: {e}"
 
 
-@tool
+@macllm_tool
 def note_delete(path: str) -> str:
     """
     Delete a note. A backup is saved automatically before deletion.
@@ -399,7 +398,7 @@ def note_delete(path: str) -> str:
 # --- folder tools ---
 
 
-@tool
+@macllm_tool
 def folder_create(path: str) -> str:
     """
     Create a new empty folder inside an indexed directory. The parent folder must already exist.
@@ -437,7 +436,7 @@ def folder_create(path: str) -> str:
         return f"Error creating folder: {e}"
 
 
-@tool
+@macllm_tool
 def folder_delete(path: str) -> str:
     """
     Delete a folder and all of its contents. A backup of the entire folder tree is saved first.
@@ -516,7 +515,7 @@ def _render_subtree(lines: list[str], current_dir: str, tree: dict[str, list[str
             lines.append(f"{prefix}{filename}")
 
 
-@tool
+@macllm_tool
 def list_folder(path: str) -> str:
     """
     List all indexed notes in a specific folder (non-recursive).
@@ -564,7 +563,7 @@ def list_folder(path: str) -> str:
     return f"Folder: {display}\n\n" + "\n".join(lines)
 
 
-@tool
+@macllm_tool
 def find_folder(query: str) -> str:
     """
     Search for folders by name across all indexed mounts. Case-insensitive substring match.
@@ -598,7 +597,7 @@ def find_folder(query: str) -> str:
     return "\n".join(matches)
 
 
-@tool
+@macllm_tool
 def view_folder_structure() -> str:
     """
     Show the folder tree of all indexed folders and their notes.
