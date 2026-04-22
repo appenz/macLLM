@@ -93,11 +93,12 @@ loop as before. See `specs/parallel_tabs.md` for the full threading design.
 
 ## Current Agent Topology
 
-- `default`: main top-level assistant; uses local prompt templates; delegates to `notes`, `calendar`, and `things`
+- `default`: main top-level assistant; uses local prompt templates; delegates to `notes`, `calendar`, `things`, and `email`
 - `smolagent`: alternate top-level assistant; uses smolagents default templates; delegates to `notes`
 - `notes`: specialist for indexed files and notes
 - `calendar`: specialist for calendar and scheduling work
 - `things`: specialist for Things task management
+- `email`: specialist for read-only email access via local Superhuman mailbox
 
 ## Agent Selection API
 

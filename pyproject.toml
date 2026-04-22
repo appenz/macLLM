@@ -16,6 +16,7 @@ dependencies = [
     "pytest>=8.3.5",
     "quickmachotkey>=2023.11.17",
     "requests>=2.32.3",
+    "shmail>=0.1.0",
     "smolagents>=0.1.0",
     "things.py>=1.0.1",
     "tomli_w>=1.0.0",

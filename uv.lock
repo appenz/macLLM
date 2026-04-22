@@ -707,6 +707,7 @@ dependencies = [
     { name = "pytest" },
     { name = "quickmachotkey" },
     { name = "requests" },
+    { name = "shmail" },
     { name = "smolagents" },
     { name = "things-py" },
     { name = "tomli-w" },
@@ -726,6 +727,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "quickmachotkey", specifier = ">=2023.11.17" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "shmail", specifier = ">=0.1.0" },
     { name = "smolagents", specifier = ">=0.1.0" },
     { name = "things-py", specifier = ">=1.0.1" },
     { name = "tomli-w", specifier = ">=1.0.0" },
@@ -4263,6 +4265,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a", size = 1198299, upload-time = "2026-02-06T21:10:39.601Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/e3/c164c88b2e5ce7b24d667b9bd83589cf4f3520d97cad01534cd3c4f55fdb/setuptools-81.0.0-py3-none-any.whl", hash = "sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6", size = 1062021, upload-time = "2026-02-06T21:10:37.175Z" },
+]
+
+[[package]]
+name = "shmail"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/65/b84602911ffb1ac5466e03a0de19cdfb9cb790a0743746117312450abb59/shmail-0.1.0.tar.gz", hash = "sha256:a12350bb783c9532a8f33ac5535ac4d0a374ec8f5dac6342c76d8fea72e3ff72", size = 6859, upload-time = "2026-04-22T19:00:05.765Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/fb/5f0969128febd864a877e4650c3bb3322b0eb31b0af87553da9c7b374e46/shmail-0.1.0-py3-none-any.whl", hash = "sha256:d55b7414c832fb03bc0ecbb6c78b38646203abcf522251239483991f733541d7", size = 8823, upload-time = "2026-04-22T19:00:07.171Z" },
 ]
 
 [[package]]

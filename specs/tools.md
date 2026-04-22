@@ -25,6 +25,7 @@ The current tool set is organized by domain:
 - calendar tools for scheduling and event lookup
 - Things tools for task management
 - skill tools such as `read_skill`
+- email tools for read-only access to the local Superhuman mailbox via shmail
 - memory tools for long-term agent recall
 
 Files and calendar have deeper subsystem docs because they combine tools with additional indexing or agent structure. The rest of the tool layer is intentionally lightweight.
@@ -42,6 +43,7 @@ Tools are smolagents `@tool` callables exported from macllm/tools/ and reference
 - General — e.g. time, web search.
 - Files — Mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
+- Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
 - Memory — `remember` appends to a daily markdown file for long-term recall.
 

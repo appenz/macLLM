@@ -24,7 +24,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "read_skill",
         "remember",
     ]
-    macllm_managed_agents = ["notes", "calendar", "things"]
+    macllm_managed_agents = ["notes", "calendar", "things", "email"]
 
     def __init__(self, **kwargs):
         super().__init__(

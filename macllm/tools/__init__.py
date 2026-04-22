@@ -38,6 +38,17 @@ from macllm.tools.things import (
     things_complete_item,
     things_cancel_item,
 )
+from macllm.tools.email import (
+    email_inbox,
+    email_search,
+    email_read_thread,
+    email_sent,
+    email_starred,
+    email_contacts,
+    email_split_inboxes,
+    email_split_inbox_threads,
+    email_profile,
+)
 from macllm.tools.shell import run_command
 from macllm.tools.skills import read_skill
 from macllm.tools.memory import remember
@@ -78,6 +89,15 @@ __all__ = [
     "things_update_project",
     "things_complete_item",
     "things_cancel_item",
+    "email_inbox",
+    "email_search",
+    "email_read_thread",
+    "email_sent",
+    "email_starred",
+    "email_contacts",
+    "email_split_inboxes",
+    "email_split_inbox_threads",
+    "email_profile",
     "run_command",
     "read_skill",
     "remember",
