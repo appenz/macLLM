@@ -145,11 +145,12 @@ class TestResetBehavior:
         monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: MockAgent())
         
         conv = Conversation()
+        conv._create_agent()
         conv.agent.memory.steps = [{'task': 'before_reset'}]
         
         conv.reset(clear_persisted=True)
         
-        assert conv.agent.memory.steps == []
+        assert conv.agent is None
     
     def test_reset_deletes_persisted_file(self, temp_storage, monkeypatch):
         from macllm.core.chat_history import Conversation
@@ -177,6 +178,7 @@ class TestStepsPersistence:
         monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: MockAgent())
         
         conv = Conversation()
+        conv._create_agent()
         conv.agent.memory.steps = [{'task': 'first'}, {'task': 'second'}]
         
         conv._create_agent()

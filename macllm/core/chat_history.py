@@ -329,7 +329,7 @@ class Conversation:
 
         if self.agent is not None:
             self.agent.memory.steps = []
-        self._create_agent()
+            self.agent = None
 
         if clear_persisted:
             from macllm.core.memory import clear_conversation
