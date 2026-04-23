@@ -7,7 +7,7 @@ import warnings
 
 # smolagents warns about non-@tool decorators for its remote executor,
 # which we don't use. Suppress globally before any tool is registered.
-warnings.filterwarnings("ignore", message="has decorators other than @tool")
+warnings.filterwarnings("ignore", message=".*has decorators other than @tool")
 
 from smolagents import tool as _smolagents_tool
 
