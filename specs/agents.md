@@ -20,8 +20,11 @@ This is the main architectural choice in the agent system. Top-level agents keep
 and delegate specialized work, such as file or calendar tasks, to subagents with narrower instructions
 and tool sets.
 
-The parent lists subagents in `macllm_managed_agents`. The base class resolves those names from the registry,
-instantiates the subagents, and passes them to smolagents as `managed_agents`.
+The parent lists subagents in `macllm_managed_agents`. The base class resolves those names from the registry
+and registers **lazy** stand-ins (`LazyManagedMacLLMAgent` in `macllm/agents/lazy_managed.py`) with smolagents as
+`managed_agents`. A real subagent instance is created only the **first time** the parent delegates to that
+specialist (first `__call__`), not when the parent agent is constructed. Until then, `preload_skill` and full
+subagent `__init__` work for that specialist do not run.
 
 At runtime, a parent agent delegates by sending a natural-language task to the managed agent.
 The subagent runs its own tool loop and returns a report. Delegation is recorded in
@@ -56,8 +59,10 @@ skills = ["organize-notes", "format-markdown"]
   receives a filtered skill catalog in its system prompt and `read_skill` is auto-added to its
   tool set. An empty or absent list means no skill access (unless the agent already has `read_skill`
   in its `macllm_tools`, in which case it sees all model-invocable skills).
-- `preload_skill` -- name of a skill whose body is appended to the agent's instructions at
-  startup. The skill content is baked into the system prompt, so it is always available as context
+- `preload_skill` -- name of a skill whose body is appended to the agent's instructions when
+  that agent is constructed. For top-level agents this is at conversation agent creation; for **managed**
+  subagents this happens when the subagent is **first materialized** (lazy), i.e. on first delegation.
+  The skill content is baked into the system prompt, so it is always available as context
   without the agent needing to call `read_skill`. This is useful for user-specific preferences or
   conventions that should always apply (e.g. note formatting rules, calendar defaults). The skill
   is resolved via `SkillsRegistry.get()`, so even skills with `disable-model-invocation: true`

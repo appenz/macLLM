@@ -1,4 +1,4 @@
-.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render
+.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote
 
 uv = /opt/homebrew/bin/uv
 
@@ -15,6 +15,10 @@ test-llm:
 
 test:
 	$(uv) run python -m pytest -rx -v
+
+# Verify /passnote-style expansion: fixture skill body must enter the agent prompt.
+test-skill-passnote:
+	$(uv) run python -m pytest -rx -v test/core/test_skill_passnote_makefile.py
 
 test-external:
 	$(uv) run python -m pytest -v -m external

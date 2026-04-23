@@ -84,6 +84,15 @@ class Conversation:
         try:
             expanded_input = SkillsRegistry.expand_manual_invocation(user_input)
 
+            err = SkillsRegistry.failed_leading_slash_skill_message(
+                user_input, expanded_input, app.plugins
+            )
+            if err:
+                self.add_user_message(user_input)
+                self.add_assistant_message(err)
+                self._notify_ui()
+                return
+
             request = UserRequest(expanded_input)
             if not request.process_tags(app.plugins, self, app.debug_log, app.debug_exception, app._prefix_index):
                 app.debug_log(f'submit: {user_input} - Abort on plugin failure', 1)

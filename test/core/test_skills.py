@@ -97,6 +97,88 @@ class TestUserInvocable:
         assert skill.name == "agent-only"
 
 
+class TestDuplicateSkillNames:
+    def test_duplicate_in_same_file_raises(self):
+        md = (
+            "---\nname: dup\ndescription: a\n---\nA\n"
+            "---\nname: dup\ndescription: b\n---\nB\n"
+        )
+        with pytest.raises(ValueError, match="Duplicate skill name 'dup'"):
+            _parse_skills_from_markdown(md, "/t.md")
+
+
+class TestPackSkillMdFallback:
+    """SKILL.md may omit name:; folder name is used (Cursor-style packs)."""
+
+    def test_uses_pack_directory_name_when_name_missing(self):
+        md = "---\ndescription: Agent for notes\n---\nDo the thing.\n"
+        skills = _parse_skills_from_markdown(
+            md, "/skills/notes-agent/SKILL.md", pack_directory_name="notes-agent"
+        )
+        assert len(skills) == 1
+        assert skills[0].name == "notes-agent"
+        assert skills[0].description == "Agent for notes"
+        assert "Do the thing." in skills[0].body
+
+    def test_missing_name_emits_debug_warning(self, monkeypatch):
+        logged: list[tuple[str, int]] = []
+
+        def capture(msg: str, level: int = 0):
+            logged.append((msg, level))
+
+        monkeypatch.setattr("macllm.core.skills._skills_debug_log", capture)
+        md = "---\ndescription: x\n---\nbody\n"
+        _parse_skills_from_markdown(
+            md, "/p/SKILL.md", pack_directory_name="packdir"
+        )
+        assert logged
+        assert any("no name:" in m[0] and m[1] == 3 for m in logged)
+
+    def test_explicit_name_in_pack_does_not_warn(self, monkeypatch):
+        logged: list[tuple[str, int]] = []
+
+        def capture(msg: str, level: int = 0):
+            logged.append((msg, level))
+
+        monkeypatch.setattr("macllm.core.skills._skills_debug_log", capture)
+        md = "---\nname: myskill\ndescription: x\n---\nbody\n"
+        skills = _parse_skills_from_markdown(
+            md, "/p/SKILL.md", pack_directory_name="packdir"
+        )
+        assert skills[0].name == "myskill"
+        assert not any("no name:" in m[0] for m in logged)
+
+
+class TestSkillMarkdownBoundaries:
+    """--- in body must not split skills unless the block declares name:."""
+
+    def test_horizontal_rule_in_body_keeps_one_skill(self):
+        md = (
+            "---\nname: passnote\ndescription: Test\n---\n"
+            "Intro line\n\n"
+            "---\n\n"
+            "## Section\nRest of skill"
+        )
+        skills = _parse_skills_from_markdown(md, "/passnote.md")
+        assert len(skills) == 1
+        assert skills[0].name == "passnote"
+        assert "Intro line" in skills[0].body
+        assert "## Section" in skills[0].body
+        assert "Rest of skill" in skills[0].body
+
+    def test_multiple_named_blocks_still_split(self):
+        md = (
+            "---\nname: a\ndescription: x\n---\nBody A\n"
+            "---\nname: b\ndescription: y\n---\nBody B"
+        )
+        skills = _parse_skills_from_markdown(md, "/two.md")
+        assert len(skills) == 2
+        assert skills[0].name == "a"
+        assert skills[0].body.strip() == "Body A"
+        assert skills[1].name == "b"
+        assert skills[1].body.strip() == "Body B"
+
+
 class TestUserInvocableParsing:
     def test_default_is_true(self):
         md = "---\nname: test\ndescription: A test\n---\nBody here."
@@ -154,3 +236,96 @@ class TestPreloadSkill:
 
     def test_get_returns_none_for_missing(self):
         assert SkillsRegistry.get("nonexistent") is None
+
+
+class _SpeedPrefixes:
+    def get_prefixes(self):
+        return ["/fast", "/slow", "/think"]
+
+
+class TestFailedLeadingSlash:
+    """Leading /command that is not a skill, builtin, or plugin slash → error message."""
+
+    def test_unknown_skill_returns_message(self):
+        SkillsRegistry._skills = {}
+        SkillsRegistry._loaded = True
+        try:
+            msg = SkillsRegistry.failed_leading_slash_skill_message(
+                "/passnote x", "/passnote x", [_SpeedPrefixes()]
+            )
+            assert msg is not None
+            assert "passnote" in msg.lower()
+        finally:
+            SkillsRegistry._skills = {}
+            SkillsRegistry._loaded = False
+
+    def test_plugin_slash_no_message(self):
+        SkillsRegistry._skills = {}
+        SkillsRegistry._loaded = True
+        try:
+            assert (
+                SkillsRegistry.failed_leading_slash_skill_message(
+                    "/fast", "/fast", [_SpeedPrefixes()]
+                )
+                is None
+            )
+            assert (
+                SkillsRegistry.failed_leading_slash_skill_message(
+                    "/reload", "/reload", []
+                )
+                is None
+            )
+        finally:
+            SkillsRegistry._skills = {}
+            SkillsRegistry._loaded = False
+
+    def test_non_user_invocable_message(self):
+        SkillsRegistry._skills = {
+            "agent-only": _make_skill("agent-only", user_invocable=False),
+        }
+        SkillsRegistry._loaded = True
+        try:
+            msg = SkillsRegistry.failed_leading_slash_skill_message(
+                "/agent-only hi", "/agent-only hi", []
+            )
+            assert msg is not None
+            assert "user-invocable" in msg.lower()
+        finally:
+            SkillsRegistry._skills = {}
+            SkillsRegistry._loaded = False
+
+    def test_expanded_skill_no_message(self):
+        SkillsRegistry._skills = {"public": _make_skill("public", user_invocable=True)}
+        SkillsRegistry._loaded = True
+        try:
+            expanded = SkillsRegistry.expand_manual_invocation("/public a")
+            assert expanded != "/public a"
+            assert (
+                SkillsRegistry.failed_leading_slash_skill_message(
+                    "/public a", expanded, []
+                )
+                is None
+            )
+        finally:
+            SkillsRegistry._skills = {}
+            SkillsRegistry._loaded = False
+
+    def test_plain_text_no_message(self):
+        assert (
+            SkillsRegistry.failed_leading_slash_skill_message("hello", "hello", [])
+            is None
+        )
+
+    def test_empty_skill_body_shows_message(self):
+        SkillsRegistry._skills = {"empty": _make_skill("empty", body="")}
+        SkillsRegistry._loaded = True
+        try:
+            assert SkillsRegistry.expand_manual_invocation("/empty") == "/empty"
+            msg = SkillsRegistry.failed_leading_slash_skill_message(
+                "/empty", "/empty", []
+            )
+            assert msg is not None
+            assert "empty" in msg.lower()
+        finally:
+            SkillsRegistry._skills = {}
+            SkillsRegistry._loaded = False

@@ -89,9 +89,14 @@ class MacLLMAgent(ToolCallingAgent):
             )
 
         if managed_agents is None and self.macllm_managed_agents:
-            from macllm.agents import get_agent_class
+            from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
+
             managed_agents = [
-                get_agent_class(name)(speed=speed)
+                LazyManagedMacLLMAgent(
+                    name,
+                    speed=speed,
+                    token_callback=token_callback,
+                )
                 for name in self.macllm_managed_agents
             ]
 

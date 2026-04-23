@@ -4,6 +4,8 @@ from typing import List
 from Cocoa import NSPanel, NSBorderlessWindowMask, NSColor, NSTableView, NSTableColumn, NSScrollView, NSObject, NSIndexSet
 import objc
 
+from macllm.core.skills import SkillsRegistry
+
 
 class TableDataSource(NSObject):
     """NSObject subclass to serve as NSTableView data source."""
@@ -216,8 +218,8 @@ class AutocompleteController:  # pylint: disable=too-few-public-methods
         #    and plugin-registered commands.
         if fragment.startswith('/'):
             lower = fragment.lower()
-            # Add user-defined shortcuts
-            for s in self._shortcuts:
+            # Skill slash commands from the live registry (avoids stale suggestions after /reload).
+            for s in SkillsRegistry.list_manual_commands():
                 if s.lower().startswith(lower) and len(s) > 3:
                     entries.append((s, s))
                     seen.add(s)

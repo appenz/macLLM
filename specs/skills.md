@@ -56,8 +56,16 @@ The four combinations:
 
 Skills are loaded from `skills_dirs` in runtime config.
 
-`SkillsRegistry.reload()` scans those directories recursively, parses markdown files, and stores skills by name.
-If the same name appears more than once, the last loaded definition wins. This allows user-level overrides of project-provided skills.
+`SkillsRegistry.reload()` reads **only**:
+
+- any `*.md` file **directly** under each configured skills root (e.g. bundled `shortcuts.md` with several skills), and
+- a file named **`SKILL.md` in each immediate subdirectory** of that root (Cursor-style packs such as `skills/my-pack/SKILL.md`).
+
+For `SKILL.md`, the first YAML block may omit `name:`; the skill id is then the **parent folder name** (e.g. `notes-agent/SKILL.md` → skill `notes-agent`). With `--debug`, macLLM logs an **orange** warning when that fallback is used so packs without `name:` are obvious. Root-level `*.md` bundles must declare `name:` on every skill block.
+
+Duplicate `name:` **within the same file** is an error (recorded in the registry’s parse list; that file’s skills are skipped). The same name in **different** files still follows last-loaded-wins across `skills_dirs` order.
+
+Deeper paths (e.g. `references/*.md`, `my-pack/extra.md`) are **not** scanned for skill definitions; use `read_skill` with a `file=` path for auxiliary markdown inside a pack.
 
 ## Runtime Use
 
@@ -78,7 +86,7 @@ Skills are reusable instruction snippets stored as Markdown files, discovered fr
 
 ## Registry
 
-`SkillsRegistry` (core/skills.py) scans `skills_dirs` from merged config (`resolved_skills_dirs`), parses YAML frontmatter blocks per file, and indexes skills by `name`.
+`SkillsRegistry` (core/skills.py) loads from `skills_dirs` (`resolved_skills_dirs`): root-level `*.md` plus each child folder’s `SKILL.md` only; then parses YAML frontmatter blocks per file and indexes skills by `name`.
 
 Frontmatter keys (structural): `name`, `description`, optional `disable-model-invocation` (bool, default false), optional `user-invocable` (bool, default true).
 
