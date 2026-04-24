@@ -94,7 +94,7 @@ agents running simultaneously. The agent thread is set up with a thread-local co
 context so that tools and step callbacks automatically route to the correct conversation.
 
 Agents themselves are not aware of multi-threading. They run the same smolagents tool-calling
-loop as before. See `specs/parallel_tabs.md` for the full threading design.
+loop as before. Routing of tools to the correct tab uses `macllm/core/context.py`; see `specs/overview.md` (Parallel Tab Execution) and `specs/tools.md` (Threading and conversation context).
 
 ## Current Agent Topology
 

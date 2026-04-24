@@ -14,7 +14,7 @@ The main design choice is that tools are the operational boundary of the agent s
 - tools perform the concrete work
 - tool names are the stable contract between agent configuration and implementation
 
-Tools return human-readable strings. Tool execution progress is recorded by smolagents in `agent.memory.steps` and rendered by the UI from there. Tools do not report status directly.
+Tools return human-readable strings. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation.tool_calls` while a tool body runs; `set_tool_message` updates the latest line. That list is cleared when a new agent run starts on the conversation.
 
 ## Tool Families
 
@@ -32,7 +32,7 @@ Files and calendar have deeper subsystem docs because they combine tools with ad
 
 # Tools (agent API)
 
-Tools are smolagents `@tool` callables exported from macllm/tools/ and referenced by name on each `MacLLMAgent` (`macllm_tools`).
+Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapper around smolagents `tool` that adds debug logging and the live `conversation.tool_calls` behavior above. Only `_debug.py` imports `smolagents.tool` directly. Tools are referenced by name on each `MacLLMAgent` (`macllm_tools`).
 
 ## Resolution
 
@@ -49,11 +49,11 @@ Tools are smolagents `@tool` callables exported from macllm/tools/ and reference
 
 ## Threading and conversation context
 
-Tools run on agent background threads. They access the current conversation through `get_current_conversation()` from `macllm/core/context.py`, which uses a thread-local to route to the correct conversation. Tools are completely unaware of multi-threading — they call the same functions regardless of how many agents are running.
+Tools run on agent background threads. They resolve the owning `Conversation` through `get_current_conversation()` from `macllm/core/context.py`. Resolution order: optional explicit `conv_id` (string UUID on each conversation, looked up in a small process-wide registry), else the thread-local set at agent thread entry via `set_current_conversation`, else `MacLLM._instance.chat_history` for main-thread callers such as tag plugins. The `@macllm_tool` wrapper captures `conv_id` at invocation time so `set_tool_message` targets the correct tab even when the UI focus changes. Tools do not manage threading themselves.
 
 ## Side effects
 
-Tools that need user approval (e.g., `run_command`) set `conversation.pending_approval` and block until the user decides. This is the only point where a tool blocks on user interaction. See `specs/shell.md` and `specs/parallel_tabs.md` for the approval flow.
+Tools that need user approval (e.g., `run_command`) set `conversation.pending_approval` and block until the user decides. This is the only point where a tool blocks on user interaction. See `specs/shell.md` for the approval flow. For `run_command`, the redundant live `tool_calls` row is removed while the inline approval UI is shown, then re-added after approval before sandboxed execution.
 
 ## Boundaries
 

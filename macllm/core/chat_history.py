@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
 import threading
-import time
 import traceback
 import uuid
 from typing import List, Dict, Optional, Union
@@ -149,29 +147,6 @@ class Conversation:
                 conversation.clear_tool_calls()
                 conversation._run_step_offset = len(conversation.agent.memory.steps)
 
-                # #region agent log
-                try:
-                    payload = {
-                        "sessionId": "db8a81",
-                        "runId": "ctrl-c-stack-probe",
-                        "hypothesisId": "H1,H3,H4",
-                        "location": "macllm/core/chat_history.py:run_agent:start",
-                        "message": "Agent thread started for conversation",
-                        "data": {
-                            "conv_id": conversation.conv_id,
-                            "thread_ident": threading.get_ident(),
-                            "agent_thread_ident": conversation.agent_thread.ident if conversation.agent_thread else None,
-                            "is_agent_running": conversation.is_agent_running(),
-                            "active_index": getattr(app.conversation_history, "active_index", None),
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                    with open("/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-db8a81.log", "a", encoding="utf-8") as log_file:
-                        log_file.write(json.dumps(payload) + "\n")
-                except Exception:
-                    pass
-                # #endregion
-
                 run_kwargs = dict(max_steps=10, reset=False)
                 if request.images:
                     if model_supports_vision(conversation.speed_level):
@@ -204,27 +179,6 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
-                # #region agent log
-                try:
-                    payload = {
-                        "sessionId": "db8a81",
-                        "runId": "ctrl-c-stack-probe",
-                        "hypothesisId": "H1,H2,H5",
-                        "location": "macllm/core/chat_history.py:run_agent:finally",
-                        "message": "Agent thread exiting for conversation",
-                        "data": {
-                            "conv_id": conversation.conv_id,
-                            "thread_ident": threading.get_ident(),
-                            "abort_event_set": conversation.abort_event.is_set(),
-                            "queue_length": len(conversation.query_queue),
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                    with open("/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-db8a81.log", "a", encoding="utf-8") as log_file:
-                        log_file.write(json.dumps(payload) + "\n")
-                except Exception:
-                    pass
-                # #endregion
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()

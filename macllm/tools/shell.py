@@ -5,12 +5,16 @@ from __future__ import annotations
 import os
 import subprocess
 
-from smolagents import tool
-
 from macllm.core.command_parser import CommandParseError, extract_executables, extract_paths
 from macllm.core.sandbox import run_sandboxed
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 COMMAND_TIMEOUT = 60
+
+
+def _cmd_preview(cmd: str) -> str:
+    c = cmd.replace("\n", " ")
+    return c if len(c) <= 60 else c[:57] + "..."
 
 
 def _debug_log(message: str, level: int = 0) -> None:
@@ -32,7 +36,7 @@ def _get_shell_config():
     return get_runtime_config().shell
 
 
-@tool
+@macllm_tool
 def run_command(command: str, working_directory: str = "") -> str:
     """Execute a shell command in a sandboxed environment.
 
@@ -71,6 +75,7 @@ def run_command(command: str, working_directory: str = "") -> str:
         needs_approval = bool(unknown) or bool(ungranted)
 
         if needs_approval:
+            conversation.pop_last_tool_call()
             from macllm.core.agent_status import PendingApproval
 
             approval = PendingApproval(
@@ -103,6 +108,10 @@ def run_command(command: str, working_directory: str = "") -> str:
                 for path in ungranted:
                     conversation.grant_directory(path)
                 granted_dirs = conversation.get_granted_dirs()
+
+            conversation.add_tool_call("run_command", _cmd_preview(command))
+        else:
+            set_tool_message(_cmd_preview(command))
 
         cwd = _resolve_working_directory(working_directory, granted_dirs)
 

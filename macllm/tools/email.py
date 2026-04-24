@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from smolagents import tool
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 
 def _mailbox():
@@ -54,7 +54,7 @@ def _fmt_message(msg) -> str:
     return "\n".join(parts)
 
 
-@tool
+@macllm_tool
 def email_inbox(limit: str = "20") -> str:
     """
     List recent inbox threads from the user's email.
@@ -66,6 +66,7 @@ def email_inbox(limit: str = "20") -> str:
         Formatted list of recent inbox threads with ID, subject, date, and participants.
     """
     n = min(int(limit), 50)
+    set_tool_message(f"Loading inbox (up to {n})")
     try:
         with _mailbox() as mb:
             threads = mb.inbox(n)
@@ -77,7 +78,7 @@ def email_inbox(limit: str = "20") -> str:
     return "\n\n---\n\n".join(_fmt_thread_summary(t) for t in threads)
 
 
-@tool
+@macllm_tool
 def email_search(query: str, limit: str = "20") -> str:
     """
     Search email threads by keyword or query string.
@@ -92,6 +93,7 @@ def email_search(query: str, limit: str = "20") -> str:
         Formatted list of matching threads.
     """
     n = min(int(limit), 50)
+    set_tool_message(f'Searching email for "{query}"')
     try:
         with _mailbox() as mb:
             threads = mb.search(query, limit=n)
@@ -103,7 +105,7 @@ def email_search(query: str, limit: str = "20") -> str:
     return "\n\n---\n\n".join(_fmt_thread_summary(t) for t in threads)
 
 
-@tool
+@macllm_tool
 def email_read_thread(thread_id: str) -> str:
     """
     Read the full content of an email thread by its ID (or ID prefix).
@@ -116,6 +118,7 @@ def email_read_thread(thread_id: str) -> str:
     Returns:
         Full thread with all messages, senders, dates, and snippets.
     """
+    set_tool_message(f"Reading thread {thread_id}")
     try:
         with _mailbox() as mb:
             thread = mb.thread(thread_id.strip())
@@ -130,7 +133,7 @@ def email_read_thread(thread_id: str) -> str:
     return f"{header}\n\n{messages}"
 
 
-@tool
+@macllm_tool
 def email_sent(limit: str = "20") -> str:
     """
     List recent sent email threads.
@@ -142,6 +145,7 @@ def email_sent(limit: str = "20") -> str:
         Formatted list of recent sent threads.
     """
     n = min(int(limit), 50)
+    set_tool_message("Loading sent mail")
     try:
         with _mailbox() as mb:
             threads = mb.sent(n)
@@ -153,7 +157,7 @@ def email_sent(limit: str = "20") -> str:
     return "\n\n---\n\n".join(_fmt_thread_summary(t) for t in threads)
 
 
-@tool
+@macllm_tool
 def email_starred(limit: str = "20") -> str:
     """
     List starred/flagged email threads.
@@ -165,6 +169,7 @@ def email_starred(limit: str = "20") -> str:
         Formatted list of starred threads.
     """
     n = min(int(limit), 50)
+    set_tool_message("Loading starred mail")
     try:
         with _mailbox() as mb:
             threads = mb.starred(n)
@@ -176,7 +181,7 @@ def email_starred(limit: str = "20") -> str:
     return "\n\n---\n\n".join(_fmt_thread_summary(t) for t in threads)
 
 
-@tool
+@macllm_tool
 def email_contacts(query: str = "", limit: str = "30") -> str:
     """
     List or search email contacts. Without a query, returns top contacts
@@ -190,6 +195,7 @@ def email_contacts(query: str = "", limit: str = "30") -> str:
         Formatted list of contacts with name, email, and frequency score.
     """
     n = min(int(limit), 100)
+    set_tool_message(f'Searching contacts for "{query}"' if query.strip() else "Listing contacts")
     try:
         with _mailbox() as mb:
             if query.strip():
@@ -211,7 +217,7 @@ def email_contacts(query: str = "", limit: str = "30") -> str:
     return "\n".join(lines)
 
 
-@tool
+@macllm_tool
 def email_split_inboxes() -> str:
     """
     List all split inbox definitions (Superhuman split inboxes).
@@ -219,6 +225,7 @@ def email_split_inboxes() -> str:
     Returns:
         Formatted list of split inboxes with name, type, and status.
     """
+    set_tool_message("Loading split inboxes")
     try:
         with _mailbox() as mb:
             splits = mb.split_inboxes
@@ -235,7 +242,7 @@ def email_split_inboxes() -> str:
     return "\n".join(lines)
 
 
-@tool
+@macllm_tool
 def email_split_inbox_threads(split_id: str, limit: str = "20") -> str:
     """
     List recent threads from a specific split inbox.
@@ -249,6 +256,7 @@ def email_split_inbox_threads(split_id: str, limit: str = "20") -> str:
         Formatted list of threads in the split inbox.
     """
     n = min(int(limit), 50)
+    set_tool_message(f"Loading split inbox {split_id}")
     try:
         with _mailbox() as mb:
             threads = mb.split_inbox_threads(split_id.strip(), limit=n)
@@ -260,7 +268,7 @@ def email_split_inbox_threads(split_id: str, limit: str = "20") -> str:
     return "\n\n---\n\n".join(_fmt_thread_summary(t) for t in threads)
 
 
-@tool
+@macllm_tool
 def email_profile(email_address: str) -> str:
     """
     Look up a contact's enrichment profile (name, bio, location, timezone).
@@ -271,6 +279,7 @@ def email_profile(email_address: str) -> str:
     Returns:
         Profile information if available, or a not-found message.
     """
+    set_tool_message(f"Looking up {email_address}")
     try:
         with _mailbox() as mb:
             profile = mb.profile(email_address.strip())

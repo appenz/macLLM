@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from smolagents import tool
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 def _things():
     import things
@@ -361,7 +361,7 @@ def _update_command_for_item(item: dict[str, Any]) -> str:
     raise ValueError(f"Things item type '{item_type}' does not support this operation.")
 
 
-@tool
+@macllm_tool
 def things_list_areas() -> str:
     """
     List all Things areas from the local Things database.
@@ -369,11 +369,12 @@ def things_list_areas() -> str:
     Returns:
         A formatted list of areas and their IDs.
     """
+    set_tool_message("Listing Things areas")
     items = _things().areas(database=_get_database())
     return _format_items(items, "No Things areas found.")
 
 
-@tool
+@macllm_tool
 def things_list_projects(area: str = "", include_completed: bool = False) -> str:
     """
     List Things projects, optionally scoped to an area.
@@ -385,6 +386,7 @@ def things_list_projects(area: str = "", include_completed: bool = False) -> str
     Returns:
         A formatted list of projects and their IDs.
     """
+    set_tool_message("Listing Things projects" + (f" · {area}" if area else ""))
     area_id = _resolve_area_id(area)
     items = _things().projects(
         area=area_id,
@@ -394,7 +396,7 @@ def things_list_projects(area: str = "", include_completed: bool = False) -> str
     return _format_items(items, "No Things projects found.")
 
 
-@tool
+@macllm_tool
 def things_list_tags() -> str:
     """
     List all Things tags from the local Things database.
@@ -402,11 +404,12 @@ def things_list_tags() -> str:
     Returns:
         A formatted list of tags.
     """
+    set_tool_message("Listing Things tags")
     items = _things().tags(database=_get_database())
     return _format_items(items, "No Things tags found.")
 
 
-@tool
+@macllm_tool
 def things_list_todos(
     bucket: str = "",
     area: str = "",
@@ -429,6 +432,7 @@ def things_list_todos(
     Returns:
         A formatted list of to-dos.
     """
+    set_tool_message("Listing Things to-dos" + (f" · {bucket}" if bucket else ""))
     area_id = _resolve_area_id(area)
     project_id = _resolve_project_id(project)
     items = _bucket_items(
@@ -443,7 +447,7 @@ def things_list_todos(
     return _format_items(items, "No Things to-dos found.")
 
 
-@tool
+@macllm_tool
 def things_search(query: str, status: str = "", limit: int = 25) -> str:
     """
     Search Things data by text.
@@ -456,6 +460,7 @@ def things_search(query: str, status: str = "", limit: int = 25) -> str:
     Returns:
         A formatted list of matching Things items.
     """
+    set_tool_message(f'Searching Things for "{query}"')
     matches = _things().search(
         _strip(query),
         status=_normalize_status(status),
@@ -466,7 +471,7 @@ def things_search(query: str, status: str = "", limit: int = 25) -> str:
     return _format_items(matches, f"No Things items found matching '{query}'.")
 
 
-@tool
+@macllm_tool
 def things_get_item(item_id: str, include_items: bool = True) -> str:
     """
     Get a single Things item by ID.
@@ -478,11 +483,12 @@ def things_get_item(item_id: str, include_items: bool = True) -> str:
     Returns:
         The formatted item details.
     """
+    set_tool_message(f"Loading Things item {item_id}")
     item = _load_item(_strip(item_id), include_items=include_items)
     return _format_item(item)
 
 
-@tool
+@macllm_tool
 def things_show_item(item_id: str) -> str:
     """
     Reveal a Things item in the Things app.
@@ -493,12 +499,13 @@ def things_show_item(item_id: str) -> str:
     Returns:
         The formatted item details after revealing it in Things.
     """
+    set_tool_message(f"Opening in Things {item_id}")
     item = _load_item(_strip(item_id), include_items=True)
     _open_things_url("show", uuid=item["uuid"])
     return "Opened in Things:\n\n" + _format_item(item)
 
 
-@tool
+@macllm_tool
 def things_create_todo(
     title: str,
     when: str = "",
@@ -534,6 +541,7 @@ def things_create_todo(
     title = _strip(title)
     if not title:
         raise ValueError("A Things to-do title is required.")
+    set_tool_message(f'Creating to-do "{title[:50]}"')
 
     resolved_list_id = _resolve_project_or_area_id(list_id, list_name)
     resolved_heading_id = _resolve_heading_id(resolved_list_id, heading_id, heading)
@@ -570,7 +578,7 @@ def things_create_todo(
     return "To-do created:\n\n" + _format_item(item)
 
 
-@tool
+@macllm_tool
 def things_create_project(
     title: str,
     when: str = "",
@@ -602,6 +610,7 @@ def things_create_project(
     title = _strip(title)
     if not title:
         raise ValueError("A Things project title is required.")
+    set_tool_message(f'Creating project "{title[:50]}"')
 
     resolved_area_id = _resolve_area_id(area_id or area)
     created_after = datetime.now().replace(microsecond=0)
@@ -635,7 +644,7 @@ def things_create_project(
     return "Project created:\n\n" + _format_item(item)
 
 
-@tool
+@macllm_tool
 def things_update_todo(
     item_id: str,
     title: str = "",
@@ -680,6 +689,7 @@ def things_update_todo(
     Returns:
         The updated to-do details.
     """
+    set_tool_message(f"Updating to-do {item_id}")
     item = _load_item(_strip(item_id), include_items=True)
     if item.get("type") != "to-do":
         raise ValueError("things_update_todo only works on Things to-dos.")
@@ -714,7 +724,7 @@ def things_update_todo(
     return "To-do updated:\n\n" + _format_item(updated)
 
 
-@tool
+@macllm_tool
 def things_update_project(
     item_id: str,
     title: str = "",
@@ -749,6 +759,7 @@ def things_update_project(
     Returns:
         The updated project details.
     """
+    set_tool_message(f"Updating project {item_id}")
     item = _load_item(_strip(item_id), include_items=True)
     if item.get("type") != "project":
         raise ValueError("things_update_project only works on Things projects.")
@@ -775,7 +786,7 @@ def things_update_project(
     return "Project updated:\n\n" + _format_item(updated)
 
 
-@tool
+@macllm_tool
 def things_complete_item(item_id: str, completed: bool = True) -> str:
     """
     Mark a Things to-do or project complete or incomplete.
@@ -787,6 +798,7 @@ def things_complete_item(item_id: str, completed: bool = True) -> str:
     Returns:
         The updated item details.
     """
+    set_tool_message(f"Completing {item_id}" if completed else f"Reopening {item_id}")
     item = _load_item(_strip(item_id), include_items=True)
     command = _update_command_for_item(item)
     _open_things_url(command, uuid=item["uuid"], completed=completed)
@@ -794,7 +806,7 @@ def things_complete_item(item_id: str, completed: bool = True) -> str:
     return "Item updated:\n\n" + _format_item(updated)
 
 
-@tool
+@macllm_tool
 def things_cancel_item(item_id: str, canceled: bool = True) -> str:
     """
     Mark a Things to-do or project canceled or incomplete.
@@ -806,6 +818,7 @@ def things_cancel_item(item_id: str, canceled: bool = True) -> str:
     Returns:
         The updated item details.
     """
+    set_tool_message(f"Canceling {item_id}" if canceled else f"Uncanceling {item_id}")
     item = _load_item(_strip(item_id), include_items=True)
     command = _update_command_for_item(item)
     _open_things_url(command, uuid=item["uuid"], canceled=canceled)

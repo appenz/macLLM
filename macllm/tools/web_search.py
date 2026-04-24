@@ -3,8 +3,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
-from smolagents import tool
+
 from macllm.core.config import get_runtime_config
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 _state = {"search_count": 0, "tool_call_counter": 0}
 MAX_SEARCHES_PER_RUN = 50
@@ -57,7 +58,7 @@ def _format_results(search_results: list[dict]) -> str:
     return "\n".join(output)
 
 
-@tool
+@macllm_tool
 def web_search(queries: list[str]) -> str:
     """
     Search the web using Brave Search API.
@@ -77,7 +78,12 @@ def web_search(queries: list[str]) -> str:
     
     if not queries:
         return "No queries provided."
-    
+
+    shown = [f'"{q}"' for q in queries[:3]]
+    if len(queries) > 3:
+        shown.append("…")
+    set_tool_message("Searching the web for " + ", ".join(shown))
+
     current_count = _state["search_count"]
     if current_count + len(queries) > MAX_SEARCHES_PER_RUN:
         raise ValueError(

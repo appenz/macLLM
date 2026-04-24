@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from smolagents import tool
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 _store_singleton = None
 
@@ -94,7 +94,7 @@ def _format_time_slot(slot) -> str:
 # ---------------------------------------------------------------------------
 
 
-@tool
+@macllm_tool
 def cal_list_calendars() -> str:
     """
     List all available macOS calendars.
@@ -102,6 +102,7 @@ def cal_list_calendars() -> str:
     Returns:
         A formatted list of calendars showing name, type, and source.
     """
+    set_tool_message("Listing calendars")
     store = _get_store()
     cals = store.list_calendars()
     if not cals:
@@ -115,7 +116,7 @@ def cal_list_calendars() -> str:
     return "\n".join(lines)
 
 
-@tool
+@macllm_tool
 def cal_get_events(start: str, end: str, calendars: str = "") -> str:
     """
     Fetch all calendar events in a date range.
@@ -128,6 +129,7 @@ def cal_get_events(start: str, end: str, calendars: str = "") -> str:
     Returns:
         A formatted list of events in the date range.
     """
+    set_tool_message(f"Loading events {start} → {end}")
     store = _get_store()
     dt_start = _parse_datetime(start)
     dt_end = _parse_datetime(end)
@@ -138,7 +140,7 @@ def cal_get_events(start: str, end: str, calendars: str = "") -> str:
     return "\n\n".join(_format_event(ev) for ev in events)
 
 
-@tool
+@macllm_tool
 def cal_find_events(
     query: str, start: str, end: str, calendars: str = "", fields: str = ""
 ) -> str:
@@ -155,6 +157,7 @@ def cal_find_events(
     Returns:
         A formatted list of matching events, or a message if none found.
     """
+    set_tool_message(f'Searching calendar for "{query}"')
     store = _get_store()
     dt_start = _parse_datetime(start)
     dt_end = _parse_datetime(end)
@@ -172,7 +175,7 @@ def cal_find_events(
     return "\n\n".join(_format_event(ev) for ev in events)
 
 
-@tool
+@macllm_tool
 def cal_add_event(
     title: str,
     start: str,
@@ -199,6 +202,7 @@ def cal_add_event(
     Returns:
         The created event details including its event ID.
     """
+    set_tool_message(f'Adding "{title}" to calendar')
     store = _get_store()
     tz = timezone or None
     dt_start = _parse_datetime(start, tz)
@@ -215,7 +219,7 @@ def cal_add_event(
     return "Event created:\n\n" + _format_event(event)
 
 
-@tool
+@macllm_tool
 def cal_update_event(
     event_id: str,
     title: str = "",
@@ -240,6 +244,7 @@ def cal_update_event(
     Returns:
         The updated event details.
     """
+    set_tool_message(f"Updating event {event_id}")
     store = _get_store()
     tz = timezone or None
 
@@ -261,7 +266,7 @@ def cal_update_event(
     return "Event updated:\n\n" + _format_event(event)
 
 
-@tool
+@macllm_tool
 def cal_find_free_time(
     start: str,
     end: str,
@@ -282,6 +287,7 @@ def cal_find_free_time(
     Returns:
         A list of free time slots, or a message if none found.
     """
+    set_tool_message(f"Finding free time ({duration_minutes} min)")
     store = _get_store()
     tz = timezone or None
     dt_start = _parse_datetime(start, tz)

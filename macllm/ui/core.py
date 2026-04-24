@@ -28,10 +28,7 @@ from macllm.ui.input_field import InputFieldHandler
 
 import objc
 
-import json
 import signal
-import sys
-import time
 import traceback
 from time import sleep
 
@@ -268,40 +265,6 @@ class MacLLMUI:
 
     @staticmethod
     def handle_interrupt(signal, frame):
-        # #region agent log
-        try:
-            from macllm.macllm import MacLLM
-            app = MacLLM._instance
-            conv = getattr(app, "chat_history", None) if app else None
-            agent_thread = getattr(conv, "agent_thread", None) if conv else None
-            agent_thread_ident = getattr(agent_thread, "ident", None)
-            frames = sys._current_frames()
-            stack = traceback.format_stack(frames[agent_thread_ident])[-8:] if agent_thread_ident in frames else []
-            payload = {
-                "sessionId": "db8a81",
-                "runId": "ctrl-c-stack-probe",
-                "hypothesisId": "H1,H2,H3,H4,H5",
-                "location": "macllm/ui/core.py:handle_interrupt",
-                "message": "SIGINT handler observed active conversation thread state",
-                "data": {
-                    "has_app": app is not None,
-                    "has_active_conversation": conv is not None,
-                    "active_index": getattr(getattr(app, "conversation_history", None), "active_index", None) if app else None,
-                    "active_conv_id": getattr(conv, "conv_id", None),
-                    "active_agent_running": conv.is_agent_running() if conv else None,
-                    "agent_thread_ident": agent_thread_ident,
-                    "agent_thread_alive": agent_thread.is_alive() if agent_thread else None,
-                    "agent_frame_visible": agent_thread_ident in frames if agent_thread_ident is not None else False,
-                    "agent_stack_tail": stack,
-                    "main_thread_frame": bool(frame),
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-            with open("/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-db8a81.log", "a", encoding="utf-8") as log_file:
-                log_file.write(json.dumps(payload) + "\n")
-        except Exception:
-            pass
-        # #endregion
         NSApp().terminate_(None)
 
     def iconStatus(self, color):

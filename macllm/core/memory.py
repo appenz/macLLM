@@ -166,6 +166,8 @@ def load_all_conversations(conversation_history) -> bool:
             conv.agent.memory.steps = entry.get('steps', [])
             conv.messages = entry.get('messages', [])
             conv.title = entry.get('title', 'New')
+            from macllm.core.context import register_conversation
+            register_conversation(conv)
             conversation_history.conversations.append(conv)
 
         saved_index = data.get('active_index', len(entries) - 1)

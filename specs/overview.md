@@ -38,7 +38,7 @@ At a high level, the flow is as follows:
 5. The original prompt is stored in the conversation for UI/history.
 6. If the expanded prompt is non-empty, it is passed to the supervising agent of the conversation
 7. The agent calls tools and managed subagents as needed.
-8. Tool progress is tracked in `agent.memory.steps` and rendered by the UI.
+8. Tool progress is shown from `agent.memory.steps` (smolagents steps) and, for `@macllm_tool` wrappers, from transient `conversation.tool_calls` lines while tools execute.
 9. The final assistant response is appended to the conversation and persisted.
 
 ## Key Objects
@@ -54,11 +54,12 @@ Multiple conversations can run agents simultaneously. Each conversation owns its
 abort event, token metadata, and pending approval state. `MacLLM` holds no per-run state; it is
 purely a bootstrap and global resource container.
 
-Tools are isolated from threading via a thread-local conversation context. They call the same
-lookup functions as before; routing to the correct conversation happens underneath.
+Tools resolve the owning conversation through `get_current_conversation()` (`macllm/core/context.py`):
+explicit `conv_id` registry lookup, then thread-local context set on the agent thread, then the
+active-tab `chat_history` for main-thread callers.
 
 The UI is a pure renderer of conversation state. The only signal from agent to UI is a generic
-repaint callback. See `specs/parallel_tabs.md` for the full design.
+repaint callback. Tab switching, queues, and submit flow are described in `specs/conversation.md`.
 
 ## Subsystems
 

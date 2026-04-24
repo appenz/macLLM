@@ -54,4 +54,4 @@ applies its own presentation rules. No imports from `macllm.tools`.
 
 The previous `AgentStatusManager` class has been removed. It used to track plan text, tool call entries, and pending approvals as a separate object owned by `MacLLM`. Tools reported their own progress by calling `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()`.
 
-This was replaced by rendering directly from `agent.memory.steps`, which smolagents already maintains as part of its execution loop. This eliminates a redundant layer and makes the conversation the sole data source for the UI. See `specs/parallel_tabs.md` for context.
+This was replaced by rendering directly from `agent.memory.steps`, which smolagents already maintains as part of its execution loop. This eliminates a redundant layer and makes the conversation the sole data source for the UI. Transient `@macllm_tool` status lines also read from `conversation.tool_calls` (see `specs/tools.md`).

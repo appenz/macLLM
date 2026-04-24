@@ -3,9 +3,8 @@
 import os
 from datetime import datetime
 
-from smolagents import tool
-
 from macllm.tags.file_tag import FileTag
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 MEMORY_SUBFOLDER = "Agent-Memory"
 
@@ -25,7 +24,7 @@ def _memory_dir() -> str | None:
     return None
 
 
-@tool
+@macllm_tool
 def remember(text: str) -> str:
     """
     Save a piece of information to the agent's long-term memory.
@@ -39,6 +38,7 @@ def remember(text: str) -> str:
     Returns:
         Success message, or an error description.
     """
+    set_tool_message("Saving to memory")
     mem_dir = _memory_dir()
     if mem_dir is None:
         return "Error: No indexed folders configured and no memory_dir set in config."

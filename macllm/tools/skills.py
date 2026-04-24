@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from smolagents import tool
-
 from macllm.core.skills import SkillsRegistry
+from macllm.tools._debug import macllm_tool, set_tool_message
 
 MAX_SKILL_FILE_LEN = 10_000
 
@@ -30,7 +29,7 @@ def _read_skill_file(skill_dir: Path, file: str) -> str:
     return content
 
 
-@tool
+@macllm_tool
 def read_skill(name: str, file: str = "") -> str:
     """
     Read a model-invocable skill or a file from its directory.
@@ -44,6 +43,7 @@ def read_skill(name: str, file: str = "") -> str:
     Returns:
         Skill body with a file listing, or the content of the requested file.
     """
+    set_tool_message(f"Reading skill {name}/{file}" if file.strip() else f"Reading skill {name}")
     SkillsRegistry.ensure_loaded()
 
     skill = SkillsRegistry.get_model_invocable(name.strip())

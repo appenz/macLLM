@@ -59,7 +59,7 @@ Each `Conversation` owns its complete agent runtime: the agent instance, the bac
 `Conversation._create_agent()` rebuilds the agent through `create_agent(...)` in `macllm/core/agent_service.py`.
 When an agent is recreated, existing `agent.memory.steps` are preserved so the agent trace survives across re-instantiation within the same conversation.
 
-`Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. See `specs/parallel_tabs.md` for the full threading model.
+`Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. Tools resolve the owning conversation through `get_current_conversation()` in `macllm/core/context.py` (see `specs/tools.md`).
 
 ### Query Queue
 
