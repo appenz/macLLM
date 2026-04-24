@@ -52,6 +52,37 @@ def _parse_csv(value: str | None) -> list[str] | None:
     return [s.strip() for s in value.split(",") if s.strip()]
 
 
+def _attendee_label(participant) -> str:
+    """Display name and email for a single participant, if available."""
+    name, email = participant.name, participant.email
+    if name and email and name.strip() != email.strip():
+        return f"{name} ({email})"
+    if name or email:
+        return (name or email or "").strip() or "unknown"
+    return "unknown"
+
+
+def _format_participant_rsvp(participant) -> str:
+    """Map maccal ParticipantStatus to a short, human-readable RSVP label."""
+    from maccal import ParticipantStatus
+
+    st = getattr(participant, "status", None)
+    if st is None or st == ParticipantStatus.UNKNOWN:
+        return "unknown"
+    labels = {
+        ParticipantStatus.PENDING: "no response",
+        ParticipantStatus.ACCEPTED: "accepted",
+        ParticipantStatus.DECLINED: "declined",
+        ParticipantStatus.TENTATIVE: "tentative",
+        ParticipantStatus.DELEGATED: "delegated",
+        ParticipantStatus.COMPLETED: "completed",
+        ParticipantStatus.IN_PROCESS: "in process",
+    }
+    if st in labels:
+        return labels[st]
+    return getattr(st, "name", str(st)).replace("_", " ").lower()
+
+
 def _format_event(ev) -> str:
     """Format a maccal Event into a readable block."""
     time_fmt = "%Y-%m-%d %H:%M"
@@ -74,8 +105,11 @@ def _format_event(ev) -> str:
     if ev.url:
         lines.append(f"  URL: {ev.url}")
     if ev.attendees:
-        names = [a.name or a.email or "unknown" for a in ev.attendees]
-        lines.append(f"  Attendees: {', '.join(names)}")
+        lines.append("  Attendees:")
+        for a in ev.attendees:
+            who = _attendee_label(a)
+            rsvp = _format_participant_rsvp(a)
+            lines.append(f"    {who} — {rsvp}")
     if ev.is_recurring:
         lines.append("  Recurring: yes")
     if ev.availability and ev.availability.name != "NOT_SUPPORTED":
