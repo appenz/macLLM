@@ -49,7 +49,7 @@ class Conversation:
 `AgentStatusManager` is removed entirely. Its responsibilities are absorbed:
 
 - **Plan text**: no longer displayed. The plan lives in `agent.memory.steps` (as `PlanningStep` objects) and can be rendered from there if ever needed again.
-- **Tool call progress**: rendered directly from `agent.memory.steps`. Each `ActionStep` contains `tool_calls` (name, arguments, id), `observations` (tool output), and `error` (if failed). An `ActionStep` with `tool_calls` but no `observations` yet means the tool is currently running.
+- **Tool call progress**: rendered from `agent.memory.steps`. Each `ActionStep` contains `tool_calls` (name, arguments, id), `observations` (tool output), and `error` (if failed). An `ActionStep` with `tool_calls` but no `observations` yet means the tool is currently running. In addition, `@macllm_tool`-wrapped tools append short-lived human-readable rows to `conversation.tool_calls` for the same conversation; the main text view shows these under **Steps** while a tool body runs (cleared when a new run starts).
 - **Managed-agent nesting**: visible from `TaskStep` entries in `memory.steps`.
 - **Pending approval**: moved to `Conversation.pending_approval`.
 
@@ -65,27 +65,11 @@ The menu bar status indicator (colored circle) is removed. The menu bar shows a 
 
 ### The problem
 
-Tools reach the current conversation through `MacLLM._instance.chat_history`, but `chat_history` points to whatever tab is displayed, not the tab whose agent is running.
+Tools cannot rely on `MacLLM._instance.chat_history` alone: that pointer tracks the **focused** tab, not necessarily the conversation whose agent is executing.
 
 ### The solution
 
-A `threading.local()` stores the active conversation for each agent thread. Before the agent thread starts, the conversation is set on the thread-local. A central lookup function checks thread-local first, falling back to `MacLLM._instance.chat_history` (for main-thread callers like tag plugins).
-
-```python
-_thread_context = threading.local()
-
-def set_current_conversation(conv: Conversation):
-    _thread_context.conversation = conv
-
-def get_current_conversation() -> Conversation:
-    conv = getattr(_thread_context, 'conversation', None)
-    if conv is not None:
-        return conv
-    from macllm.macllm import MacLLM
-    return MacLLM._instance.chat_history
-```
-
-This lives in a small module (e.g., `macllm/core/context.py`) that tools import. All existing tool code that calls `MacLLM._instance.chat_history` or `MacLLM.get_status_manager()` is updated to call `get_current_conversation()` instead.
+`macllm/core/context.py` exposes `set_current_conversation` / `get_current_conversation`. Each `Conversation` has a stable string `conv_id` (UUID) and is registered in a small process-wide map at creation (and unregistered on removal). `get_current_conversation(conv_id=None)` resolves in order: explicit `conv_id` (registry hit), thread-local conversation set at agent thread entry, then `MacLLM._instance.chat_history` for main-thread callers such as tag plugins. The `@macllm_tool` wrapper records the owning `conv_id` at invocation time so `set_tool_message` can target the correct conversation even if the user switches tabs mid-tool.
 
 The agent thread entry point sets the context once at the top:
 
@@ -109,10 +93,11 @@ Today, pressing Enter while an agent is running aborts the agent. The new model:
 
 ### Interrupt (explicit)
 
-Aborting an agent becomes an explicit gesture (e.g., Escape key or a dedicated button), not the default behavior of Enter.
+Aborting an agent is an explicit gesture: **Cmd-Enter**. It is not the default behavior of Enter.
 
-- Interrupt aborts the current run (same mechanism as today: `agent.interrupt_switch = True`), generates a summary, then processes any queued queries.
-- If the user wants to interrupt and replace, they press the interrupt key and then type a new query.
+- Cmd-Enter sets `agent.interrupt_switch = True` on the top agent and all managed subagents, then shows a static "Interrupted." assistant message. There is no additional LLM call (`provide_final_answer` is not invoked).
+- If the user types text and presses Cmd-Enter, the agent is cancelled and the text is submitted as a new request.
+- Cmd-Enter with an empty input box is a pure cancel.
 
 ### Cross-tab behavior
 
@@ -168,6 +153,7 @@ When switching tabs, the UI simply changes `conversation_history.active_index` a
 
 - `conversation.messages` for user/assistant text
 - `conversation.agent.memory.steps` for tool call progress (while agent is running)
+- `conversation.tool_calls` for transient `@macllm_tool` status lines during execution
 - `conversation.pending_approval` for the approval widget
 - `conversation.llm_metadata` for token counts in the top bar
 
@@ -237,7 +223,7 @@ The main thread reads conversation state for display. This is safe without locks
 | `macllm/tools/shell.py`        | Use `get_current_conversation()` from context module. Set `conversation.pending_approval` instead of `status_manager.request_approval()`. Remove `_status_manager()` calls.                                                      |
 | `macllm/tools/*.py`            | Remove all `_status_manager()` helpers and `start_tool_call` / `complete_tool_call` / `fail_tool_call` calls. Tools just do their work and return.                                                                               |
 | `macllm/agents/base.py`        | Remove `MacLLM.get_status_manager()` calls for managed-agent enter/exit.                                                                                                                                                         |
-| `macllm/ui/core.py`            | Remove `is_agent_running()` guards from tab switching. `handle_user_input` calls `conversation.submit()` directly instead of going through `MacLLM`. Remove `set_status_indicator`. Add explicit interrupt gesture (Escape).     |
+| `macllm/ui/core.py`            | Remove `is_agent_running()` guards from tab switching. `handle_user_input` calls `conversation.submit()` directly instead of going through `MacLLM`. Remove `set_status_indicator`. Add explicit interrupt gesture (Cmd-Enter via `handle_cmd_return`). |
 | `macllm/ui/main_text.py`       | Render tool progress from `agent.memory.steps` instead of `AgentStatusManager`. Render approval from `conversation.pending_approval`. Remove plan rendering.                                                                     |
 | `macllm/ui/tab_bar.py`         | Add running/approval indicators on tabs.                                                                                                                                                                                         |
 | `macllm/ui/approval.py`        | Update to read from `conversation.pending_approval` instead of `AgentStatusManager`.                                                                                                                                             |

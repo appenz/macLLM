@@ -57,9 +57,9 @@ It supports:
 - command-key shortcuts for speed selection and other actions
 - Shift-Enter for literal newlines
 - Enter for submission (enqueues if agent is running)
-- Escape for explicit agent interrupt
+- Cmd-Enter to cancel the running agent and optionally submit new text
 
-When the user presses Enter while an agent is running in the active tab, the query is added to the conversation's query queue and displayed as a user message. The agent processes it after the current run finishes. Aborting is an explicit gesture (Escape), not the default behavior of Enter.
+When the user presses Enter while an agent is running in the active tab, the query is added to the conversation's query queue and displayed as a user message. The agent processes it after the current run finishes. Cancelling is an explicit gesture (Cmd-Enter). Cmd-Enter aborts the running agent immediately (showing a static "Interrupted." message with no additional LLM call) and, if there is text in the input, submits it as a new request.
 
 The key design choice is that displayed text and inserted raw token text can differ. The user sees a short pill label, but the input field retains the underlying token needed for later parsing and expansion.
 

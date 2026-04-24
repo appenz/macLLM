@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import threading
+import time
 import traceback
+import uuid
 from typing import List, Dict, Optional, Union
 
 from macllm.core.agent_status import PendingApproval
@@ -10,6 +13,7 @@ from macllm.core.agent_status import PendingApproval
 
 class Conversation:
     def __init__(self):
+        self.conv_id: str = str(uuid.uuid4())
         self.agent = None
         self.agent_cls = None
         self.ui_update_callback = None
@@ -41,6 +45,11 @@ class Conversation:
         """Override the message of the most recent tool-call entry."""
         if self.tool_calls:
             self.tool_calls[-1]["message"] = message
+            self._notify_ui()
+
+    def pop_last_tool_call(self) -> None:
+        if self.tool_calls:
+            self.tool_calls.pop()
             self._notify_ui()
 
     def clear_tool_calls(self) -> None:
@@ -140,6 +149,29 @@ class Conversation:
                 conversation.clear_tool_calls()
                 conversation._run_step_offset = len(conversation.agent.memory.steps)
 
+                # #region agent log
+                try:
+                    payload = {
+                        "sessionId": "db8a81",
+                        "runId": "ctrl-c-stack-probe",
+                        "hypothesisId": "H1,H3,H4",
+                        "location": "macllm/core/chat_history.py:run_agent:start",
+                        "message": "Agent thread started for conversation",
+                        "data": {
+                            "conv_id": conversation.conv_id,
+                            "thread_ident": threading.get_ident(),
+                            "agent_thread_ident": conversation.agent_thread.ident if conversation.agent_thread else None,
+                            "is_agent_running": conversation.is_agent_running(),
+                            "active_index": getattr(app.conversation_history, "active_index", None),
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    with open("/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-db8a81.log", "a", encoding="utf-8") as log_file:
+                        log_file.write(json.dumps(payload) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+
                 run_kwargs = dict(max_steps=10, reset=False)
                 if request.images:
                     if model_supports_vision(conversation.speed_level):
@@ -172,6 +204,27 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
+                # #region agent log
+                try:
+                    payload = {
+                        "sessionId": "db8a81",
+                        "runId": "ctrl-c-stack-probe",
+                        "hypothesisId": "H1,H2,H5",
+                        "location": "macllm/core/chat_history.py:run_agent:finally",
+                        "message": "Agent thread exiting for conversation",
+                        "data": {
+                            "conv_id": conversation.conv_id,
+                            "thread_ident": threading.get_ident(),
+                            "abort_event_set": conversation.abort_event.is_set(),
+                            "queue_length": len(conversation.query_queue),
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    with open("/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-db8a81.log", "a", encoding="utf-8") as log_file:
+                        log_file.write(json.dumps(payload) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
@@ -210,23 +263,10 @@ class Conversation:
             self._notify_ui()
 
     def _handle_abort_summary(self, task, app) -> None:
-        """After an abort, ask the LLM to summarize partial results."""
-        from macllm.core.memory import save_all_conversations
-        try:
-            self._notify_ui()
-            summary_msg = self.agent.provide_final_answer(task)
-            content = summary_msg.content
-            if isinstance(content, list):
-                content = " ".join(
-                    item.get("text", "") for item in content if isinstance(item, dict)
-                )
-            result = content.strip() if isinstance(content, str) else str(content)
-            prefix = "**Interrupted.** The following is a partial answer based on what I found before being stopped:\n\n"
-            self.add_assistant_message(prefix + result if result else "[Interrupted]")
-        except Exception as summary_error:
-            app.debug_exception(summary_error)
-            self.add_assistant_message("[Interrupted]")
+        """After an abort, record a static interrupted message (no LLM call)."""
+        self.add_assistant_message("Interrupted.")
         if not app.ephemeral:
+            from macllm.core.memory import save_all_conversations
             save_all_conversations(app.conversation_history)
 
     def _maybe_generate_title(self) -> None:
@@ -392,8 +432,11 @@ class ConversationHistory:
 
     def add_conversation(self, conversation=None):
         """Add a new Conversation object and make it the current (active) conversation."""
+        from macllm.core.context import register_conversation
+
         if conversation is None:
             conversation = Conversation()
+        register_conversation(conversation)
         self.conversations.append(conversation)
         self.active_index = len(self.conversations) - 1
         return conversation
@@ -423,8 +466,11 @@ class ConversationHistory:
 
     def remove_conversation(self, index: int) -> bool:
         """Remove conversation at *index*, ensuring at least one always exists."""
+        from macllm.core.context import unregister_conversation
+
         if index < 0 or index >= len(self.conversations):
             return False
+        unregister_conversation(self.conversations[index])
         self.conversations.pop(index)
         if not self.conversations:
             self.add_conversation()

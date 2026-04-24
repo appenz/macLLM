@@ -170,12 +170,15 @@ class InputFieldDelegate(NSObject):
                     return False
                 elif commandSelector in ('insertNewline:'):
                     current_event = NSApp().currentEvent()
-                    shift_pressed = current_event and (current_event.modifierFlags() & (1 << 17))
-                    if shift_pressed:
+                    flags = current_event.modifierFlags() if current_event else 0
+                    if flags & (1 << 17):  # Shift
                         self.text_view.insertText_("\n")
                         return True
                     input_text = self._plain_text_from_view()
-                    self.macllm_ui.handle_user_input(input_text)
+                    if flags & (1 << 20):  # Cmd
+                        self.macllm_ui.handle_cmd_return(input_text)
+                    else:
+                        self.macllm_ui.handle_user_input(input_text)
                     return True
                 elif commandSelector == 'cancelOperation:':
                     self.macllm_ui.close_window()
