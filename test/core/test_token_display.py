@@ -1,4 +1,4 @@
-"""Verify the full token-display pipeline: step callback → llm_metadata → top bar text."""
+"""Verify the full token-display pipeline: step callback → conversation.usage → top bar text."""
 
 import time
 from unittest.mock import Mock, patch, MagicMock
@@ -7,7 +7,7 @@ from smolagents import ActionStep, PlanningStep, TaskStep
 from smolagents.memory import TokenUsage, Timing
 
 from macllm.core.agent_service import create_step_callback
-from macllm.core.chat_history import Conversation
+from macllm.core.chat_history import Conversation, Usage
 from macllm.core.llm_service import get_model_for_speed
 from macllm.macllm import create_macllm
 
@@ -17,7 +17,7 @@ from macllm.macllm import create_macllm
 # ---------------------------------------------------------------------------
 
 class TestCreateStepCallback:
-    """Verify token accumulation inside the step callback closure."""
+    """Verify that step callbacks increment conversation.usage directly."""
 
     @staticmethod
     def _make_action_step(input_tokens: int, output_tokens: int) -> ActionStep:
@@ -38,91 +38,83 @@ class TestCreateStepCallback:
         )
 
     def test_accumulates_action_step_tokens(self):
-        received = {}
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        on_step = create_step_callback(conv)
 
-        def cb(inp, out):
-            received["input"] = inp
-            received["output"] = out
-
-        on_step = create_step_callback(cb)
         on_step(self._make_action_step(100, 50), agent=None)
-        assert received == {"input": 100, "output": 50}
+        assert conv.usage.input_tokens == 100
+        assert conv.usage.output_tokens == 50
 
         on_step(self._make_action_step(200, 80), agent=None)
-        assert received == {"input": 300, "output": 130}
+        assert conv.usage.input_tokens == 300
+        assert conv.usage.output_tokens == 130
 
     def test_accumulates_planning_step_tokens(self):
-        received = {}
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        on_step = create_step_callback(conv)
 
-        def cb(inp, out):
-            received["input"] = inp
-            received["output"] = out
-
-        on_step = create_step_callback(cb)
         on_step(self._make_planning_step(50, 20), agent=None)
-        assert received == {"input": 50, "output": 20}
+        assert conv.usage.input_tokens == 50
+        assert conv.usage.output_tokens == 20
 
     def test_mixed_steps(self):
-        received = {}
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        on_step = create_step_callback(conv)
 
-        def cb(inp, out):
-            received["input"] = inp
-            received["output"] = out
-
-        on_step = create_step_callback(cb)
         on_step(self._make_planning_step(10, 5), agent=None)
         on_step(self._make_action_step(100, 50), agent=None)
-        assert received == {"input": 110, "output": 55}
+        assert conv.usage.input_tokens == 110
+        assert conv.usage.output_tokens == 55
 
     def test_task_step_ignored(self):
-        received = {}
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        on_step = create_step_callback(conv)
 
-        def cb(inp, out):
-            received["input"] = inp
-            received["output"] = out
-
-        on_step = create_step_callback(cb)
         on_step(TaskStep(task="sub"), agent=None)
-        assert received == {}
+        assert conv.usage.input_tokens == 0
+        assert conv.usage.output_tokens == 0
 
-    def test_no_callback_no_crash(self):
+    def test_no_conversation_no_crash(self):
         on_step = create_step_callback(None)
         on_step(self._make_action_step(100, 50), agent=None)
 
     def test_none_token_usage_skipped(self):
-        received = {}
-
-        def cb(inp, out):
-            received["input"] = inp
-            received["output"] = out
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
 
         step = ActionStep(
             step_number=1,
             timing=Timing(start_time=0.0),
             token_usage=None,
         )
-        on_step = create_step_callback(cb)
+        on_step = create_step_callback(conv)
         on_step(step, agent=None)
-        assert received == {}
+        assert conv.usage.input_tokens == 0
+        assert conv.usage.output_tokens == 0
 
 
 # ---------------------------------------------------------------------------
-# Conversation.llm_metadata integration
+# Conversation.usage integration
 # ---------------------------------------------------------------------------
 
-class TestConversationTokenMetadata:
-    """Verify that _process_query correctly wires the token callback."""
+class TestConversationUsage:
+    """Verify that _process_query correctly wires the conversation to the step callback."""
 
-    def test_initial_metadata_is_zero(self):
+    def test_initial_usage_is_zero(self):
         conv = Conversation()
-        assert conv.llm_metadata == {"input_tokens": 0, "output_tokens": 0}
+        assert conv.usage.input_tokens == 0
+        assert conv.usage.output_tokens == 0
 
-    def test_metadata_reset_on_submit(self):
+    def test_usage_reset_on_submit(self):
         """Submitting a query resets token counts to 0 before starting."""
         mac = create_macllm(debug=False, start_ui=False)
         conv = mac.chat_history
-        conv.llm_metadata["input_tokens"] = 999
-        conv.llm_metadata["output_tokens"] = 888
+        conv.usage.input_tokens = 999
+        conv.usage.output_tokens = 888
 
         with patch("macllm.core.agent_service.create_agent") as mock_create:
             mock_agent = Mock()
@@ -133,18 +125,18 @@ class TestConversationTokenMetadata:
             conv.submit("test")
             time.sleep(0.3)
 
-        assert conv.llm_metadata["input_tokens"] == 0
-        assert conv.llm_metadata["output_tokens"] == 0
+        assert conv.usage.input_tokens == 0
+        assert conv.usage.output_tokens == 0
 
-    def test_token_callback_updates_metadata(self):
-        """token_callback created in _process_query correctly sets llm_metadata."""
+    def test_conversation_passed_to_create_agent(self):
+        """_process_query passes the conversation itself to create_agent."""
         mac = create_macllm(debug=False, start_ui=False)
         conv = mac.chat_history
 
-        captured_callback = {}
+        captured = {}
 
-        def intercept_create_agent(agent_cls=None, speed="normal", token_callback=None):
-            captured_callback["cb"] = token_callback
+        def intercept_create_agent(agent_cls=None, speed="normal", conversation=None):
+            captured["conversation"] = conversation
             mock_agent = Mock()
             mock_agent.run = Mock(return_value="done")
             mock_agent.memory = Mock()
@@ -155,13 +147,7 @@ class TestConversationTokenMetadata:
             conv.submit("test")
             time.sleep(0.3)
 
-        cb = captured_callback.get("cb")
-        assert cb is not None, "token_callback should have been passed to create_agent"
-
-        conv.ui_update_callback = lambda: None
-        cb(150, 75)
-        assert conv.llm_metadata["input_tokens"] == 150
-        assert conv.llm_metadata["output_tokens"] == 75
+        assert captured.get("conversation") is conv
 
 
 # ---------------------------------------------------------------------------
@@ -197,26 +183,26 @@ class TestTopBarDisplayValues:
         assert len(name) > 0, "Agent display name should be non-empty"
 
     def test_display_for_each_tab(self):
-        """Switching tabs updates chat_history and each conversation's metadata is independent."""
+        """Switching tabs updates chat_history and each conversation's usage is independent."""
         mac = create_macllm(debug=False, start_ui=False)
 
         conv_a = mac.chat_history
-        conv_a.llm_metadata["input_tokens"] = 100
-        conv_a.llm_metadata["output_tokens"] = 50
+        conv_a.usage.input_tokens = 100
+        conv_a.usage.output_tokens = 50
         conv_a.speed_level = "fast"
 
         conv_b = mac.conversation_history.add_conversation()
         conv_b.ui_update_callback = mac._update_ui_from_callback
-        conv_b.llm_metadata["input_tokens"] = 200
-        conv_b.llm_metadata["output_tokens"] = 80
+        conv_b.usage.input_tokens = 200
+        conv_b.usage.output_tokens = 80
         conv_b.speed_level = "slow"
 
         mac.switch_to_conversation(1)
         assert mac.chat_history is conv_b
-        assert mac.chat_history.llm_metadata["input_tokens"] == 200
+        assert mac.chat_history.usage.input_tokens == 200
         assert mac.chat_history.speed_level == "slow"
 
         mac.switch_to_conversation(0)
         assert mac.chat_history is conv_a
-        assert mac.chat_history.llm_metadata["input_tokens"] == 100
+        assert mac.chat_history.usage.input_tokens == 100
         assert mac.chat_history.speed_level == "fast"

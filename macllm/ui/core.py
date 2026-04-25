@@ -586,14 +586,10 @@ class MacLLMUI:
 
         from macllm.core.llm_service import get_model_for_speed
         conv = self.macllm.chat_history
-        metadata = getattr(conv, 'llm_metadata', {'input_tokens': 0, 'output_tokens': 0})
         speed = getattr(conv, 'speed_level', 'normal') or 'normal'
         model = get_model_for_speed(speed)
-        input_tokens = metadata.get('input_tokens', 0)
-        output_tokens = metadata.get('output_tokens', 0)
-        # #region agent log
-        import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"DE","location":"ui/core.py:update_top_bar_text","message":"Reading token metadata for display","data":{"conv_id":getattr(conv,'conv_id','?'),"input_tokens":input_tokens,"output_tokens":output_tokens,"is_running":conv.is_agent_running() if hasattr(conv,'is_agent_running') else '?'},"timestamp":int(_time.time()*1000)})+'\n')
-        # #endregion
+        input_tokens = conv.usage.input_tokens
+        output_tokens = conv.usage.output_tokens
 
         # Determine agent and speed for display
         agent_cls = getattr(self.macllm.chat_history, "agent_cls", None)

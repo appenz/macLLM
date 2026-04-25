@@ -21,7 +21,7 @@ class TestLazyManagedSubagents:
         old = llm_service.MODELS.get("normal")
         llm_service.MODELS["normal"] = mock_model
         try:
-            agent = MacLLMDefaultAgent(speed="normal", token_callback=None)
+            agent = MacLLMDefaultAgent(speed="normal", conversation=None)
             notes = agent.managed_agents["notes"]
             assert isinstance(notes, LazyManagedMacLLMAgent)
             assert notes._impl is None

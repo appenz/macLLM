@@ -1,5 +1,11 @@
-from typing import Optional, Callable
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from smolagents import PlanningStep, ActionStep, TaskStep
+
+if TYPE_CHECKING:
+    from macllm.core.chat_history import Conversation
 
 
 def extract_plan(text: str) -> str:
@@ -21,31 +27,26 @@ def extract_plan(text: str) -> str:
     return '\n'.join(plan_lines)
 
 
-def create_step_callback(token_callback: Optional[Callable[[int, int], None]] = None):
+def create_step_callback(conversation: Conversation | None = None):
     """Create a callback for smolagents step events.
 
-    Accumulates token usage across steps and invokes *token_callback*
-    so the UI can update the token counter.
+    Increments token usage directly on *conversation.usage* and
+    triggers a UI repaint so the top bar stays current.
     """
-    input_tokens = [0]
-    output_tokens = [0]
-    
+
     def on_step(step, agent):
-        # #region agent log
-        import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"B","location":"agent_service.py:on_step","message":"Step callback invoked","data":{"step_type":type(step).__name__,"has_token_usage":bool(getattr(step,'token_usage',None)),"token_usage_input":getattr(getattr(step,'token_usage',None),'input_tokens',None),"token_usage_output":getattr(getattr(step,'token_usage',None),'output_tokens',None),"has_callback":token_callback is not None},"timestamp":int(_time.time()*1000)})+'\n')
-        # #endregion
         if isinstance(step, (PlanningStep, ActionStep)):
-            if step.token_usage and token_callback:
-                input_tokens[0] += step.token_usage.input_tokens
-                output_tokens[0] += step.token_usage.output_tokens
-                token_callback(input_tokens[0], output_tokens[0])
+            if step.token_usage and conversation is not None:
+                conversation.usage.input_tokens += step.token_usage.input_tokens
+                conversation.usage.output_tokens += step.token_usage.output_tokens
+                conversation._notify_ui()
 
     return on_step
 
 
-def create_agent(agent_cls=None, speed="normal", token_callback=None):
+def create_agent(agent_cls=None, speed="normal", conversation=None):
     """Thin factory for creating agent instances."""
     if agent_cls is None:
         from macllm.agents import get_default_agent_class
         agent_cls = get_default_agent_class()
-    return agent_cls(speed=speed, token_callback=token_callback)
+    return agent_cls(speed=speed, conversation=conversation)

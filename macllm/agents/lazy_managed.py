@@ -15,7 +15,7 @@ class LazyManagedMacLLMAgent:
     __slots__ = (
         "_agent_cls",
         "_speed",
-        "_token_callback",
+        "_conversation",
         "_kwargs",
         "_impl",
         "_interrupt_switch",
@@ -30,7 +30,7 @@ class LazyManagedMacLLMAgent:
         macllm_name: str,
         *,
         speed: str,
-        token_callback: Callable[..., Any] | None,
+        conversation: Any | None = None,
         **kwargs: Any,
     ) -> None:
         from macllm.agents import get_agent_class
@@ -39,7 +39,7 @@ class LazyManagedMacLLMAgent:
         self.name = self._agent_cls.macllm_name
         self.description = self._agent_cls.macllm_description
         self._speed = speed
-        self._token_callback = token_callback
+        self._conversation = conversation
         self._kwargs = kwargs
         self._impl = None
         self._interrupt_switch = False
@@ -63,7 +63,7 @@ class LazyManagedMacLLMAgent:
 
         self._impl = self._agent_cls(
             speed=self._speed,
-            token_callback=self._token_callback,
+            conversation=self._conversation,
             managed_agents=[],
             max_steps=5,
             **self._kwargs,

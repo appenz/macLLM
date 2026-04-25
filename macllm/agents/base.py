@@ -1,7 +1,12 @@
-from typing import Optional, Callable
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import litellm
 from smolagents import ToolCallingAgent, LogLevel, PlanningStep, ActionStep, TaskStep
+
+if TYPE_CHECKING:
+    from macllm.core.chat_history import Conversation
 
 litellm.drop_params = True
 
@@ -35,7 +40,7 @@ class MacLLMAgent(ToolCallingAgent):
     macllm_managed_agents: list[str] = []
 
     def __init__(self, speed: str = "normal",
-                 token_callback: Optional[Callable[[int, int], None]] = None,
+                 conversation: Conversation | None = None,
                  managed_agents: list | None = None,
                  custom_instructions: str | None = None,
                  prompt_templates: dict | None = None,
@@ -55,7 +60,7 @@ class MacLLMAgent(ToolCallingAgent):
             raise ValueError(f"Model for speed '{speed}' is not configured (missing API key)")
 
         tools = [getattr(tools_module, n) for n in self.macllm_tools]
-        step_callback = create_step_callback(token_callback)
+        step_callback = create_step_callback(conversation)
 
         cfg = get_runtime_config()
         agent_cfg = cfg.agents.get(self.macllm_name)
@@ -96,7 +101,7 @@ class MacLLMAgent(ToolCallingAgent):
                 LazyManagedMacLLMAgent(
                     name,
                     speed=speed,
-                    token_callback=token_callback,
+                    conversation=conversation,
                 )
                 for name in self.macllm_managed_agents
             ]
