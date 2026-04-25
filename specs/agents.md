@@ -98,9 +98,9 @@ loop as before. Routing of tools to the correct tab uses `macllm/core/context.py
 
 ## Current Agent Topology
 
-- `default`: main top-level assistant; uses local prompt templates; delegates to `notes`, `calendar`, `things`, and `email`
-- `smolagent`: alternate top-level assistant; uses smolagents default templates; delegates to `notes`
-- `notes`: specialist for indexed files and notes
+- `default`: main top-level assistant; uses local prompt templates (`macllm/agents/prompts/default.yaml`); delegates to `notes`, `calendar`, `things`, and `email`
+- `smolagent`: alternate top-level assistant; uses the same macLLM prompt YAML as `default`; delegates to `notes`
+- `notes`: specialist for indexed files and notes (same prompt YAML as `default`, including `managed_agent` templates when invoked as a subagent)
 - `calendar`: specialist for calendar and scheduling work
 - `things`: specialist for Things task management
 - `email`: specialist for read-only email access via local Superhuman mailbox

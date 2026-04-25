@@ -2,15 +2,10 @@ from macllm.agents.base import MacLLMAgent
 
 
 class MacLLMSmolAgent(MacLLMAgent):
-    """Agent using the upstream smolagents default system prompt templates.
-
-    Passes ``prompt_templates=None`` so smolagents applies its own built-in
-    templates.  Uses the same instructions as default (via ``[agents.smolagent]``
-    or ``[agents.default]`` in config.toml).
-    """
+    """Alternate top-level agent; same macLLM prompt YAML as ``default`` (via base default)."""
 
     macllm_name = "smolagent"
-    macllm_description = "Agent using the default smolagents system prompt"
+    macllm_description = "Alternate top-level assistant (lighter tool set than default)"
     macllm_tools = [
         "get_current_time",
         "web_search",
@@ -19,7 +14,4 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_managed_agents = ["notes"]
 
     def __init__(self, **kwargs):
-        super().__init__(
-            prompt_templates=None,
-            **kwargs,
-        )
+        super().__init__(**kwargs)

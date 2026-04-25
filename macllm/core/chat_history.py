@@ -117,10 +117,16 @@ class Conversation:
                 self._notify_ui()
                 return
 
+            # #region agent log
+            import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"A","location":"chat_history.py:_process_query:reset","message":"Resetting llm_metadata to 0","data":{"conv_id":self.conv_id,"old_input":self.llm_metadata.get('input_tokens'),"old_output":self.llm_metadata.get('output_tokens'),"user_input":user_input[:80]},"timestamp":int(_time.time()*1000)})+'\n')
+            # #endregion
             self.llm_metadata['input_tokens'] = 0
             self.llm_metadata['output_tokens'] = 0
 
             def token_callback(input_tokens: int, output_tokens: int):
+                # #region agent log
+                import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"B","location":"chat_history.py:token_callback","message":"token_callback fired","data":{"conv_id":self.conv_id,"input_tokens":input_tokens,"output_tokens":output_tokens},"timestamp":int(_time.time()*1000)})+'\n')
+                # #endregion
                 self.llm_metadata['input_tokens'] = input_tokens
                 self.llm_metadata['output_tokens'] = output_tokens
                 self._notify_ui()
@@ -164,6 +170,10 @@ class Conversation:
                 else:
                     conversation.add_assistant_message("Error: No output from agent")
 
+                # #region agent log
+                import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"A","location":"chat_history.py:run_agent:after_run","message":"Agent run completed","data":{"conv_id":conversation.conv_id,"input_tokens":conversation.llm_metadata.get('input_tokens'),"output_tokens":conversation.llm_metadata.get('output_tokens')},"timestamp":int(_time.time()*1000)})+'\n')
+                # #endregion
+
                 if not app.ephemeral:
                     save_all_conversations(app.conversation_history)
 
@@ -179,6 +189,9 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
+                # #region agent log
+                import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"AC","location":"chat_history.py:run_agent:finally","message":"Finally block - about to notify UI and drain queue","data":{"conv_id":conversation.conv_id,"input_tokens":conversation.llm_metadata.get('input_tokens'),"output_tokens":conversation.llm_metadata.get('output_tokens'),"queue_len":len(conversation.query_queue)},"timestamp":int(_time.time()*1000)})+'\n')
+                # #endregion
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
@@ -192,6 +205,9 @@ class Conversation:
 
     def _drain_queue(self) -> None:
         """Process the next queued query, if any."""
+        # #region agent log
+        import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"A","location":"chat_history.py:_drain_queue","message":"_drain_queue called","data":{"conv_id":self.conv_id,"queue_len":len(self.query_queue),"queue_contents":[q[:40] for q in self.query_queue]},"timestamp":int(_time.time()*1000)})+'\n')
+        # #endregion
         if self.query_queue:
             next_query = self.query_queue.pop(0)
             self._process_query(next_query)

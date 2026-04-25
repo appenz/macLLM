@@ -21,11 +21,12 @@ class MacLLMAgent(ToolCallingAgent):
 
     - ``custom_instructions`` -- inserted as ``{{custom_instructions}}`` in the
       system prompt template (smolagents' ``instructions`` parameter)
-    - ``prompt_templates``    -- full or partial ``PromptTemplates`` dict
-    - ``planning_interval``   -- how often the planning step runs
+    - ``prompt_templates``    -- full template dict; if omitted (``None``), uses
+      :data:`macllm.agents.macllm_prompt_templates.MACLLM_AGENT_PROMPT_TEMPLATES`
+      (never smolagents' bundled YAML).
+    - ``planning_interval``   -- how often the planning step runs (``None`` disables)
 
-    If a parameter is left at its default (``None`` / ``3``), smolagents' own
-    defaults apply.
+    Subclasses that want no planning pass ``planning_interval=None`` explicitly.
     """
 
     macllm_name: str = ""
@@ -99,6 +100,11 @@ class MacLLMAgent(ToolCallingAgent):
                 )
                 for name in self.macllm_managed_agents
             ]
+
+        if prompt_templates is None:
+            from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES
+
+            prompt_templates = MACLLM_AGENT_PROMPT_TEMPLATES
 
         super().__init__(
             tools=tools,

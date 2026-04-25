@@ -1,11 +1,8 @@
-from pathlib import Path
-
-import yaml
-
 from macllm.agents.base import MacLLMAgent
+from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES
 
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
-PROMPT_TEMPLATES = yaml.safe_load((_PROMPTS_DIR / "default.yaml").read_text())
+# Backwards-compatible name for callers/tests.
+PROMPT_TEMPLATES = MACLLM_AGENT_PROMPT_TEMPLATES
 
 
 class MacLLMDefaultAgent(MacLLMAgent):
@@ -27,7 +24,4 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_managed_agents = ["notes", "calendar", "things", "email"]
 
     def __init__(self, **kwargs):
-        super().__init__(
-            prompt_templates=PROMPT_TEMPLATES,
-            **kwargs,
-        )
+        super().__init__(**kwargs)

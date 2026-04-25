@@ -65,6 +65,7 @@ class LazyManagedMacLLMAgent:
             speed=self._speed,
             token_callback=self._token_callback,
             managed_agents=[],
+            max_steps=5,
             **self._kwargs,
         )
         self._impl.interrupt_switch = self._interrupt_switch

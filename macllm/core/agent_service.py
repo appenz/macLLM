@@ -31,6 +31,9 @@ def create_step_callback(token_callback: Optional[Callable[[int, int], None]] = 
     output_tokens = [0]
     
     def on_step(step, agent):
+        # #region agent log
+        import json as _json, time as _time; open('/Users/gappenzeller/dev/myprojects/macLLM/.cursor/debug-a4552a.log','a').write(_json.dumps({"sessionId":"a4552a","hypothesisId":"B","location":"agent_service.py:on_step","message":"Step callback invoked","data":{"step_type":type(step).__name__,"has_token_usage":bool(getattr(step,'token_usage',None)),"token_usage_input":getattr(getattr(step,'token_usage',None),'input_tokens',None),"token_usage_output":getattr(getattr(step,'token_usage',None),'output_tokens',None),"has_callback":token_callback is not None},"timestamp":int(_time.time()*1000)})+'\n')
+        # #endregion
         if isinstance(step, (PlanningStep, ActionStep)):
             if step.token_usage and token_callback:
                 input_tokens[0] += step.token_usage.input_tokens

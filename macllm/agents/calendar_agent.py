@@ -26,8 +26,4 @@ class CalendarAgent(MacLLMAgent):
     ]
 
     def __init__(self, **kwargs):
-        super().__init__(
-            prompt_templates=None,
-            planning_interval=None,
-            **kwargs,
-        )
+        super().__init__(planning_interval=None, **kwargs)
