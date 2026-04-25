@@ -133,5 +133,65 @@ class MacLLMAgent(ToolCallingAgent):
         except Exception:
             pass
 
+    def provide_final_answer(self, task):
+        """Override to pass the ``final_answer`` tool to the LLM call.
+
+        Smolagents' default ``provide_final_answer`` sends the agent's memory
+        to the model *without* any tools.  Tool-calling models (Gemini in
+        particular) see tool-call patterns in the history and try to respond
+        with a tool call anyway, which the API rejects as a malformed call
+        and returns empty content.  By offering ``final_answer`` as an
+        available tool the model can either respond with plain text or call
+        the tool -- both paths produce a usable answer.
+        """
+        from smolagents.models import ChatMessage, MessageRole
+        from smolagents.agents import populate_template
+
+        messages = [
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=[{
+                    "type": "text",
+                    "text": self.prompt_templates["final_answer"]["pre_messages"],
+                }],
+            )
+        ]
+        messages += self.write_memory_to_messages()[1:]
+        messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=[{
+                    "type": "text",
+                    "text": populate_template(
+                        self.prompt_templates["final_answer"]["post_messages"],
+                        variables={"task": task},
+                    ),
+                }],
+            )
+        )
+        try:
+            chat_message = self.model.generate(
+                messages,
+                tools_to_call_from=[self.tools["final_answer"]],
+            )
+        except Exception as e:
+            return ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=f"Error in generating final LLM output: {e}",
+            )
+
+        if chat_message.content is None and chat_message.tool_calls:
+            for tc in chat_message.tool_calls:
+                if tc.function.name == "final_answer":
+                    args = tc.function.arguments
+                    if isinstance(args, dict):
+                        answer = args.get("answer", str(args))
+                    else:
+                        answer = str(args)
+                    chat_message.content = str(answer) if answer is not None else ""
+                    break
+
+        return chat_message
+
     def __call__(self, *args, **kwargs):
         return super().__call__(*args, **kwargs)

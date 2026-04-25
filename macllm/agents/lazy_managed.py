@@ -68,6 +68,7 @@ class LazyManagedMacLLMAgent:
             max_steps=5,
             **self._kwargs,
         )
+        self._impl.planning_interval = None
         self._impl.interrupt_switch = self._interrupt_switch
         if MacLLM._instance is not None:
             MacLLM._instance.debug_log(
@@ -76,4 +77,11 @@ class LazyManagedMacLLMAgent:
         return self._impl
 
     def __call__(self, task: str, **kwargs):
-        return self._materialize().__call__(task, **kwargs)
+        result = self._materialize().__call__(task, **kwargs)
+        from macllm.macllm import MacLLM
+        if MacLLM._instance is not None:
+            MacLLM._instance.debug_log(
+                f"[agent] subagent {self.name!r} returned: type={type(result).__name__}, "
+                f"value={result!r}"
+            )
+        return result
