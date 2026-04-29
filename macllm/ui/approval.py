@@ -202,7 +202,7 @@ class ApprovalRenderer:
             conversation.resolve_approval("run")
             return True
         if key_lower == "d":
-            conversation.resolve_approval("deny")
+            conversation.abort()
             return True
         if key_lower == "a":
             conversation.resolve_approval("always_allow")

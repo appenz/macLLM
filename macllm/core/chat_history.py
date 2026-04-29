@@ -33,7 +33,7 @@ class Conversation:
         self.abort_event: threading.Event = threading.Event()
         self.usage: Usage = Usage()
         self.pending_approval: PendingApproval | None = None
-        self.query_queue: list = []
+        self.pending_input: str = ""
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
 
@@ -75,17 +75,20 @@ class Conversation:
     def submit(self, user_input: str) -> None:
         """Submit a user query to this conversation.
 
-        If the agent is already running the query is enqueued and will be
-        processed after the current run finishes.  Otherwise processing
-        starts immediately on a new background thread.
+        If the agent is already running the text is accumulated into
+        ``pending_input`` (joined with newlines when multiple submissions
+        arrive) and will be processed as a single query after the current
+        run finishes.  Otherwise processing starts immediately.
         """
         user_input = user_input.strip()
         if not user_input:
             return
 
         if self.is_agent_running():
-            self.query_queue.append(user_input)
-            self.add_user_message(user_input)
+            if self.pending_input:
+                self.pending_input += "\n" + user_input
+            else:
+                self.pending_input = user_input
             self._notify_ui()
             return
 
@@ -177,7 +180,7 @@ class Conversation:
                 app.debug_log(f'Output: {result}\n')
             except Exception as e:
                 if conversation.abort_event.is_set():
-                    conversation._handle_abort_summary(request.expanded_prompt, app)
+                    conversation._handle_abort(app)
                 else:
                     app.debug_exception(e)
                     conversation.add_assistant_message(f"Error: {str(e)}")
@@ -190,21 +193,27 @@ class Conversation:
                 if getattr(app.args, 'query', None):
                     screenshot_path = getattr(app.args, 'screenshot', None)
                     app.ui.schedule_quit(screenshot_path=screenshot_path)
-                conversation._drain_queue()
+                conversation._drain_pending_input()
 
         self.agent_thread = threading.Thread(target=run_agent, daemon=True)
         self.agent_thread.start()
 
-    def _drain_queue(self) -> None:
-        """Process the next queued query, if any."""
-        if self.query_queue:
-            next_query = self.query_queue.pop(0)
-            self._process_query(next_query)
+    def _drain_pending_input(self) -> None:
+        """Submit accumulated pending input as a single query, if any."""
+        text = self.pending_input
+        self.pending_input = ""
+        if text:
+            self._process_query(text)
 
     def abort(self) -> None:
-        """Signal the running agent to abort."""
+        """Signal the running agent to abort.
+
+        Adds an immediate "Interrupted." assistant message so the user
+        sees visual feedback right away (before the agent thread exits).
+        """
         if not self.is_agent_running():
             return
+        self.add_assistant_message("Interrupted.")
         self.abort_event.set()
         if self.pending_approval is not None:
             self.resolve_approval("deny")
@@ -221,9 +230,8 @@ class Conversation:
             self.pending_approval = None
             self._notify_ui()
 
-    def _handle_abort_summary(self, task, app) -> None:
-        """After an abort, record a static interrupted message (no LLM call)."""
-        self.add_assistant_message("Interrupted.")
+    def _handle_abort(self, app) -> None:
+        """After an abort, persist state without adding any message."""
         if not app.ephemeral:
             from macllm.core.memory import save_all_conversations
             save_all_conversations(app.conversation_history)

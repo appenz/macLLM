@@ -2,20 +2,21 @@
 
 macLLM is a local AI agent for macOS, launched via a hotkey. It uses tools to answer questions, search the web, and work with your files. For example:
 
-* "Can a Cessna C172S fly over Mt Kilimanjaro?" — searches the web and reasons on facts
-* "Make a table of my families passport numbers" — searches your indexed notes or files, e.g. Obsidian
-* "Check @~/Documents/proposal.md vs. @company.com/proposal.html — reads and processes files and URLs
-* "/emojis Crazy drunken ski party" — picks relevant emojis
-* "Summarize @clipboard and append to my note @~/Notes/skiholiday2026.md"
+- "Can a Cessna C172S fly over Mt Kilimanjaro?" — searches the web and reasons on facts
+- "Make a table of my families passport numbers" — searches your indexed notes or files, e.g. Obsidian
+- "Check @~/Documents/proposal.md vs. @company.com/proposal.html — reads and processes files and URLs
+- "/emojis Crazy drunken ski party" — picks relevant emojis
+- "Summarize @clipboard and append to my note @~/Notes/skiholiday2026.md"
 
 macLLM is:
-* Open source (Apache 2.0)
-* Very easily extensible. It's written in 100% Python and highly modular
-* Has a native macOS Cocoa UI written in Python (via PyObjC)
-* Agentic — uses [smolagents](https://github.com/huggingface/smolagents) with tool calling
-* Model-agnostic via [LiteLLM](https://docs.litellm.ai/) (supports OpenAI, Gemini, Anthropic, and more)
 
-![Example Image](./assets/example.png)
+- Open source (Apache 2.0)
+- Very easily extensible. It's written in 100% Python and highly modular
+- Has a native macOS Cocoa UI written in Python (via PyObjC)
+- Agentic — uses [smolagents](https://github.com/huggingface/smolagents) with tool calling
+- Model-agnostic via [LiteLLM](https://docs.litellm.ai/) (supports OpenAI, Gemini, Anthropic, and more)
+
+Example Image
 
 ## Installation
 
@@ -30,17 +31,20 @@ uv handles all dependencies automatically.
 ### API Keys
 
 macLLM requires API keys for the LLM you want to use. Right now supported providers are:
-* Google - Gemini flash is default
-* OpenAI - good for complex tasks
-* Inception Labs - ultra fast diffusion models)
+
+- Google - Gemini flash is default
+- OpenAI - good for complex tasks
+- Inception Labs - ultra fast diffusion models)
 Create a `.env` file in the project root or export environment variables:
 
-| Variable | Required for | Provider |
-|---|---|---|
-| `GEMINI_API_KEY` | Default (`/normal`) | Google Gemini |
-| `INCEPTION_API_KEY` | `/fast` speed | Inception Labs (Mercury) |
-| `OPENAI_API_KEY` | `/slow` / `/think` speed | OpenAI (GPT-5) |
-| `BRAVE_API_KEY` | Web search tool | Brave Search |
+
+| Variable            | Required for             | Provider                 |
+| ------------------- | ------------------------ | ------------------------ |
+| `GEMINI_API_KEY`    | Default (`/normal`)      | Google Gemini            |
+| `INCEPTION_API_KEY` | `/fast` speed            | Inception Labs (Mercury) |
+| `OPENAI_API_KEY`    | `/slow` / `/think` speed | OpenAI (GPT-5)           |
+| `BRAVE_API_KEY`     | Web search tool          | Brave Search             |
+
 
 At minimum, set `GEMINI_API_KEY` to use the default model. Add `BRAVE_API_KEY` to enable web search.
 
@@ -51,6 +55,7 @@ Press the hotkey (default: **⌥ Space** / option-space) to open the window, the
 > Capital of France?
 
 After a moment you get the reply. From there you can:
+
 1. Press **Escape** to close the window (the hotkey also toggles it).
 2. Press **⬆** to browse the reply, then **⌘C** to copy it.
 3. Type a follow-up query — macLLM keeps conversation context.
@@ -66,23 +71,25 @@ For example, asking "Can a Cessna C172 fly over Mt Kilimanjaro?" will cause the 
 
 The agent has access to the following tools:
 
-| Tool | Description |
-|---|---|
-| **web_search** | Searches the web via Brave Search. The agent can issue multiple queries per request. |
-| **search_notes** | Semantic search across your indexed notes. |
-| **read_note** | Reads the full content of an indexed note. |
-| **note_append** | Appends text to an existing note. |
-| **note_create** | Creates a new note with the given content. |
-| **note_modify** | Replaces the content of an existing note (with automatic backup). |
-| **note_move** | Moves or renames a note within indexed folders. |
-| **note_delete** | Deletes a note (with automatic backup). |
-| **note_resolve_path** | Resolves a mount-relative note path to its absolute filesystem path. |
-| **list_folder** | Lists notes and subfolders in a specific folder. |
-| **find_folder** | Searches for folders by name (case-insensitive substring) across all mounts. |
-| **view_folder_structure** | Shows the full folder tree of all indexed mounts. |
-| **folder_create** | Creates a new subfolder inside an indexed directory. |
-| **folder_delete** | Deletes a subfolder and its contents (with automatic backup). |
-| **get_current_time** | Returns the current date and time. |
+
+| Tool                      | Description                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| **web_search**            | Searches the web via Brave Search. The agent can issue multiple queries per request. |
+| **search_notes**          | Semantic search across your indexed notes.                                           |
+| **read_note**             | Reads the full content of an indexed note.                                           |
+| **note_append**           | Appends text to an existing note.                                                    |
+| **note_create**           | Creates a new note with the given content.                                           |
+| **note_modify**           | Replaces the content of an existing note (with automatic backup).                    |
+| **note_move**             | Moves or renames a note within indexed folders.                                      |
+| **note_delete**           | Deletes a note (with automatic backup).                                              |
+| **note_resolve_path**     | Resolves a mount-relative note path to its absolute filesystem path.                 |
+| **list_folder**           | Lists notes and subfolders in a specific folder.                                     |
+| **find_folder**           | Searches for folders by name (case-insensitive substring) across all mounts.         |
+| **view_folder_structure** | Shows the full folder tree of all indexed mounts.                                    |
+| **folder_create**         | Creates a new subfolder inside an indexed directory.                                 |
+| **folder_delete**         | Deletes a subfolder and its contents (with automatic backup).                        |
+| **get_current_time**      | Returns the current date and time.                                                   |
+
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
 
@@ -134,13 +141,15 @@ To use write actions, enable Things URLs in Things settings so an auth token is 
 
 Tags start with `@` and attach external data as context for the conversation:
 
-| Tag | Description |
-|---|---|
-| `@clipboard` | Current clipboard content (text or image) |
-| `@window` | Screenshot of a desktop window (click to select) |
-| `@selection` | Screenshot of a selected screen area |
-| `@<path>` | Any file — path must start with `/` or `~` |
-| `@<url>` | Web page content — must start with `http://` or `https://` |
+
+| Tag          | Description                                                |
+| ------------ | ---------------------------------------------------------- |
+| `@clipboard` | Current clipboard content (text or image)                  |
+| `@window`    | Screenshot of a desktop window (click to select)           |
+| `@selection` | Screenshot of a selected screen area                       |
+| `@<path>`    | Any file — path must start with `/` or `~`                 |
+| `@<url>`     | Web page content — must start with `http://` or `https://` |
+
 
 Tags can be used inline: "translate @clipboard into French" or "summarize the slide @window".
 
@@ -152,11 +161,13 @@ Quoted forms like `@"~/My Notes/file.md"` are supported for paths with spaces.
 
 Speed levels select different models for the tradeoff between speed and capability:
 
-| Command | Speed | Model |
-|---|---|---|
-| *(default)* | Normal | `gemini/gemini-3-flash-preview` (Gemini) |
-| `/fast` | Fast | `openai/mercury` (Inception Labs) |
-| `/slow` or `/think` | Slow | `gpt-5` (OpenAI) |
+
+| Command             | Speed  | Model                                    |
+| ------------------- | ------ | ---------------------------------------- |
+| *(default)*         | Normal | `gemini/gemini-3-flash-preview` (Gemini) |
+| `/fast`             | Fast   | `openai/mercury` (Inception Labs)        |
+| `/slow` or `/think` | Slow   | `gpt-5` (OpenAI)                         |
+
 
 There are two ways to set the speed:
 
@@ -182,20 +193,24 @@ expands to instructions that correct spelling and grammar only, so the model can
 
 These ship in `config/skills/shortcuts.md`:
 
-| Command | Description |
-|---|---|
-| `/fix` | Fix spelling and grammar only; reply with corrected text |
-| `/emoji` | Suggest one relevant emoji |
-| `/emojis` | Suggest several relevant emojis |
+
+| Command   | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `/fix`    | Fix spelling and grammar only; reply with corrected text |
+| `/emoji`  | Suggest one relevant emoji                               |
+| `/emojis` | Suggest several relevant emojis                          |
+
 
 ### Other built-in `/` commands
 
-| Command | Description |
-|---|---|
-| `/reload` | Reload merged config and skill files; may trigger index refresh |
-| `/fast` | Fast model tier (see **Speed Levels**) |
-| `/slow` / `/think` | Slow / thinking tier |
-| `/reindex` | Request a rebuild of the file index |
+
+| Command            | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| `/reload`          | Reload merged config and skill files; may trigger index refresh |
+| `/fast`            | Fast model tier (see **Speed Levels**)                          |
+| `/slow` / `/think` | Slow / thinking tier                                            |
+| `/reindex`         | Request a rebuild of the file index                             |
+
 
 ### Adding skills
 
@@ -224,14 +239,16 @@ Both `/` and `@` use an autocomplete popup:
 uv run -m macllm [options]
 ```
 
-| Option | Description |
-|---|---|
-| `--debug` | Enable debug logging to the terminal |
-| `--debuglitellm` | Enable verbose LiteLLM debug logging |
-| `--version` | Print version and exit |
-| `--show-window` | Open the window immediately on startup |
-| `--query <text>` | Auto-submit a query (implies `--show-window`) |
+
+| Option                | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| `--debug`             | Enable debug logging to the terminal                                     |
+| `--debuglitellm`      | Enable verbose LiteLLM debug logging                                     |
+| `--version`           | Print version and exit                                                   |
+| `--show-window`       | Open the window immediately on startup                                   |
+| `--query <text>`      | Auto-submit a query (implies `--show-window`)                            |
 | `--screenshot <path>` | After `--query` completes, capture the window to the given path and exit |
+
 
 ## License
 

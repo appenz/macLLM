@@ -43,6 +43,7 @@ The main conversation view is a text-based rendering pipeline. The conversation 
 - assistant messages are rendered through the markdown subsystem
 - tool call progress is rendered from `agent.memory.steps` while an agent run is active
 - pending shell approvals are rendered from `conversation.pending_approval`
+- pending user input is rendered as a dimmed block from `conversation.pending_input`
 
 The UI reads displayable messages from conversation state rather than reconstructing the request from the expanded prompt.
 
@@ -56,10 +57,13 @@ It supports:
 - insertion of pills that retain a raw underlying token
 - command-key shortcuts for speed selection and other actions
 - Shift-Enter for literal newlines
-- Enter for submission (enqueues if agent is running)
-- Cmd-Enter to cancel the running agent and optionally submit new text
+- Enter for submission (accumulates into pending input if agent is running)
+- Cmd-Enter to abort the running agent and optionally submit new text
+- Ctrl-C to abort the running agent without submitting
 
-When the user presses Enter while an agent is running in the active tab, the query is added to the conversation's query queue and displayed as a user message. The agent processes it after the current run finishes. Cancelling is an explicit gesture (Cmd-Enter). Cmd-Enter aborts the running agent immediately (showing a static "Interrupted." message with no additional LLM call) and, if there is text in the input, submits it as a new request.
+When the user presses Enter while an agent is running in the active tab, the text is accumulated into the conversation's `pending_input` (joined with newlines if multiple submissions arrive). The pending input is displayed as a visually distinct (dimmed) block below the agent activity. The agent processes the accumulated input as a single query after the current run finishes.
+
+Aborting is an explicit gesture: Cmd-Enter or Ctrl-C. Cmd-Enter aborts the running agent and, if there is text in the input, submits it as the next query. Ctrl-C aborts the running agent without submitting any text. A static "Interrupted." assistant message appears immediately when the agent is aborted — no LLM call is made.
 
 The key design choice is that displayed text and inserted raw token text can differ. The user sees a short pill label, but the input field retains the underlying token needed for later parsing and expansion.
 
@@ -71,7 +75,7 @@ It shows:
 
 - branding and window identity
 - recent context pills
-- model and token metadata (read from `conversation.llm_metadata`)
+- model and token metadata (read from `conversation.usage`)
 
 The menu bar shows a static "LLM" label. Per-tab running state is conveyed by indicators on the tab bar, not the menu bar.
 

@@ -56,8 +56,9 @@ class QuickWindowPanel(NSPanel):
         return True
 
     def performKeyEquivalent_(self, event):
+        flags = event.modifierFlags()
+
         if event.keyCode() == 0x30:  # Tab key
-            flags = event.modifierFlags()
             if flags & (1 << 18):  # NSControlKeyMask
                 if self.macllm_ui and self.macllm_ui.macllm:
                     shift = flags & (1 << 17)  # NSShiftKeyMask
@@ -65,6 +66,23 @@ class QuickWindowPanel(NSPanel):
                     self.macllm_ui.macllm.cycle_conversation(delta)
                     self.macllm_ui.update_window()
                     return True
+
+        # Cmd-Return: abort + optional submit
+        if event.keyCode() == 0x24 and (flags & (1 << 20)):  # Return + NSCommandKeyMask
+            if self.macllm_ui:
+                text = ""
+                delegate = getattr(self.macllm_ui, 'window_delegate', None)
+                if delegate:
+                    text = delegate._plain_text_from_view()
+                self.macllm_ui.handle_cmd_return(text)
+                return True
+
+        # Ctrl-C: abort running agent (no submit)
+        chars = event.charactersIgnoringModifiers()
+        if chars and chars.lower() == "c" and (flags & (1 << 18)) and not (flags & (1 << 20)):
+            if self.macllm_ui:
+                self.macllm_ui.handle_abort()
+                return True
 
         handled = objc.super(QuickWindowPanel, self).performKeyEquivalent_(event)
         if handled:
@@ -314,6 +332,14 @@ class MacLLMUI:
         self.update_window()
         InputFieldHandler.clear_input_field(self.input_field)
 
+    def handle_abort(self):
+        """Abort the running agent without submitting any text."""
+        conv = self.macllm.chat_history
+        if conv.is_agent_running():
+            conv.abort()
+            self.exit_history_browsing()
+        self.update_window()
+
     def set_status_indicator(self, working: bool):
         """No-op — status indicator removed in favour of static label."""
         pass
@@ -330,6 +356,8 @@ class MacLLMUI:
             'scheduleQuitTimer:', None, False)
 
     def request_update(self):
+        if not getattr(self, 'quick_window', None):
+            return
         if NSThread.isMainThread():
             self.update_window()
         else:

@@ -16,6 +16,13 @@ def _mock_agent_for_thread():
     return mock_agent
 
 
+def _wait_for_idle(conv, timeout=2.0):
+    """Spin until the conversation's agent thread has exited."""
+    deadline = time.monotonic() + timeout
+    while conv.is_agent_running() and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+
 class TestStickySpeedPreference:
     def test_speed_persists_within_conversation_and_resets_on_new(self):
         mac = create_macllm(debug=False, start_ui=False)
@@ -29,7 +36,7 @@ class TestStickySpeedPreference:
 
             mac.chat_history.submit("Hello /fast")
             assert mac.chat_history.speed_level == "fast"
-            time.sleep(0.3)
+            _wait_for_idle(mac.chat_history)
             assert mock_agent.run.called
 
         # Verify speed persisted
@@ -42,7 +49,7 @@ class TestStickySpeedPreference:
 
             mac.chat_history.submit("Second message with no tag")
             assert mac.chat_history.speed_level == "fast"
-            time.sleep(0.3)
+            _wait_for_idle(mac.chat_history)
 
         # Test slow speed
         with patch('macllm.core.agent_service.create_agent') as mock_create_agent:
@@ -52,7 +59,7 @@ class TestStickySpeedPreference:
 
             mac.chat_history.submit("Please reason carefully /think")
             assert mac.chat_history.speed_level == "slow"
-            time.sleep(0.3)
+            _wait_for_idle(mac.chat_history)
 
         # Test new conversation resets speed
         new_conv = mac.conversation_history.add_conversation()
@@ -67,4 +74,4 @@ class TestStickySpeedPreference:
             
             mac.chat_history.submit("Fresh start")
             assert mac.chat_history.speed_level == "normal"
-            time.sleep(0.3)
+            _wait_for_idle(mac.chat_history)

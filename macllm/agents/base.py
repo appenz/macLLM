@@ -111,6 +111,10 @@ class MacLLMAgent(ToolCallingAgent):
 
             prompt_templates = MACLLM_AGENT_PROMPT_TEMPLATES
 
+        if conversation is not None:
+            from macllm.core.abortable_model import AbortableModel
+            model = AbortableModel(model, conversation.abort_event)
+
         super().__init__(
             tools=tools,
             model=model,

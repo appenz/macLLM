@@ -141,6 +141,22 @@ class MainTextHandler:
             ApprovalRenderer.render_pending(ts, conversation.pending_approval)
 
     @staticmethod
+    def _render_pending_input(text_view, text):
+        """Render queued user input as a dimmed block below agent activity."""
+        ts = text_view.textStorage()
+        muted = NSColor.colorWithCalibratedWhite_alpha_(0.45, 1.0)
+        font = NSFont.systemFontOfSize_(13.0)
+
+        def _append(s, color, f=font):
+            a = NSAttributedString.alloc().initWithString_attributes_(
+                s, {NSForegroundColorAttributeName: color, NSFontAttributeName: f})
+            ts.appendAttributedString_(a)
+
+        _append("\n", muted)
+        _append("Pending: ", muted, NSFont.boldSystemFontOfSize_(11.0))
+        _append(text + "\n", muted)
+
+    @staticmethod
     def calculate_minimum_text_height(macllm):
         if hasattr(macllm.ui, "text_area"):
             text_view = macllm.ui.text_area
@@ -210,7 +226,10 @@ class MainTextHandler:
 
         if conv.is_agent_running() or conv.pending_approval:
             MainTextHandler._render_agent_steps(text_view, conv)
-        
+
+        if conv.pending_input:
+            MainTextHandler._render_pending_input(text_view, conv.pending_input)
+
         layout_manager = text_view.layoutManager()
         text_container = text_view.textContainer()
         
