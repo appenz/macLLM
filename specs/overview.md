@@ -125,5 +125,7 @@ The current model IDs are configured in code, not in TOML.
 
 ## Running and Testing
 
-Run and test the project through `make` targets. The repository includes targets for normal
-execution, local tests, external-model tests, calendar-specific tests, and render/debug workflows.
+Run and test the project through `make` targets. The repository includes targets for normal  
+execution, local tests, external-model tests, calendar-specific tests, and render/debug workflows.  
+
+To test macLLM with a specific query, use the `debug-render` Makefile target. Don't ask the user to enter a query.
