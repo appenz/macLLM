@@ -4,8 +4,9 @@
 
 During agent execution, macLLM shows live progress in the conversation view.
 
-The display has two goals:
+The display has three goals:
 
+- show supervising-agent planning progress as a checklist and status summary
 - show the progress of tool calls and managed-agent delegation
 - show pending shell approval requests that need user action
 
@@ -15,11 +16,16 @@ All progress data comes from `agent.memory.steps` on the conversation's agent in
 
 smolagents records each step as a dataclass in the step list:
 
-- `PlanningStep`: the agent produced a plan (not currently displayed)
+- `PlanningStep`: the agent produced or updated a plan
 - `ActionStep`: the agent called a tool. Contains `tool_calls` (name, arguments, id), `observations` (tool output), `error` (if failed), and `is_final_answer`
 - `TaskStep`: the agent delegated to a managed subagent
 
-The UI renders these directly. There is no intermediate status manager object.
+`PlanningStep` output is parsed from `step.model_output_message.content` and stored on the conversation as transient text fields:
+
+- `Conversation.plan_text`: extracted text between `### Plan:` and `<end_plan>`
+- `Conversation.plan_status`: extracted text between `### Status:` and `<end_status>` (optional)
+
+The UI then renders these conversation fields, plus tool/activity data from `agent.memory.steps`. There is no intermediate status manager object.
 
 ### Determining tool state from ActionStep
 
@@ -33,10 +39,12 @@ Shell approval state lives on `Conversation.pending_approval` (a transient `Pend
 
 ## Rendering
 
-`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list and pending approval to render:
+`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list, plan fields, and pending approval to render:
 
-- **"Thinking..."** when the agent is running but no tool calls have been recorded yet
+- a **"Plan"** section when `conversation.plan_text` is present (checkbox-style lines from planning output)
+- a **"Status"** summary under the plan when `conversation.plan_status` is present
 - a **"Steps"** section with status markers (running, success, error) once tool calls exist
+- **"Thinking..."** when the agent is running and neither plan text nor tool calls are available yet
 - nested indentation for managed-agent delegation (from `TaskStep` entries)
 - an inline approval prompt when `conversation.pending_approval` is set
 

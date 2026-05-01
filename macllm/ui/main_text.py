@@ -50,6 +50,43 @@ class MainTextHandler:
     }
 
     @staticmethod
+    def _render_plan(ts, conversation, muted, light, green, font_sm, font_sm_bold):
+        """Render parsed planning checklist and status summary."""
+        plan_text = getattr(conversation, "plan_text", None)
+        if not plan_text:
+            return False
+
+        def _append(text, color, font=font_sm):
+            a = NSAttributedString.alloc().initWithString_attributes_(
+                text, {NSForegroundColorAttributeName: color, NSFontAttributeName: font})
+            ts.appendAttributedString_(a)
+
+        _append("Plan\n", muted, font_sm_bold)
+        for line in plan_text.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("[x]"):
+                color = green
+            elif stripped.startswith("[~]"):
+                color = muted
+            elif stripped.startswith("[ ]"):
+                color = light
+            else:
+                color = light
+            _append(f"  {line}\n", color)
+
+        status = getattr(conversation, "plan_status", None)
+        if status:
+            _append("\n", muted)
+            _append("Status: ", muted, font_sm_bold)
+            status_lines = status.splitlines()
+            if status_lines:
+                _append(f"{status_lines[0]}\n", light)
+                for extra in status_lines[1:]:
+                    _append(f"        {extra}\n", light)
+        _append("\n", muted)
+        return True
+
+    @staticmethod
     def _render_agent_steps(text_view, conversation):
         """Render live agent progress from agent.memory.steps and pending approval."""
         from Foundation import NSMutableAttributedString
@@ -83,12 +120,20 @@ class MainTextHandler:
             getattr(s, 'tool_calls', None)
             for s in steps if isinstance(s, ActionStep)
         )
+        has_live_tool_calls = bool(conversation.tool_calls)
+        has_plan = bool(getattr(conversation, "plan_text", None))
+        show_steps = has_tool_calls or has_live_tool_calls
 
         _append("\n\n", muted)
 
-        if has_tool_calls:
+        if has_plan:
+            MainTextHandler._render_plan(
+                ts, conversation, muted, light, green, font_sm, font_sm_bold
+            )
+
+        if show_steps:
             _append("Steps\n", muted, font_sm_bold)
-        elif not conversation.pending_approval:
+        elif not conversation.pending_approval and not has_plan:
             _append("Thinking...\n", muted, font_sm_bold)
 
         for step in steps:

@@ -36,6 +36,8 @@ class Conversation:
         self.pending_input: str = ""
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
+        self.plan_text: str | None = None
+        self.plan_status: str | None = None
 
         self.reset()
 
@@ -131,7 +133,7 @@ class Conversation:
                 self._notify_ui()
                 return
 
-            self.usage.reset()
+            self._reset_run_state()
 
             self._create_agent(conversation=self)
 
@@ -275,6 +277,13 @@ class Conversation:
         if self.ui_update_callback:
             self.ui_update_callback()
 
+    def _reset_run_state(self) -> None:
+        """Reset transient per-run UI state before starting an agent run."""
+        self.usage.reset()
+        self.clear_tool_calls()
+        self.plan_text = None
+        self.plan_status = None
+
     # ------------------------------------------------------------------
     # Message management
     # ------------------------------------------------------------------
@@ -363,6 +372,8 @@ class Conversation:
         self.speed_level = "normal"
         self.title = "New Agent"
         self.tool_calls = []
+        self.plan_text = None
+        self.plan_status = None
 
         self._get_agent_cls()
 

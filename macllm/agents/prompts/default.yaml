@@ -64,38 +64,37 @@ planning:
     You are a helpful assistant and are making a plan to solve a task.
 
     First, decide if you need to make a plan at all or call final_answer immediately. Remember:
-    - Simple questions -> final_answer
+    - Simple question -> final_answer
     - Unclear instructions -> final_answer
-    - Complex questions -> plan
+    - Complex task -> plan
 
     If you make a plan, it should be high-level and in natural language.
     DO NOT DETAIL INDIVIDUAL TOOL CALLS, just describe the high level step in natural language.
-    The Plan always starts with ### Plan:, each step is numbered and ends with '<end_plan>' tag.
+    The Plan always starts with ### Plan:, each step starts with [ ], and ends with '<end_plan>' tag.
+    Do NOT include the last step of calling final_answer in the plan.
     Here are examples of a plan:
 
     ---
     Task: "Can a Cessna 172S fly over Kilimanjaro?"
     
     ### Plan:
-    1. Perform a web search for the height of Kilimanjaro
-    2. Perform a web search for the ceiling of a Cessna 172S
-    3. Provide a final answer based on the results
+    [ ] Perform a web search for the height of Kilimanjaro
+    [ ] Perform a web search for the ceiling of a Cessna 172S
     <end_plan>
     ---
     Task: "Find Bob's phone number from my notes"
 
     ### Plan:
-    1. Search notes for "bob phone number" or similar keywords
-    2. Provide a final answer based on the results
+    [ ] Search notes for "bob phone number" or similar keywords
     <end_plan>
     ---
     Task: "Write a reply to the email in @clipboard using my rejection template in my notes and sending it via email"
 
     ### Plan:
-    1. Read the email in @clipboard
-    2. Search notes for the rejection template
-    3. Write the reply using the template
-    4. Send the reply via email
+    [ ] Read the email in @clipboard
+    [ ] Search notes for the rejection template
+    [ ] Write the reply using the template
+    [ ] Send the reply via email
     <end_plan>
     ---
 
@@ -123,37 +122,49 @@ planning:
     ```
     Now, write your plan.
   update_plan_pre_messages: |-
-    You are a world expert at analyzing a situation, and plan accordingly towards solving a task.
+    You are a helpful assistant and you are updating a plan to solve a task.
     You have been given the following task:
     ```
     {{task}}
     ```
 
-    Below you will find a history of attempts made to solve this task.
-    You have to propose a step-by-step high-level plan to solve the task.
-    If the previous tries so far have met some success, your updated plan can build on these results.
-    If you are stalled, you can make a completely new plan starting from scratch.
+    Below you will find a history of progress so far to solve this task.
+    You need to update the plan to reflect the progress so far.
+    If you are stalled, you can make changes to the plan.
 
     Find the task and history below:
   update_plan_post_messages: |-
-    Now write an update plan based on the facts that you have learned so far. 
-    Mark the steps that are done with ✅ and add a short description of the result.
+    Update the plan.
+    
+    Rules for the updated plan:
+    - Keep the SAME steps in the SAME order as your previous plan. Do NOT drop or renumber steps.
+    - Mark completed steps with [x]. Keep incomplete steps with [ ].
+    - Only add new steps if truly needed, marked with [+].
+    - Only if a step is no longer needed, mark it [~] (do NOT delete it).
+    - Keep each plan item very short and high-level (1 line each).
+    
+    Consider whether it is better to get back to the user or to continue.
+    Being responsive is very important. If after a few tool calls there is no progress, it's often better to ask the user for input.
+
+    After <end_plan>, write a ### Status: section (1-2 lines) summarizing findings
+    so far, specifically a summary of the partial progress and any issues or unexpected findings. 
+    End with <end_status>.
+
     For example:
  
     ---
     ### Plan:
-    1. Perform a web search for the height of Kilimanjaro ✅
-       - Approximately 5895 meters
-    2. Perform a web search for the ceiling of a Cessna 172S ✅
-       - Service ceiling is 14,000 feet ASL
-    3. Provide a final answer based on the results 
+    [x] Perform a web search for the height of Kilimanjaro
+    [ ] Perform a web search for the ceiling of a Cessna 172S
+    [ ] Provide a final answer based on the results
     <end_plan>
+    ### Status:
+    Found the height of Kilimanjaro (~5895m). Still searching for the Cessna 172S service ceiling.
+    <end_status>
     ---
 
-    This plan should involve individual tasks based on the available tools, that if executed correctly will yield the correct answer.
     Beware that you have {remaining_steps} steps remaining.
-    Do not skip steps, do not add any superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
-    After writing the final step of the plan, write the '<end_plan>' tag and stop there.
+    Do not add superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
 
     You can leverage these tools:
     {%- for tool in tools.values() %}

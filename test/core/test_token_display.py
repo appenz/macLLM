@@ -6,10 +6,49 @@ from unittest.mock import Mock, patch, MagicMock
 from smolagents import ActionStep, PlanningStep, TaskStep
 from smolagents.memory import TokenUsage, Timing
 
-from macllm.core.agent_service import create_step_callback
+from macllm.core.agent_service import create_step_callback, extract_plan, extract_status
 from macllm.core.chat_history import Conversation, Usage
 from macllm.core.llm_service import get_model_for_speed
 from macllm.macllm import create_macllm
+
+
+# ---------------------------------------------------------------------------
+# Plan parsing tests
+# ---------------------------------------------------------------------------
+
+class TestPlanParsing:
+    def test_extract_plan_between_markers(self):
+        text = (
+            "### Plan:\n"
+            "[ ] Find Thursday dinner details\n"
+            "[x] Draft a confirmation email\n"
+            "<end_plan>\n"
+            "### Status:\n"
+            "Found Friday dinner details only.\n"
+            "<end_status>\n"
+        )
+        assert extract_plan(text) == (
+            "[ ] Find Thursday dinner details\n"
+            "[x] Draft a confirmation email"
+        )
+
+    def test_extract_status_between_markers(self):
+        text = (
+            "### Plan:\n"
+            "[ ] Search notes\n"
+            "<end_plan>\n"
+            "### Status:\n"
+            "Found dinner with Marcus on Friday.\n"
+            "Still searching for Thursday.\n"
+            "<end_status>\n"
+        )
+        assert extract_status(text) == (
+            "Found dinner with Marcus on Friday.\n"
+            "Still searching for Thursday."
+        )
+
+    def test_extract_status_missing_markers(self):
+        assert extract_status("### Plan:\n[ ] Do a thing\n<end_plan>") is None
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +107,31 @@ class TestCreateStepCallback:
         on_step(self._make_action_step(100, 50), agent=None)
         assert conv.usage.input_tokens == 110
         assert conv.usage.output_tokens == 55
+
+    def test_planning_step_updates_plan_text_and_status(self):
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        on_step = create_step_callback(conv)
+
+        planning_message = Mock()
+        planning_message.content = (
+            "### Plan:\n"
+            "[ ] Search for dinner details\n"
+            "<end_plan>\n"
+            "### Status:\n"
+            "Found only Friday dinner details so far.\n"
+            "<end_status>\n"
+        )
+        step = PlanningStep(
+            model_input_messages=[],
+            model_output_message=planning_message,
+            plan="test plan",
+            timing=Timing(start_time=0.0),
+            token_usage=TokenUsage(input_tokens=10, output_tokens=5),
+        )
+        on_step(step, agent=None)
+        assert conv.plan_text == "[ ] Search for dinner details"
+        assert conv.plan_status == "Found only Friday dinner details so far."
 
     def test_task_step_ignored(self):
         conv = Conversation()
