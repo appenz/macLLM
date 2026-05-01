@@ -41,6 +41,11 @@ class InputFieldDelegate(NSObject):
         self.text_view.setDelegate_(self)
         self.autocomplete = None  # type: AutocompleteController | None
         self._rebuilding = False  # suppress re-entrant textDidChange during rebuilds
+        self._undo_stack = []  # list of (plain_text, caret_plain_index)
+        self._redo_stack = []
+        self._restoring = False  # suppress undo snapshots during restore
+        self._last_plain = ""  # tracks state before the current edit
+        self._last_caret = 0
         return self
 
     # ------------------------------------------------------------------
@@ -51,14 +56,20 @@ class InputFieldDelegate(NSObject):
         try:
             if getattr(self, "_rebuilding", False):
                 return
+            if getattr(self, "_restoring", False):
+                return
             # IME guard: skip while composing marked text
             if hasattr(self.text_view, 'hasMarkedText') and self.text_view.hasMarkedText():
                 return
             fragment = self._current_fragment()
             if self.autocomplete:
                 self.autocomplete.update_suggestions(fragment)
+            # Push the previous state onto the undo stack before rebuilding
+            self._push_undo_snapshot()
             # Full-buffer re-render with pill conversion
             self._rebuild_buffer_with_pills()
+            self._last_plain = self._plain_text_from_view(strip_ends=False)
+            self._last_caret = self.text_view.selectedRange().location
         except Exception as exc:  # pragma: no cover
             self.macllm_ui.macllm.debug_exception(exc)
 
@@ -94,6 +105,9 @@ class InputFieldDelegate(NSObject):
                     if key == 'c':
                         self.text_view.copy_(None)
                         return True
+                    if key == 'x':
+                        self.text_view.cut_(None)
+                        return True
                     if key == 'v':
                         if hasattr(self.text_view, 'pasteAndMatchStyle_'):
                             self.text_view.pasteAndMatchStyle_(None)
@@ -101,6 +115,12 @@ class InputFieldDelegate(NSObject):
                             clipboard_content = self.macllm_ui.read_clipboard()
                             if clipboard_content:
                                 self.text_view.insertText_(clipboard_content)
+                        return True
+                    if key == 'z':
+                        if current_event.modifierFlags() & (1 << 17):
+                            self._perform_redo()
+                        else:
+                            self._perform_undo()
                         return True
                     if key == 'n':
                         self.macllm_ui.macllm.new_conversation()
@@ -188,6 +208,56 @@ class InputFieldDelegate(NSObject):
         except Exception as exc:  # pragma: no cover
             self.macllm_ui.macllm.debug_exception(exc)
             return False
+
+    # ------------------------------------------------------------------
+    # Undo / redo helpers
+    # ------------------------------------------------------------------
+    _UNDO_LIMIT = 100
+
+    def _push_undo_snapshot(self) -> None:
+        """Push the pre-edit state onto the undo stack."""
+        prev = getattr(self, "_last_plain", "")
+        if self._undo_stack and self._undo_stack[-1][0] == prev:
+            return
+        cur = self._plain_text_from_view(strip_ends=False)
+        if prev == cur:
+            return
+        prev_caret = getattr(self, "_last_caret", 0)
+        self._undo_stack.append((prev, prev_caret))
+        if len(self._undo_stack) > self._UNDO_LIMIT:
+            self._undo_stack = self._undo_stack[-self._UNDO_LIMIT:]
+        self._redo_stack.clear()
+
+    def _perform_undo(self) -> None:
+        if not self._undo_stack:
+            return
+        current_plain = self._plain_text_from_view(strip_ends=False)
+        current_caret = self.text_view.selectedRange().location
+        self._redo_stack.append((current_plain, current_caret))
+        plain, caret = self._undo_stack.pop()
+        self._restore_plain_text(plain, caret)
+
+    def _perform_redo(self) -> None:
+        if not self._redo_stack:
+            return
+        current_plain = self._plain_text_from_view(strip_ends=False)
+        current_caret = self.text_view.selectedRange().location
+        self._undo_stack.append((current_plain, current_caret))
+        plain, caret = self._redo_stack.pop()
+        self._restore_plain_text(plain, caret)
+
+    def _restore_plain_text(self, plain: str, caret: int) -> None:
+        """Restore the input field to a previous plain-text state."""
+        self._restoring = True
+        try:
+            self.text_view.setString_(plain)
+            safe_caret = min(caret, len(plain))
+            self.text_view.setSelectedRange_(NSRange(safe_caret, 0))
+            self._rebuild_buffer_with_pills()
+            self._last_plain = plain
+            self._last_caret = self.text_view.selectedRange().location
+        finally:
+            self._restoring = False
 
     # ------------------------------------------------------------------
     # Helper functions
@@ -470,5 +540,10 @@ class InputFieldHandler:
         if hasattr(input_field, 'setString_'):
             input_field.setString_("")
         else:
-            input_field.setString_("")  # NSTextView 
-            input_field.setString_("")  # NSTextView 
+            input_field.setString_("")  # NSTextView
+        delegate = input_field.delegate() if hasattr(input_field, 'delegate') else None
+        if delegate and hasattr(delegate, '_undo_stack'):
+            delegate._undo_stack.clear()
+            delegate._redo_stack.clear()
+            delegate._last_plain = ""
+            delegate._last_caret = 0

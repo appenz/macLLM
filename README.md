@@ -59,7 +59,10 @@ After a moment you get the reply. From there you can:
 1. Press **Escape** to close the window (the hotkey also toggles it).
 2. Press **⬆** to browse the reply, then **⌘C** to copy it.
 3. Type a follow-up query — macLLM keeps conversation context.
-4. Press **⌘N** to start a new conversation (clears context).
+4. Press **Enter** while the agent is working to queue text — it runs as the next query once the current one finishes.
+5. Press **⌘↩** to interrupt the agent and optionally submit new text.
+6. Press **Ctrl+C** to interrupt the agent without submitting anything.
+7. Press **⌘N** to start a new conversation (clears context).
 
 ## Agentic Architecture
 
