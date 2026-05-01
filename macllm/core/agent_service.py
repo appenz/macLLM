@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 def extract_plan(text: str) -> str:
-    """Extract numbered plan steps from text using ### Plan: ... <end_plan> markers."""
+    """Extract plan steps between ``### Plan:`` and ``### Status:`` or ``<end_plan>``."""
     import re
     lines = text.split('\n')
     collecting = False
@@ -19,7 +19,7 @@ def extract_plan(text: str) -> str:
             collecting = True
             continue
         if collecting:
-            if '<end_plan>' in line:
+            if '<end_plan>' in line or re.match(r'^###\s+Status\s*:', line):
                 break
             stripped = line.strip()
             if stripped and stripped.strip('`') != '':
@@ -28,7 +28,7 @@ def extract_plan(text: str) -> str:
 
 
 def extract_status(text: str) -> str | None:
-    """Extract status summary text using ### Status: ... <end_status> markers."""
+    """Extract status summary from ``### Status:`` to ``<end_plan>`` / ``<end_status>`` / end."""
     import re
     lines = text.split('\n')
     collecting = False
@@ -38,7 +38,7 @@ def extract_status(text: str) -> str | None:
             collecting = True
             continue
         if collecting:
-            if '<end_status>' in line:
+            if '<end_status>' in line or '<end_plan>' in line:
                 break
             stripped = line.strip()
             if stripped and stripped.strip('`') != '':
@@ -64,6 +64,14 @@ def create_step_callback(conversation: Conversation | None = None):
             conversation.plan_text = extract_plan(raw) or None
             conversation.plan_status = extract_status(raw)
             should_notify = True
+
+        if isinstance(step, ActionStep) and conversation is not None:
+            is_parent = (agent is conversation.agent)
+            step_done = (getattr(step, 'observations', None) is not None
+                         or getattr(step, 'error', None) is not None)
+            if is_parent and step_done:
+                conversation.clear_tool_calls()
+                should_notify = True
 
         if isinstance(step, (PlanningStep, ActionStep)):
             if step.token_usage and conversation is not None:

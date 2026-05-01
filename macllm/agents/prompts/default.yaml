@@ -146,9 +146,9 @@ planning:
     Consider whether it is better to get back to the user or to continue.
     Being responsive is very important. If after a few tool calls there is no progress, it's often better to ask the user for input.
 
-    After <end_plan>, write a ### Status: section (1-2 lines) summarizing findings
-    so far, specifically a summary of the partial progress and any issues or unexpected findings. 
-    End with <end_status>.
+    After the plan items, write a ### Status: section (1-2 lines) summarizing findings
+    so far, specifically a summary of the partial progress and any issues or unexpected findings.
+    End with <end_plan>.
 
     For example:
  
@@ -157,10 +157,9 @@ planning:
     [x] Perform a web search for the height of Kilimanjaro
     [ ] Perform a web search for the ceiling of a Cessna 172S
     [ ] Provide a final answer based on the results
-    <end_plan>
     ### Status:
     Found the height of Kilimanjaro (~5895m). Still searching for the Cessna 172S service ceiling.
-    <end_status>
+    <end_plan>
     ---
 
     Beware that you have {remaining_steps} steps remaining.

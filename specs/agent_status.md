@@ -22,8 +22,8 @@ smolagents records each step as a dataclass in the step list:
 
 `PlanningStep` output is parsed from `step.model_output_message.content` and stored on the conversation as transient text fields:
 
-- `Conversation.plan_text`: extracted text between `### Plan:` and `<end_plan>`
-- `Conversation.plan_status`: extracted text between `### Status:` and `<end_status>` (optional)
+- `Conversation.plan_text`: extracted text between `### Plan:` and `### Status:` (or `<end_plan>`)
+- `Conversation.plan_status`: extracted text after `### Status:` until `<end_plan>` or end of output (optional)
 
 The UI then renders these conversation fields, plus tool/activity data from `agent.memory.steps`. There is no intermediate status manager object.
 
