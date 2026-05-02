@@ -23,4 +23,8 @@ multiple choice UI.
 ### IMPORTANT: Always use `make` targets, never call tools directly
 - `make` is on the shell allowlist; `uv` and `pytest` are NOT.
 - Running `uv run` or `pytest` directly will fail or reinstall wrong dependency versions.
-- **Never** call `uv`, `pytest`, or `rm` directly. Use the corresponding `make` target instead.
+- Do not call `pytest` directly. Use the corresponding `make` target instead.
+
+### Upgrading dependencies
+- When upgrading a Python package, use `uv add <package>` (not `uv pip install --upgrade`).
+- `uv add` properly updates `pyproject.toml` and the lock file; `uv pip install` only touches the venv.
