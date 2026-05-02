@@ -155,6 +155,13 @@ class Conversation:
             try:
                 conversation.abort_event.clear()
                 conversation.clear_tool_calls()
+                from smolagents import PlanningStep
+
+                conversation.agent.memory.steps = [
+                    s
+                    for s in conversation.agent.memory.steps
+                    if not isinstance(s, PlanningStep)
+                ]
                 conversation._run_step_offset = len(conversation.agent.memory.steps)
 
                 run_kwargs = dict(max_steps=10, reset=False)
@@ -388,6 +395,7 @@ class Conversation:
     def _create_agent(self, conversation=None):
         """Create agent instance using the current agent class."""
         from macllm.core.agent_service import create_agent
+        from smolagents import PlanningStep
 
         old_steps = None
         if self.agent is not None:
@@ -400,7 +408,9 @@ class Conversation:
         )
 
         if old_steps is not None:
-            self.agent.memory.steps = old_steps
+            self.agent.memory.steps = [
+                s for s in old_steps if not isinstance(s, PlanningStep)
+            ]
 
 
 class ConversationHistory:

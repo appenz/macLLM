@@ -57,7 +57,9 @@ This keeps UI context management separate from stored chat text.
 Each `Conversation` owns its complete agent runtime: the agent instance, the background thread, the abort event, token metadata, and pending approval state.
 
 `Conversation._create_agent()` rebuilds the agent through `create_agent(...)` in `macllm/core/agent_service.py`.
-When an agent is recreated, existing `agent.memory.steps` are preserved so the agent trace survives across re-instantiation within the same conversation.
+When an agent is recreated, existing `agent.memory.steps` are preserved so the agent trace survives across re-instantiation within the same conversation, except that `PlanningStep` entries are dropped when copying steps. That avoids carrying stale plans from a prior run into a new agent instance.
+
+Before each `agent.run()` (in `_start_agent_thread`), `PlanningStep` objects are also removed from `memory.steps` while keeping `TaskStep` and `ActionStep` history. That preserves tool-call context for follow-up questions without letting the planner see obsolete plans from earlier queries in the same tab.
 
 `Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. Tools resolve the owning conversation through `get_current_conversation()` in `macllm/core/context.py` (see `specs/tools.md`).
 
