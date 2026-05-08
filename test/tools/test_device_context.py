@@ -10,17 +10,19 @@ from macllm.core import device_context as dc
 @pytest.fixture(autouse=True)
 def _reset_device_context_cache():
     dc._CACHE_EXPIRES = 0.0
-    dc._CACHE_LINE = "Unknown"
+    dc._CACHE_LOC_TEXT = "Unknown"
+    dc._CACHE_GPS_TEXT = "Unknown"
     yield
     dc._CACHE_EXPIRES = 0.0
-    dc._CACHE_LINE = "Unknown"
+    dc._CACHE_LOC_TEXT = "Unknown"
+    dc._CACHE_GPS_TEXT = "Unknown"
 
 
-def test_get_device_context_includes_current_time_line():
+def test_get_device_context_lines_present():
     text = dc.get_device_context()
     assert "Current time:" in text
     assert "Location:" in text
-    # Weekday from strftime %A
+    assert "GPS:" in text
     assert re.search(
         r"Current time: (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d{4}-\d{2}-\d{2}",
         text,
@@ -32,67 +34,58 @@ def test_get_device_context_uses_cached_location(monkeypatch):
 
     def fake_fetch():
         calls["n"] += 1
-        return "1.0000, 2.0000 — Test City, TS, Testland"
+        return "Test City, TS, Testland", "1.0000, 2.0000"
 
-    monkeypatch.setattr(dc, "_fetch_location_line_uncached", fake_fetch)
+    monkeypatch.setattr(dc, "_fetch_location_uncached", fake_fetch)
 
     t1 = dc.get_device_context()
     t2 = dc.get_device_context()
     assert calls["n"] == 1
-    assert "1.0000, 2.0000" in t1
-    assert "1.0000, 2.0000" in t2
+    assert "Location: Test City, TS, Testland" in t1
+    assert "GPS: 1.0000, 2.0000" in t1
+    assert t1 == t2
 
 
-def test_format_placemark_includes_poi_name_when_distinct():
-    from macllm.core.device_context import _format_placemark_description
+class _FakePlacemark:
+    """Synthetic CLPlacemark; missing attrs return None like Apple does."""
 
-    class PM:
-        def name(self):
-            return "US Post Office"
+    def __init__(self, **fields) -> None:
+        self._fields = fields
 
-        def locality(self):
-            return "San Francisco"
+    def __getattr__(self, attr: str):
+        def call():
+            return self._fields.get(attr)
 
-        def administrativeArea(self):
-            return "CA"
+        return call
 
-        def country(self):
-            return "United States"
 
-        def subThoroughfare(self):
-            return None
+def test_format_placemark_joins_all_populated_fields():
+    pm = _FakePlacemark(
+        name="US Post Office",
+        thoroughfare="Market St",
+        locality="San Francisco",
+        administrativeArea="CA",
+        country="United States",
+    )
+    s = dc._format_placemark_description(pm)
+    assert s == "US Post Office, Market St, San Francisco, CA, United States"
 
-        def thoroughfare(self):
-            return "Market St"
 
-    s = _format_placemark_description(PM())
-    assert "US Post Office" in s
-    assert "San Francisco" in s
+def test_format_placemark_drops_thoroughfare_when_name_contains_address():
+    pm = _FakePlacemark(
+        name="140 Campo Bello Ln",
+        subThoroughfare="140",
+        thoroughfare="Campo Bello Ln",
+        locality="Menlo Park",
+        country="United States",
+    )
+    s = dc._format_placemark_description(pm)
+    assert s == "140 Campo Bello Ln, Menlo Park, United States"
 
 
 def test_format_placemark_unknown_when_empty():
-    from macllm.core.device_context import _format_placemark_description
-
-    class PM:
-        def name(self):
-            return ""
-
-        def locality(self):
-            return None
-
-        def administrativeArea(self):
-            return None
-
-        def country(self):
-            return None
-
-        def subThoroughfare(self):
-            return None
-
-        def thoroughfare(self):
-            return None
-
-    assert _format_placemark_description(PM()) == "Unknown"
+    pm = _FakePlacemark()
+    assert dc._format_placemark_description(pm) == "Unknown"
 
 
 def test_default_agent_system_prompt_includes_user_situation(monkeypatch):
@@ -118,5 +111,6 @@ def test_default_agent_system_prompt_includes_user_situation(monkeypatch):
         assert "User's current time & location" in prompt
         assert "Current time:" in prompt
         assert "Location:" in prompt
+        assert "GPS:" in prompt
     finally:
         MacLLM._instance = None

@@ -3,7 +3,7 @@ name = "macllm"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13.2"
 dependencies = [
     "bashlex>=0.18",
     "beautifulsoup4>=4.12.3",

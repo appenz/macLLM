@@ -1,4 +1,10 @@
-"""Local time and approximate location for agent system prompts (macOS / PyObjC)."""
+"""Local time and approximate location for agent system prompts (macOS / PyObjC).
+
+The location path mirrors ``~/dev/myprojects/geoloc/geoloc.py``: it polls
+``CLLocationManager.location()`` instead of installing a delegate, then asks
+``CLGeocoder`` for a ``CLPlacemark`` and concatenates whatever populated fields
+Apple returns. We never invent any field that the OS did not give us.
+"""
 
 from __future__ import annotations
 
@@ -6,294 +12,188 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any
 
 _CACHE_LOCK = threading.Lock()
 _CACHE_EXPIRES: float = 0.0
-_CACHE_LINE: str = "Unknown"
+_CACHE_LOC_TEXT: str = "Unknown"
+_CACHE_GPS_TEXT: str = "Unknown"
 
 _TTL_SECONDS = 300.0
-_TOTAL_WAIT = 5.0
+_LOCATION_WAIT = 5.0
+_GEOCODE_WAIT = 5.0
+
+
+def _debug(msg: str, level: int = 1) -> None:
+    """Forward to ``MacLLM.debug_log`` when the app is up; otherwise no-op."""
+    try:
+        from macllm.macllm import MacLLM
+
+        if MacLLM._instance is not None:
+            MacLLM._instance.debug_log(msg, level)
+    except Exception:
+        pass
 
 
 def _format_time_string() -> str:
     now = datetime.now(timezone.utc).astimezone()
-    tzinfo = now.tzinfo
     iana = ""
+    tzinfo = now.tzinfo
     if tzinfo is not None and getattr(tzinfo, "key", None):
         iana = f" ({tzinfo.key})"
-    abbrev = now.strftime("%Z")
-    dow = now.strftime("%A")
-    return f"{dow}, {now.strftime('%Y-%m-%d %H:%M')} {abbrev}{iana}"
+    return f"{now.strftime('%A')}, {now.strftime('%Y-%m-%d %H:%M')} {now.strftime('%Z')}{iana}"
 
 
-def _street_line(pm: Any) -> str | None:
-    if pm is None:
-        return None
+_PLACEMARK_FIELDS = (
+    "name",
+    "subThoroughfare",
+    "thoroughfare",
+    "subLocality",
+    "locality",
+    "subAdministrativeArea",
+    "administrativeArea",
+    "postalCode",
+    "country",
+)
+
+
+def _placemark_field(pm, attr: str) -> str:
     try:
-        sub = pm.subThoroughfare()
-        th = pm.thoroughfare()
+        value = getattr(pm, attr)()
     except Exception:
-        return None
-    parts: list[str] = []
-    if sub:
-        parts.append(str(sub))
-    if th:
-        parts.append(str(th))
-    if not parts:
-        return None
-    return " ".join(parts)
+        return ""
+    if not value:
+        return ""
+    return str(value).strip()
 
 
-def _format_placemark_description(pm: Any) -> str:
-    """Human-readable place; 'Unknown' if nothing usable."""
+def _format_placemark_description(pm) -> str:
+    """Return ``", "``-joined non-empty placemark fields, deduplicated.
+
+    Only Apple-provided fields are echoed; nothing is invented. When ``name``
+    already contains the street number/name (e.g. ``"140 Campo Bello Ln"``),
+    the redundant ``subThoroughfare``/``thoroughfare`` entries are dropped.
+    """
     if pm is None:
         return "Unknown"
-    try:
-        name_o = pm.name()
-        name = str(name_o).strip() if name_o else ""
-    except Exception:
-        name = ""
-    street = _street_line(pm)
-    try:
-        locality = str(pm.locality()).strip() if pm.locality() else ""
-    except Exception:
-        locality = ""
-    try:
-        admin = str(pm.administrativeArea()).strip() if pm.administrativeArea() else ""
-    except Exception:
-        admin = ""
-    try:
-        country = str(pm.country()).strip() if pm.country() else ""
-    except Exception:
-        country = ""
 
-    poi = ""
+    name = _placemark_field(pm, "name")
+    sub_thoro = _placemark_field(pm, "subThoroughfare")
+    thoro = _placemark_field(pm, "thoroughfare")
+    skip: set[str] = set()
     if name:
-        if street and name.strip() == street.strip():
-            pass
-        elif street and street in name:
-            pass
-        else:
-            poi = name
+        if sub_thoro and sub_thoro in name:
+            skip.add("subThoroughfare")
+        if thoro and thoro in name:
+            skip.add("thoroughfare")
 
-    tail = ", ".join(x for x in (locality, admin, country) if x)
-    if poi and tail:
-        return f"{poi}, {tail}"
-    if tail:
-        return tail
-    if poi:
-        return poi
-    if street:
-        return street
-    return "Unknown"
-
-
-def _location_line_from_state(lat: float | None, lon: float | None, desc: str) -> str:
-    if lat is None or lon is None:
-        return "Unknown"
-    coord = f"{lat:.4f}, {lon:.4f}"
-    if not desc or desc == "Unknown":
-        return f"{coord} — Unknown"
-    return f"{coord} — {desc}"
+    seen: set[str] = set()
+    parts: list[str] = []
+    for attr in _PLACEMARK_FIELDS:
+        if attr in skip:
+            continue
+        s = _placemark_field(pm, attr)
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        parts.append(s)
+    return ", ".join(parts) if parts else "Unknown"
 
 
-def _auth_int() -> int:
+def _fetch_location_uncached() -> tuple[str, str]:
+    """Return ``(location_text, gps_text)``; either may be ``"Unknown"``."""
     if sys.platform != "darwin":
-        return -1
+        return "Unknown", "Unknown"
     try:
-        from CoreLocation import CLLocationManager
-
-        return int(CLLocationManager.authorizationStatus())
+        from CoreLocation import CLGeocoder, CLLocationManager
+        from Foundation import NSDate, NSDefaultRunLoopMode, NSRunLoop
     except Exception:
-        return -1
+        return "Unknown", "Unknown"
 
+    manager = CLLocationManager.alloc().init()
+    manager.startUpdatingLocation()
 
-def _is_authorized(auth: int) -> bool:
+    deadline = time.time() + _LOCATION_WAIT
+    loc = None
+    while time.time() < deadline:
+        loc = manager.location()
+        if loc is not None:
+            break
+        time.sleep(0.1)
+    manager.stopUpdatingLocation()
+
+    if loc is None:
+        _debug(
+            f"[device_context] no CLLocationManager fix within {_LOCATION_WAIT}s",
+            1,
+        )
+        return "Unknown", "Unknown"
+
     try:
-        from CoreLocation import (
-            kCLAuthorizationStatusAuthorizedAlways,
-            kCLAuthorizationStatusAuthorizedWhenInUse,
-        )
-
-        return auth in (
-            int(kCLAuthorizationStatusAuthorizedAlways),
-            int(kCLAuthorizationStatusAuthorizedWhenInUse),
-        )
+        coord = loc.coordinate()
+        lat, lon = float(coord.latitude), float(coord.longitude)
     except Exception:
-        return False
+        return "Unknown", "Unknown"
 
+    gps_text = f"{lat:.4f}, {lon:.4f}"
 
-def _is_denied_or_restricted(auth: int) -> bool:
-    try:
-        from CoreLocation import (
-            kCLAuthorizationStatusDenied,
-            kCLAuthorizationStatusRestricted,
-        )
+    state: dict = {"desc": None, "done": False, "error": None}
+    geocoder = CLGeocoder.alloc().init()
 
-        return auth in (
-            int(kCLAuthorizationStatusDenied),
-            int(kCLAuthorizationStatusRestricted),
-        )
-    except Exception:
-        return False
-
-
-if sys.platform == "darwin":
-    try:
-        from Foundation import NSDate, NSDefaultRunLoopMode, NSObject, NSRunLoop
-        from CoreLocation import (
-            CLGeocoder,
-            CLLocationManager,
-            kCLLocationAccuracyKilometer,
-        )
-
-        class _LocationDelegate(NSObject):
-            """CLLocationManager delegate; ``macllm_state`` must be set to a shared dict."""
-
-            def locationManagerDidChangeAuthorization_(self, manager) -> None:  # noqa: N802
-                state = getattr(self, "macllm_state", None)
-                if not isinstance(state, dict):
-                    return
-                if state.get("updates_started"):
-                    return
-                if _is_authorized(_auth_int()):
-                    state["updates_started"] = True
-                    manager.startUpdatingLocation()
-
-            def locationManager_didUpdateLocations_(self, manager, locations) -> None:  # noqa: N802
-                state = getattr(self, "macllm_state", None)
-                if not isinstance(state, dict) or state.get("geocode_started"):
-                    return
-                if not locations:
-                    return
-                loc_obj = locations[-1]
+    def on_done(placemarks, error) -> None:
+        try:
+            if placemarks and len(placemarks) > 0:
+                state["desc"] = _format_placemark_description(placemarks[0])
+            elif error is not None:
                 try:
-                    coord = loc_obj.coordinate()
-                    lat, lon = float(coord.latitude), float(coord.longitude)
+                    state["error"] = str(error.localizedDescription())
                 except Exception:
-                    state["done"] = True
-                    return
-                state["lat"] = lat
-                state["lon"] = lon
-                state["geocode_started"] = True
-                manager.stopUpdatingLocation()
-
-                geocoder = CLGeocoder.alloc().init()
-
-                def on_placemarks(placemarks, error) -> None:  # noqa: ARG001
-                    try:
-                        if placemarks and len(placemarks) > 0:
-                            state["desc"] = _format_placemark_description(placemarks[0])
-                    finally:
-                        state["geocode_done"] = True
-                        state["done"] = True
-
-                try:
-                    geocoder.reverseGeocodeLocation_completionHandler_(loc_obj, on_placemarks)
-                except Exception:
-                    state["geocode_done"] = True
-                    state["done"] = True
-
-            def locationManager_didFailWithError_(self, manager, error) -> None:  # noqa: N802, ARG002
-                state = getattr(self, "macllm_state", None)
-                if isinstance(state, dict) and not state.get("geocode_started"):
-                    state["done"] = True
-
-        _LOCATION_IMPORTS_OK = True
-    except Exception:
-        _LOCATION_IMPORTS_OK = False
-else:
-    _LOCATION_IMPORTS_OK = False
-
-
-def _location_worker(state: dict[str, Any]) -> None:
-    if not _LOCATION_IMPORTS_OK:
-        state["done"] = True
-        return
-
-    try:
-        delegate = _LocationDelegate.alloc().init()
-        delegate.macllm_state = state
-        manager = CLLocationManager.alloc().init()
-        manager.setDelegate_(delegate)
-
-        auth = _auth_int()
-        if _is_denied_or_restricted(auth):
+                    state["error"] = str(error)
+        finally:
             state["done"] = True
-            return
 
-        manager.setDesiredAccuracy_(kCLLocationAccuracyKilometer)
+    geocoder.reverseGeocodeLocation_completionHandler_(loc, on_done)
 
-        if _is_authorized(auth):
-            state["updates_started"] = True
-            manager.startUpdatingLocation()
-        elif auth == 0:
-            try:
-                manager.requestWhenInUseAuthorization()
-            except Exception:
-                state["done"] = True
-                return
-            state["updates_started"] = True
-            manager.startUpdatingLocation()
-        else:
-            state["done"] = True
-            return
+    geocode_deadline = time.time() + _GEOCODE_WAIT
+    runloop = NSRunLoop.currentRunLoop()
+    while not state["done"] and time.time() < geocode_deadline:
+        runloop.runMode_beforeDate_(
+            NSDefaultRunLoopMode,
+            NSDate.dateWithTimeIntervalSinceNow_(0.1),
+        )
 
-        deadline = time.time() + _TOTAL_WAIT
-        rl = NSRunLoop.currentRunLoop()
-        while time.time() < deadline and not state["done"]:
-            rl.runMode_beforeDate_(
-                NSDefaultRunLoopMode,
-                NSDate.dateWithTimeIntervalSinceNow_(0.05),
-            )
-        manager.stopUpdatingLocation()
-        manager.setDelegate_(None)
-        if state.get("geocode_started") and not state.get("geocode_done"):
-            state["done"] = True
-        if not state.get("geocode_started"):
-            state["done"] = True
-    except Exception:
-        state["done"] = True
+    if not state["done"]:
+        _debug(
+            "[device_context] CLGeocoder reverse geocode timed out before completion "
+            f"(lat={lat}, lon={lon}, budget={_GEOCODE_WAIT}s)",
+            1,
+        )
+        return "Unknown", gps_text
+
+    if state["error"]:
+        _debug(f"[device_context] CLGeocoder error: {state['error']}", 1)
+
+    return state["desc"] or "Unknown", gps_text
 
 
-def _fetch_location_line_uncached() -> str:
-    if sys.platform != "darwin" or not _LOCATION_IMPORTS_OK:
-        return "Unknown"
-    state: dict[str, Any] = {
-        "done": False,
-        "lat": None,
-        "lon": None,
-        "desc": "Unknown",
-        "geocode_started": False,
-        "geocode_done": False,
-        "updates_started": False,
-    }
-    t = threading.Thread(target=_location_worker, args=(state,), daemon=True)
-    t.start()
-    t.join(_TOTAL_WAIT + 1.0)
-    return _location_line_from_state(
-        state.get("lat"),
-        state.get("lon"),
-        str(state.get("desc") or "Unknown"),
-    )
-
-
-def _cached_location_line() -> str:
-    global _CACHE_EXPIRES, _CACHE_LINE
+def _cached_location() -> tuple[str, str]:
+    global _CACHE_EXPIRES, _CACHE_LOC_TEXT, _CACHE_GPS_TEXT
     now = time.monotonic()
     with _CACHE_LOCK:
-        if now < _CACHE_EXPIRES and _CACHE_LINE:
-            return _CACHE_LINE
-    line = _fetch_location_line_uncached()
+        if now < _CACHE_EXPIRES and (_CACHE_LOC_TEXT or _CACHE_GPS_TEXT):
+            return _CACHE_LOC_TEXT, _CACHE_GPS_TEXT
+    loc_text, gps_text = _fetch_location_uncached()
     with _CACHE_LOCK:
-        _CACHE_LINE = line
+        _CACHE_LOC_TEXT = loc_text
+        _CACHE_GPS_TEXT = gps_text
         _CACHE_EXPIRES = time.monotonic() + _TTL_SECONDS
-    return line
+    return loc_text, gps_text
 
 
 def get_device_context() -> str:
-    """Two-line block: current local time (with IANA zone) and location line."""
-    time_s = _format_time_string()
-    loc = _cached_location_line()
-    return f"Current time: {time_s}\nLocation: {loc}"
+    """Three-line block: current local time, descriptive location, GPS coords."""
+    loc_text, gps_text = _cached_location()
+    return (
+        f"Current time: {_format_time_string()}\n"
+        f"Location: {loc_text}\n"
+        f"GPS: {gps_text}"
+    )
