@@ -169,7 +169,7 @@ Speed levels select different models for the tradeoff between speed and capabili
 | Command             | Speed  | Model                                    |
 | ------------------- | ------ | ---------------------------------------- |
 | *(default)*         | Normal | `gemini/gemini-3-flash-preview` (Gemini) |
-| `/fast`             | Fast   | `openai/mercury` (Inception Labs)        |
+| `/fast`             | Fast   | `openai/mercury-2` (Inception Labs)      |
 | `/slow` or `/think` | Slow   | `gpt-5` (OpenAI)                         |
 
 

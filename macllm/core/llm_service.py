@@ -32,7 +32,7 @@ MODELS = {
 # can't determine capabilities (e.g. custom api_base endpoints).
 # True = force vision on, False = force vision off, absent = ask LiteLLM.
 _VISION_OVERRIDES: dict[str, bool] = {
-    'openai/mercury': False,
+    'openai/mercury-2': False,
 }
 
 
@@ -44,7 +44,7 @@ def refresh_models():
 
     MODELS['fast'] = (
         LiteLLMModel(
-            model_id='openai/mercury',
+            model_id='openai/mercury-2',
             api_key=inception_key,
             api_base=_inception_api_base
         ) if inception_key else None

@@ -10,7 +10,7 @@ def _mock_agent_for_thread():
     mock_agent = Mock()
     mock_agent.run = Mock(return_value="MOCK_RESPONSE")
     mock_agent.model = Mock()
-    mock_agent.model.model_id = "openai/mercury"
+    mock_agent.model.model_id = "openai/mercury-2"
     mock_agent.memory = Mock()
     mock_agent.memory.steps = []
     return mock_agent

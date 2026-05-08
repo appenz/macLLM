@@ -12,7 +12,7 @@ response = requests.post(
         'Authorization': f'Bearer {api_key}'
     },
     json={
-        'model': 'mercury',
+        'model': 'mercury-2',
         'messages': [
             {'role': 'user', 'content': 'Write a haiku about the weather'}
         ],
