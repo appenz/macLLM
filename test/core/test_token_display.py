@@ -199,7 +199,7 @@ class TestConversationUsage:
 
         captured = {}
 
-        def intercept_create_agent(agent_cls=None, speed="normal", conversation=None):
+        def intercept_create_agent(agent_cls=None, speed="normal", conversation=None, no_tools=False):
             captured["conversation"] = conversation
             mock_agent = Mock()
             mock_agent.run = Mock(return_value="done")

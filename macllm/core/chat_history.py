@@ -135,7 +135,7 @@ class Conversation:
 
             self._reset_run_state()
 
-            self._create_agent(conversation=self)
+            self._create_agent(conversation=self, no_tools=request.no_tools)
 
             self._start_agent_thread(request, app)
 
@@ -164,7 +164,8 @@ class Conversation:
                 ]
                 conversation._run_step_offset = len(conversation.agent.memory.steps)
 
-                run_kwargs = dict(max_steps=10, reset=False)
+                max_steps = 1 if request.no_tools else 10
+                run_kwargs = dict(max_steps=max_steps, reset=False)
                 if request.images:
                     if model_supports_vision(conversation.speed_level):
                         run_kwargs["images"] = request.images
@@ -392,7 +393,7 @@ class Conversation:
             from macllm.core.memory import clear_conversation
             clear_conversation()
 
-    def _create_agent(self, conversation=None):
+    def _create_agent(self, conversation=None, no_tools=False):
         """Create agent instance using the current agent class."""
         from macllm.core.agent_service import create_agent
         from smolagents import PlanningStep
@@ -405,6 +406,7 @@ class Conversation:
             agent_cls=self._get_agent_cls(),
             speed=self.speed_level,
             conversation=conversation,
+            no_tools=no_tools,
         )
 
         if old_steps is not None:

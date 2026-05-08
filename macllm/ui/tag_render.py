@@ -213,6 +213,11 @@ def render_text_with_pills(text: str, color, font, shortcuts: Iterable[str], plu
             result.appendAttributedString_(make_pill_attachment(disp))
             continue
 
+        # Plugin slash-command pill
+        if token.startswith('/') and token in normal_prefixes:
+            result.appendAttributedString_(make_pill_attachment(token))
+            continue
+
         # Tag pill check
         if token.startswith('@'):
             # Fast path for prefixes or path-like
@@ -318,6 +323,9 @@ def build_input_attributed_with_caret(
 
         # Shortcuts convert only when followed by whitespace (not at EOL)
         if token in shortcuts_set and next_delim in (' ', '\n', '\t'):
+            raw = token
+            display = token
+        elif token.startswith('/') and token in normal_prefixes and next_delim in (' ', '\n', '\t'):
             raw = token
             display = token
         elif token.startswith('@'):

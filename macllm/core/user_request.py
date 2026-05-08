@@ -21,6 +21,7 @@ class UserRequest:
         self.images = []                        # PIL Images to pass to the agent (e.g. clipboard images)
         self.speed_level = None                 # Speed preference for this request if provided
         self.agent_name = None                  # Agent type for this request (set by @agent: tag)
+        self.no_tools = False                   # Disable tools/subagents for this query (/notool)
     
     @classmethod
     def find_shortcuts(cls, text: str) -> list[tuple[int, int, str]]:

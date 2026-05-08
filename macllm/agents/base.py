@@ -45,6 +45,7 @@ class MacLLMAgent(ToolCallingAgent):
                  custom_instructions: str | None = None,
                  prompt_templates: dict | None = None,
                  planning_interval: int = 3,
+                 no_tools: bool = False,
                  **kwargs):
         from macllm.core.llm_service import MODELS
         from macllm import tools as tools_module
@@ -105,6 +106,18 @@ class MacLLMAgent(ToolCallingAgent):
                 )
                 for name in self.macllm_managed_agents
             ]
+
+        if no_tools:
+            tools = []
+            managed_agents = []
+            planning_interval = None
+            no_tools_notice = (
+                "Answer this WITHOUT using tools or subagents, they have been disabed. "
+                "Answer using only your own knowledge and the conversation so far. "
+            )
+            custom_instructions = (
+                f"{(custom_instructions or '').rstrip()}\n\n{no_tools_notice}".strip()
+            )
 
         if prompt_templates is None:
             from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES

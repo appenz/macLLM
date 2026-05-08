@@ -85,9 +85,9 @@ def create_step_callback(conversation: Conversation | None = None):
     return on_step
 
 
-def create_agent(agent_cls=None, speed="normal", conversation=None):
+def create_agent(agent_cls=None, speed="normal", conversation=None, no_tools=False):
     """Thin factory for creating agent instances."""
     if agent_cls is None:
         from macllm.agents import get_default_agent_class
         agent_cls = get_default_agent_class()
-    return agent_cls(speed=speed, conversation=conversation)
+    return agent_cls(speed=speed, conversation=conversation, no_tools=no_tools)
