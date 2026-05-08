@@ -38,3 +38,8 @@ filterwarnings = [
     "ignore::UserWarning:pydantic.*",
     "ignore:There is no current event loop:DeprecationWarning:litellm.*",
 ]
+
+[dependency-groups]
+dev = [
+    "py2app>=0.28.10",
+]

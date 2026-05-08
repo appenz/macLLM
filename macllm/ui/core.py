@@ -26,6 +26,8 @@ from macllm.ui.tab_bar import TabBarHandler
 from macllm.ui.history_browse import HistoryBrowseDelegate
 from macllm.ui.input_field import InputFieldHandler
 
+import os
+import sys
 import objc
 
 import signal
@@ -158,17 +160,23 @@ class AppDelegate(NSObject):
                 print(f"Warning: failed to capture window screenshot to {path}")
         NSApp().terminate_(None)
 
+    def setup_status_item(self):
+        """Create the menu-bar status item and pasteboard. Safe to call
+        from both applicationDidFinishLaunching_ and MacLLMUI.start()."""
+        if getattr(self, "_status_item_ready", False):
+            return
+        self._status_item_ready = True
+
+        self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)
+        self.status_item.setMenu_(self.menu())
+        self.status_item.setTitle_(MacLLMUI.status_ready)
+        self.status_item.setHighlightMode_(True)
+        self.pasteboard = NSPasteboard.generalPasteboard()
+
     def applicationDidFinishLaunching_(self, notification):
         try:
-            self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1)
-        
-        # Set an icon for the status item
-            self.status_item.setMenu_(self.menu())
-            self.status_item.setTitle_(MacLLMUI.status_ready)
-            self.status_item.setHighlightMode_(True)
+            self.setup_status_item()
 
-            self.pasteboard = NSPasteboard.generalPasteboard()
-            
             # Open window on startup if requested
             if self.macllm_ui.macllm and getattr(self.macllm_ui.macllm.args, 'show_window_on_start', False):
                 NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
@@ -180,7 +188,6 @@ class AppDelegate(NSObject):
                     0.5, self, 'autoSubmitQuery:', None, False)
 
         except Exception as e:
-            # If we fail to initialize the status item, terminate the application and show stack trace
             print(f"Initialization failure: {e}")
             traceback.print_exc()
             NSApp().terminate_(self)
@@ -241,8 +248,15 @@ class MacLLMUI:
         self.pending_screenshot = None
 
         self.quick_window = None
-        self.dock_image = NSImage.alloc().initByReferencingFile_("./assets/icon.png")
-        self.logo_image = NSImage.alloc().initByReferencingFile_("./assets/icon-nobg.png")
+        if getattr(sys, "frozen", None):
+            assets_dir = os.path.join(os.environ["RESOURCEPATH"], "assets")
+        else:
+            assets_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "assets",
+            )
+        self.dock_image = NSImage.alloc().initByReferencingFile_(os.path.join(assets_dir, "icon.png"))
+        self.logo_image = NSImage.alloc().initByReferencingFile_(os.path.join(assets_dir, "icon-nobg.png"))
         
         # Create a high-quality scaled version of the logo for the top bar
         self._create_scaled_logo()
@@ -867,6 +881,22 @@ class MacLLMUI:
         else:
             self.close_window()
 
+    def _install_main_menu(self):
+        """Build a minimal main menu bar so Cmd+Q works in the app bundle."""
+        main_menu = NSMenu.alloc().init()
+
+        app_menu_item = NSMenuItem.alloc().init()
+        main_menu.addItem_(app_menu_item)
+
+        app_menu = NSMenu.alloc().init()
+        quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Quit macLLM", "terminate:", "q"
+        )
+        app_menu.addItem_(quit_item)
+        app_menu_item.setSubmenu_(app_menu)
+
+        self.app.setMainMenu_(main_menu)
+
     def start(self, dont_run_app: bool = False):
         # Pointer to main class, we need this for callback
         signal.signal(signal.SIGINT, self.handle_interrupt)
@@ -876,6 +906,8 @@ class MacLLMUI:
         self.delegate.macllm_ui = self
         self.app.setDelegate_(self.delegate)
         self.app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        self._install_main_menu()
+        self.delegate.setup_status_item()
 
         self.delegate.pb_init()
         

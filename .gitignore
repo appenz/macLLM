@@ -18,3 +18,8 @@ debug_screenshot.png
 
 # Log files
 *.log
+
+# py2app build artifacts
+build/
+dist/
+.eggs/
