@@ -15,7 +15,6 @@ class CalendarAgent(MacLLMAgent):
         "slots on the user's macOS calendars."
     )
     macllm_tools = [
-        "get_current_time",
         "web_search",
         "cal_list_calendars",
         "cal_get_events",

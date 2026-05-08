@@ -83,6 +83,10 @@ MacLLM agents are built on top of smolagents `ToolCallingAgent`.
 The agent layer provides registry/autodiscovery, a thin factory, prompt template selection,
 custom instructions, symbolic tool registration, and managed-agent delegation. See `specs/agents.md`.
 
+Each agent’s system prompt includes the user’s current local time (with IANA time zone) and
+approximate location (coordinates plus reverse-geocoded text when available), assembled by
+`macllm/core/device_context.py` — not via a tool.
+
 ### Tools
 
 Agent tools live under `macllm/tools/` and are re-exported from `macllm/tools/__init__.py`.

@@ -26,6 +26,12 @@ system_prompt: |-
   {%- endfor %}
   {%- endif %}
 
+  {%- if user_situation %}
+
+  # User's current time & location
+  {{user_situation}}
+  {%- endif %}
+
   {%- if custom_instructions %}
   {{custom_instructions}}
   {%- endif %}

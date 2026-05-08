@@ -15,7 +15,6 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_name = "default"
     macllm_description = "General-purpose macLLM assistant"
     macllm_tools = [
-        "get_current_time",
         "web_search",
         "run_command",
         "read_skill",

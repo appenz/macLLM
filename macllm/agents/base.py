@@ -133,6 +133,21 @@ class MacLLMAgent(ToolCallingAgent):
             **kwargs,
         )
 
+    def initialize_system_prompt(self) -> str:
+        from smolagents.agents import populate_template
+
+        from macllm.core.device_context import get_device_context
+
+        return populate_template(
+            self.prompt_templates["system_prompt"],
+            variables={
+                "tools": self.tools,
+                "managed_agents": self.managed_agents,
+                "custom_instructions": self.instructions,
+                "user_situation": get_device_context(),
+            },
+        )
+
     @staticmethod
     def _debug(msg: str):
         try:

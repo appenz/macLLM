@@ -16,7 +16,6 @@ class EmailAgent(MacLLMAgent):
         "browse split inboxes, and look up contacts."
     )
     macllm_tools = [
-        "get_current_time",
         "email_inbox",
         "email_search",
         "email_read_thread",

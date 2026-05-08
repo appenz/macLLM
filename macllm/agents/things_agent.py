@@ -13,7 +13,6 @@ class ThingsAgent(MacLLMAgent):
         "to-dos and projects."
     )
     macllm_tools = [
-        "get_current_time",
         "things_list_areas",
         "things_list_projects",
         "things_list_tags",

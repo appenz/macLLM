@@ -87,6 +87,11 @@ Prompt behavior is split between prompt templates and custom instructions. Token
 through `create_step_callback()`, which updates `conversation.llm_metadata`. Tool execution progress
 is recorded by smolagents in `agent.memory.steps` and rendered by the UI from there.
 
+Each agent’s system prompt includes **User's current time & location** (`user_situation` in
+`macllm/agents/prompts/default.yaml`): local date/time with IANA time zone and approximate GPS plus
+reverse-geocoded place text when available. This is assembled in `get_device_context()` in
+`macllm/core/device_context.py` and injected by `MacLLMAgent.initialize_system_prompt()` (not via a tool).
+
 ## Threading Model
 
 Each conversation runs its agent on its own background thread. Multiple conversations can have

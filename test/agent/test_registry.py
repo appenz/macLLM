@@ -46,7 +46,6 @@ class TestAgentDiscovery:
 class TestAgentDefinitions:
     def test_default_agent_attributes(self):
         assert MacLLMDefaultAgent.macllm_name == "default"
-        assert "get_current_time" in MacLLMDefaultAgent.macllm_tools
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
 
     def test_default_agent_uses_notes_subagent(self):

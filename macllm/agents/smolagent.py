@@ -7,7 +7,6 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_name = "smolagent"
     macllm_description = "Alternate top-level assistant (lighter tool set than default)"
     macllm_tools = [
-        "get_current_time",
         "web_search",
         "read_skill",
     ]

@@ -91,10 +91,11 @@ The agent has access to the following tools:
 | **view_folder_structure** | Shows the full folder tree of all indexed mounts.                                    |
 | **folder_create**         | Creates a new subfolder inside an indexed directory.                                 |
 | **folder_delete**         | Deletes a subfolder and its contents (with automatic backup).                        |
-| **get_current_time**      | Returns the current date and time.                                                   |
 
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
+
+The assistant’s system prompt always includes **User's current time & location** (local time with time zone, approximate coordinates, and a reverse-geocoded place name when available). CoreLocation may prompt for permission the first time; bundled apps should merge `resources/Info.plist` keys (e.g. `NSLocationWhenInUseUsageDescription`) into their app `Info.plist`.
 
 ## Searching Your Notes
 

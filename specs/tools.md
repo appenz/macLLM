@@ -20,7 +20,7 @@ Tools return human-readable strings. smolagents records each model-planned tool 
 
 The current tool set is organized by domain:
 
-- general utilities such as time and web search
+- general utilities such as web search
 - note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
 - calendar tools for scheduling and event lookup
 - Things tools for task management
@@ -40,7 +40,7 @@ Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapp
 
 ## Families (structural)
 
-- General — e.g. time, web search.
+- General — e.g. web search.
 - Files — Mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
