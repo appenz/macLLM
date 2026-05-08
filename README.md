@@ -95,7 +95,7 @@ The agent has access to the following tools:
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
 
-The assistant’s system prompt always includes **User's current time & location** (local time with time zone, approximate coordinates, and a reverse-geocoded place name when available). CoreLocation may prompt for permission the first time; bundled apps should merge `resources/Info.plist` keys (e.g. `NSLocationWhenInUseUsageDescription`) into their app `Info.plist`.
+The assistant’s system prompt always includes **User's current time & location** (local time with time zone, approximate coordinates, and a reverse-geocoded place name when Core Location succeeds for the running interpreter). If macOS does not grant location to that process, the location line is `Unknown` — the prompt never fabricates coordinates.
 
 ## Searching Your Notes
 

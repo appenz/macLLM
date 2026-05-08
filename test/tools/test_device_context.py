@@ -95,46 +95,6 @@ def test_format_placemark_unknown_when_empty():
     assert _format_placemark_description(PM()) == "Unknown"
 
 
-def test_default_agent_system_prompt_contains_gps_coordinates(monkeypatch):
-    """Real CoreLocation call: assert the system prompt contains a GPS lat/long pair.
-
-    May fail when Location Services are off, denied, or simply unable to obtain a fix.
-    """
-    from unittest.mock import MagicMock
-
-    from macllm.core import llm_service
-    from macllm.core.agent_service import create_agent
-    from macllm.agents.default import MacLLMDefaultAgent
-    from macllm.macllm import MacLLM
-
-    dummy = MagicMock()
-    monkeypatch.setitem(llm_service.MODELS, "normal", dummy)
-    monkeypatch.setitem(llm_service.MODELS, "fast", dummy)
-    monkeypatch.setitem(llm_service.MODELS, "slow", dummy)
-
-    class DummyApp:
-        pass
-
-    MacLLM._instance = DummyApp()
-    try:
-        agent = create_agent(agent_cls=MacLLMDefaultAgent, speed="normal")
-        prompt = agent.initialize_system_prompt()
-        match = re.search(
-            r"Location:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)",
-            prompt,
-        )
-        assert match, (
-            "Expected a 'Location: <lat>, <lon>' line with real GPS coordinates "
-            f"in the system prompt; got:\n{prompt}"
-        )
-        lat = float(match.group(1))
-        lon = float(match.group(2))
-        assert -90.0 <= lat <= 90.0, f"latitude out of range: {lat}"
-        assert -180.0 <= lon <= 180.0, f"longitude out of range: {lon}"
-    finally:
-        MacLLM._instance = None
-
-
 def test_default_agent_system_prompt_includes_user_situation(monkeypatch):
     from unittest.mock import MagicMock
 
