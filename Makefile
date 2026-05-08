@@ -1,4 +1,4 @@
-.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote
+.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote app app-dev app-clean
 
 uv = /opt/homebrew/bin/uv
 
@@ -44,3 +44,12 @@ screenshot:
 debug-render:
 	rm -f ./debug_screenshot.png
 	$(uv) run -m macllm --query "$(QUERY)" --screenshot ./debug_screenshot.png
+
+app:
+	$(uv) run python setup.py py2app --semi-standalone
+
+app-dev:
+	$(uv) run python setup.py py2app --alias
+
+app-clean:
+	rm -rf build dist .eggs
