@@ -46,6 +46,7 @@ class MacLLMAgent(ToolCallingAgent):
                  prompt_templates: dict | None = None,
                  planning_interval: int = 3,
                  no_tools: bool = False,
+                 task_mode: bool = False,
                  **kwargs):
         from macllm.core.llm_service import MODELS
         from macllm import tools as tools_module
@@ -55,6 +56,7 @@ class MacLLMAgent(ToolCallingAgent):
         from macllm.core.config import get_runtime_config
 
         reset_search_counter()
+        self._task_mode = task_mode
 
         model = MODELS.get(speed.lower(), MODELS['normal'])
         if model is None:
@@ -158,6 +160,7 @@ class MacLLMAgent(ToolCallingAgent):
                 "managed_agents": self.managed_agents,
                 "custom_instructions": self.instructions,
                 "user_situation": get_device_context(),
+                "task_mode": self._task_mode,
             },
         )
 

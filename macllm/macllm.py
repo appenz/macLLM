@@ -170,6 +170,26 @@ class MacLLM:
         if self.ui:
             self.ui.request_update()
         
+def _run_task_headless(args):
+    """Run a task file headlessly and exit with the appropriate code."""
+    import sys
+    from macllm.core.task_runner import parse_task_file, apply_cli_overrides, run_task
+
+    try:
+        task = parse_task_file(args.task)
+    except FileNotFoundError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        sys.exit(1)
+
+    apply_cli_overrides(task, args)
+
+    if args.debuglitellm:
+        enable_litellm_debug()
+
+    exit_code = run_task(task, args)
+    sys.exit(exit_code)
+
+
 def main():
     global macLLM
 
@@ -181,6 +201,14 @@ def main():
     parser.add_argument("--query", type=str, default=None, help="Auto-submit a query after the window opens (implies --show-window)")
     parser.add_argument("--screenshot", type=str, default=None, metavar="PATH",
                         help="After --query completes, capture the window to PATH and exit")
+    parser.add_argument("-task", type=str, default=None, metavar="FILE",
+                        help="Run a task file headlessly and exit")
+    parser.add_argument("--token-budget", type=int, default=None, dest="token_budget",
+                        help="Max tokens before tool use is disabled (overrides task file)")
+    parser.add_argument("--time-budget", type=int, default=None, dest="time_budget",
+                        help="Max seconds before tool use is disabled (overrides task file)")
+    parser.add_argument("--logfile", type=str, default=None,
+                        help="Write task output to file instead of stdout (overrides task file)")
     args = parser.parse_args()
 
     if args.query:
@@ -188,6 +216,11 @@ def main():
 
     if args.version:
         print(MacLLM.version)
+        return
+
+    # Headless task runner — bypass UI entirely
+    if args.task:
+        _run_task_headless(args)
         return
 
     macLLM = MacLLM(args=args)
