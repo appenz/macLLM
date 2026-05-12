@@ -19,6 +19,7 @@ class CalendarAgent(MacLLMAgent):
         "cal_list_calendars",
         "cal_get_events",
         "cal_find_events",
+        "cal_get_event",
         "cal_add_event",
         "cal_update_event",
         "cal_find_free_time",

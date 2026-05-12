@@ -1,5 +1,7 @@
 """Calendar tools wrapping the maccal library for macOS EventKit access."""
 
+import hashlib
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -124,6 +126,82 @@ def _format_time_slot(slot) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Short event IDs — stateless, format: YYYY-MM-DD-<4 hex>
+# ---------------------------------------------------------------------------
+
+_SHORT_ID_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-([0-9a-f]{4})$")
+_MAX_SUMMARY_ATTENDEES = 5
+
+
+def _short_event_id(ev) -> str:
+    """Produce a compact ID from an event: ``<UTC-date>-<4 hex hash>``."""
+    utc_date = ev.start.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%d")
+    h = hashlib.sha256(ev.event_id.encode()).hexdigest()[:4]
+    return f"{utc_date}-{h}"
+
+
+def _resolve_event(short_or_full_id: str):
+    """Resolve a short ID to its maccal Event, or search by full ID.
+
+    Returns the matching Event object.  Raises ValueError on no match.
+    """
+    store = _get_store()
+    m = _SHORT_ID_RE.match(short_or_full_id)
+    if m:
+        date_str, hash_prefix = m.group(1), m.group(2)
+        day_start = _parse_datetime(date_str, "UTC")
+        day_end = day_start + timedelta(days=1)
+        events = store.get_events(day_start, day_end)
+        for ev in events:
+            if hashlib.sha256(ev.event_id.encode()).hexdigest()[:4] == hash_prefix:
+                return ev
+        raise ValueError(
+            f"No event found matching short ID '{short_or_full_id}'."
+        )
+    # Full ID — search a wide window and match by event_id
+    now = datetime.now().astimezone()
+    window_start = now - timedelta(days=365)
+    window_end = now + timedelta(days=365)
+    events = store.get_events(window_start, window_end)
+    for ev in events:
+        if ev.event_id == short_or_full_id:
+            return ev
+    raise ValueError(f"No event found with ID '{short_or_full_id}'.")
+
+
+def _format_event_summary(ev) -> str:
+    """Compact event format for search/list results."""
+    time_fmt = "%Y-%m-%d %H:%M"
+    if ev.is_all_day:
+        when = f"{ev.start.strftime('%Y-%m-%d')} (all day)"
+    else:
+        when = f"{ev.start.strftime(time_fmt)} – {ev.end.strftime(time_fmt)}"
+        if ev.time_zone:
+            when += f" ({ev.time_zone})"
+
+    lines = [
+        f"- {ev.title}",
+        f"  Calendar: {ev.calendar}",
+        f"  ID: {_short_event_id(ev)}",
+        f"  When: {when}",
+    ]
+    if ev.location:
+        loc = ev.location if len(ev.location) <= 80 else ev.location[:77] + "..."
+        lines.append(f"  Location: {loc}")
+    if ev.attendees:
+        lines.append("  Attendees:")
+        shown = ev.attendees[:_MAX_SUMMARY_ATTENDEES]
+        for a in shown:
+            who = _attendee_label(a)
+            rsvp = _format_participant_rsvp(a)
+            lines.append(f"    {who} — {rsvp}")
+        remaining = len(ev.attendees) - len(shown)
+        if remaining > 0:
+            lines.append(f"    (+{remaining} more)")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
 
@@ -171,7 +249,7 @@ def cal_get_events(start: str, end: str, calendars: str = "") -> str:
     events = store.get_events(dt_start, dt_end, calendars=cal_list)
     if not events:
         return "No events found in this range."
-    return "\n\n".join(_format_event(ev) for ev in events)
+    return "\n\n".join(_format_event_summary(ev) for ev in events)
 
 
 @macllm_tool
@@ -206,7 +284,26 @@ def cal_find_events(
     )
     if not events:
         return f"No events matching '{query}' found in this range."
-    return "\n\n".join(_format_event(ev) for ev in events)
+    return "\n\n".join(_format_event_summary(ev) for ev in events)
+
+
+@macllm_tool
+def cal_get_event(event_id: str) -> str:
+    """
+    Get full details of a calendar event by its ID.
+
+    Use this to retrieve complete information (notes, all attendees, URLs)
+    for an event found via cal_get_events or cal_find_events.
+
+    Args:
+        event_id: The event ID (short or full, from a previous search or listing).
+
+    Returns:
+        Complete event details including notes, all attendees with RSVP, and URL.
+    """
+    set_tool_message(f"Loading event {event_id}")
+    ev = _resolve_event(event_id)
+    return _format_event(ev)
 
 
 @macllm_tool
@@ -267,7 +364,7 @@ def cal_update_event(
     Update an existing calendar event. Only provide the fields you want to change.
 
     Args:
-        event_id: The event ID (from a previous search or add result).
+        event_id: The event ID (short or full, from a previous search or add result).
         title: New event title. Leave empty to keep the current title.
         start: New start time in 'YYYY-MM-DD HH:MM' format. Leave empty to keep current.
         end: New end time in 'YYYY-MM-DD HH:MM' format. Leave empty to keep current.
@@ -280,6 +377,7 @@ def cal_update_event(
     """
     set_tool_message(f"Updating event {event_id}")
     store = _get_store()
+    full_id = _resolve_event(event_id).event_id
     tz = timezone or None
 
     kwargs: dict = {}
@@ -296,7 +394,7 @@ def cal_update_event(
     if notes != "\x00":
         kwargs["notes"] = None if notes == "CLEAR" else (notes or ...)
 
-    event = store.update_event(event_id, **kwargs)
+    event = store.update_event(full_id, **kwargs)
     return "Event updated:\n\n" + _format_event(event)
 
 

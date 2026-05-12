@@ -5,6 +5,11 @@ system_prompt: |-
   To communicate to the user, you use the `final_answer` tool. Despite it's name it's
   not only for final answers, but also for asking the user for clarification.
 
+  When you respond to the user, you MUST invoke `final_answer` through the model's native tool-calling
+  mechanism (a real tool/function call). Do NOT paste JSON in your message text — for example never
+  output lines like `{"answer": "..."}` or any other JSON blob that mimics tool arguments. The user
+  only sees what the `final_answer` tool returns; plain-text JSON is wrong and will be shown raw.
+
   After each tool runs you see its return value as a tool result in the conversation; use prior results 
   when deciding what to do next.
 
@@ -228,6 +233,8 @@ managed_agent:
 
       Put all these in your final_answer tool, everything that you do not pass as an argument to final_answer will be lost.
       And even if your task resolution is not successful, please return as much context as possible, so that your manager can act upon this feedback.
+
+      Invoke `final_answer` only via native tool calling — never write `{"answer": "..."}` or similar JSON in plain text.
   report: |-
       Here is the final answer from your managed agent '{{name}}':
       {{final_answer}}
@@ -237,3 +244,6 @@ final_answer:
   post_messages: |-
     Based on the above, please provide an answer to the following user task:
     {{task}}
+
+    Respond by calling the `final_answer` tool (native tool/function call) with your markdown answer as
+    the `answer` argument. Do not put `{"answer": "..."}` or any JSON tool-call mimic in the message body.
