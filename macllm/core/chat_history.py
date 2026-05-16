@@ -36,6 +36,8 @@ class Conversation:
         self.pending_input: str = ""
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
+        self.activity_trace = None
+        self._active_query_text: str | None = None
         self.plan_text: str | None = None
         self.plan_status: str | None = None
 
@@ -49,18 +51,44 @@ class Conversation:
 
     def add_tool_call(self, tool_name: str, message: str) -> None:
         """Append a live tool-call entry and repaint the UI."""
-        self.tool_calls.append({"tool": tool_name, "message": message})
+        trace_node = None
+        if self.activity_trace is not None:
+            trace_node = self.activity_trace.open_node(message, kind="tool")
+        self.tool_calls.append({"tool": tool_name, "message": message, "trace_node": trace_node})
         self._notify_ui()
 
     def update_last_tool_message(self, message: str) -> None:
         """Override the message of the most recent tool-call entry."""
         if self.tool_calls:
             self.tool_calls[-1]["message"] = message
+            trace_node = self.tool_calls[-1].get("trace_node")
+            if trace_node is not None:
+                trace_node.label = message
             self._notify_ui()
+
+    def complete_last_tool_call(self, *, failed: bool = False) -> None:
+        """Mark the most recent live tool-call entry complete in the activity trace."""
+        if self.tool_calls:
+            trace_node = self.tool_calls[-1].get("trace_node")
+            if trace_node is not None and self.activity_trace is not None:
+                self.activity_trace.close_node(trace_node, state="error" if failed else "success")
+            self._notify_ui()
+
+    def record_last_tool_result(self, tool_name: str, result) -> None:
+        """Attach result-size metadata to the most recent live tool-call entry."""
+        if self.tool_calls and self.activity_trace is not None:
+            entry = self.tool_calls[-1]
+            if entry.get("tool") != tool_name:
+                return
+            trace_node = entry.get("trace_node")
+            self.activity_trace.record_tool_result(trace_node, result)
 
     def pop_last_tool_call(self) -> None:
         if self.tool_calls:
-            self.tool_calls.pop()
+            entry = self.tool_calls.pop()
+            trace_node = entry.get("trace_node")
+            if trace_node is not None and self.activity_trace is not None:
+                self.activity_trace.discard_node(trace_node)
             self._notify_ui()
 
     def clear_tool_calls(self) -> None:
@@ -134,6 +162,7 @@ class Conversation:
                 return
 
             self._reset_run_state()
+            self._active_query_text = user_input
 
             self._create_agent(conversation=self, no_tools=request.no_tools)
 
@@ -197,6 +226,7 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
+                conversation._finish_activity_trace(app)
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
@@ -246,6 +276,22 @@ class Conversation:
             from macllm.core.memory import save_all_conversations
             save_all_conversations(app.conversation_history)
 
+    def _finish_activity_trace(self, app) -> None:
+        """Close the current trace and print a debug summary when requested."""
+        trace = self.activity_trace
+        if trace is None:
+            return
+        state = "error" if self.abort_event.is_set() else "success"
+        trace.finish(state=state)
+        if getattr(getattr(app, "args", None), "debug", False):
+            app.debug_log(
+                trace.format_debug_summary(
+                    query=self._active_query_text,
+                    width=72,
+                    unicode=True,
+                )
+            )
+
     def _maybe_generate_title(self) -> None:
         """Generate a short title after the first exchange."""
         if self.title != "New Agent":
@@ -287,8 +333,13 @@ class Conversation:
 
     def _reset_run_state(self) -> None:
         """Reset transient per-run UI state before starting an agent run."""
+        from macllm.core.activity_trace import ActivityTrace
+
         self.usage.reset()
         self.clear_tool_calls()
+        agent_cls = self._get_agent_cls()
+        agent_name = getattr(agent_cls, "macllm_name", "agent") or "agent"
+        self.activity_trace = ActivityTrace(f"{agent_name} agent")
         self.plan_text = None
         self.plan_status = None
 
@@ -380,6 +431,8 @@ class Conversation:
         self.speed_level = "normal"
         self.title = "New Agent"
         self.tool_calls = []
+        self.activity_trace = None
+        self._active_query_text = None
         self.plan_text = None
         self.plan_status = None
 

@@ -128,7 +128,7 @@ class MacLLMAgent(ToolCallingAgent):
 
         if conversation is not None:
             from macllm.core.abortable_model import AbortableModel
-            model = AbortableModel(model, conversation.abort_event)
+            model = AbortableModel(model, conversation.abort_event, conversation)
 
         super().__init__(
             tools=tools,

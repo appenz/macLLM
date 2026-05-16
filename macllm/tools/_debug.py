@@ -58,7 +58,17 @@ def macllm_tool(fn):
         if conv is not None:
             conv.add_tool_call(fn.__name__, f"Using tool: {fn.__name__}")
 
-        return fn(*args, **kwargs)
+        failed = False
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            failed = True
+            if conv is not None:
+                conv.complete_last_tool_call(failed=True)
+            raise
+        finally:
+            if conv is not None and not failed:
+                conv.complete_last_tool_call()
     wrapper.__signature__ = inspect.signature(fn)
     wrapper.__qualname__ = fn.__qualname__
     del wrapper.__wrapped__

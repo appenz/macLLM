@@ -131,6 +131,15 @@ class MainTextHandler:
                 ts, conversation, muted, light, green, font_sm, font_sm_bold
             )
 
+        trace = getattr(conversation, "activity_trace", None)
+        if trace is not None and trace.has_activity:
+            _append("Steps\n", muted, font_sm_bold)
+            for line in trace.format_ui_lines(width=58, unicode=True):
+                _append(f"  {line}\n", light)
+            if conversation.pending_approval:
+                ApprovalRenderer.render_pending(ts, conversation.pending_approval)
+            return
+
         if show_steps:
             _append("Steps\n", muted, font_sm_bold)
         elif not conversation.pending_approval and not has_plan:

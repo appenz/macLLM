@@ -77,7 +77,17 @@ class LazyManagedMacLLMAgent:
         return self._impl
 
     def __call__(self, task: str, **kwargs):
-        result = self._materialize().__call__(task, **kwargs)
+        trace = getattr(self._conversation, "activity_trace", None)
+        label = f"{self.name.capitalize()} agent: {task}"
+        if trace is None:
+            result = self._materialize().__call__(task, **kwargs)
+        else:
+            with trace.scoped_node(label, kind="agent"):
+                if self._conversation is not None:
+                    self._conversation._notify_ui()
+                result = self._materialize().__call__(task, **kwargs)
+            if self._conversation is not None:
+                self._conversation._notify_ui()
         from macllm.macllm import MacLLM
         if MacLLM._instance is not None:
             MacLLM._instance.debug_log(
