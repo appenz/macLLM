@@ -6,7 +6,7 @@ Skills are markdown-defined prompt assets loaded from configured skill directori
 
 They are a separate request-expansion mechanism from tag plugins:
 
-- skills handle leading `/skill` invocation
+- skills handle user-invocable `/skill` mentions
 - tag plugins handle `@...` and plugin-owned `/...` tokens after that
 
 ## Design
@@ -71,13 +71,13 @@ Deeper paths (e.g. `references/*.md`, `my-pack/extra.md`) are **not** scanned fo
 
 There are two runtime paths.
 
-For manual use, `SkillsRegistry.expand_manual_invocation()` rewrites a leading `/skill` invocation into the skill body, optionally appending an `ARGUMENTS:` section.
+For manual use, `SkillsRegistry.expand_manual_invocation()` rewrites user-invocable `/skill` mentions into the skill body. A leading `/skill` invocation keeps the legacy argument behavior: the skill body is followed by an `ARGUMENTS:` section containing the rest of the prompt.
 
 For agent use, `read_skill` in `macllm/tools/skills.py` exposes model-invocable skills. It can return the skill body (with a listing of additional files in the skill directory) or the content of a specific file within the skill directory. Agents that include `read_skill` also receive a generated skill catalog in their instructions.
 
 ## Boundary to Plugins
 
-Skills run before tag plugins. After any leading `/skill` expansion, the resulting expanded prompt is passed into `UserRequest.process_tags()`.
+Skills run before tag plugins. After any `/skill` expansion, the resulting expanded prompt is passed into `UserRequest.process_tags()`.
 
 This keeps skills focused on reusable prompt templates, while plugins remain responsible for token-level request transformation and side effects.
 # Skills
@@ -92,7 +92,7 @@ Frontmatter keys (structural): `name`, `description`, optional `disable-model-in
 
 ## Manual invocation (/)
 
-If user input starts with / and matches a loaded skill name, `expand_manual_invocation` replaces the leading token with the skill body plus an ARGUMENTS: suffix when trailing text exists. Runs before tag processing.
+If user input contains a `/skill` token matching a loaded user-invocable skill name, `expand_manual_invocation` replaces it with the skill body before tag processing. A leading `/skill` token additionally appends trailing text as `ARGUMENTS:`.
 
 ## Model invocation
 

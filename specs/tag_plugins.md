@@ -8,7 +8,7 @@ They turn user-facing shorthand into request state such as embedded context, sel
 selected speed tier, attached images, and autocomplete suggestions. This layer sits between
 the original prompt and agent execution.
 
-Skills are adjacent but separate. Leading `/skill` expansion happens before plugin processing and is
+Skills are adjacent but separate. User-invocable `/skill` expansion happens before plugin processing and is
 owned by `SkillsRegistry`, not by `TagPlugin`. After that expansion step, plugins process the remaining
 `@...` and plugin-owned `/...` tokens.
 
@@ -20,7 +20,7 @@ The base class is `TagPlugin` in `macllm/tags/base.py`. Plugins are discovered f
 Request expansion is driven by `UserRequest.process_tags()` in `macllm/core/user_request.py`.
 
 1. `Conversation.submit()` builds a `UserRequest`.
-2. Any leading `/skill` invocation is expanded by `SkillsRegistry`.
+2. Any user-invocable `/skill` invocation is expanded by `SkillsRegistry`.
 3. `UserRequest.find_shortcuts()` scans the prompt for `@...` and `/...` tokens.
 4. Tokens are matched against the plugin prefix index, longest prefix first.
 5. The matching plugin's `expand(...)` method is called.

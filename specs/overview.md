@@ -33,7 +33,7 @@ At a high level, the flow is as follows:
 
 1. The user submits a query via the UI, which queues it via `conversation.submit(query)`.
 2. The `conversation` checks its queue, and fetches the new `query`
-3. Leading slash skill invocations are expanded by `SkillsRegistry`.
+3. User-invocable slash skill mentions are expanded by `SkillsRegistry`.
 4. A `UserRequest` scans the prompt for `@...` and `/...` tokens and dispatches them to tag plugins. All slash commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
 5. The original prompt is stored in the conversation for UI/history.
 6. If the expanded prompt is non-empty, it is passed to the supervising agent of the conversation

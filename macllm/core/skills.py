@@ -121,28 +121,57 @@ class SkillsRegistry:
     @classmethod
     def expand_manual_invocation(cls, text: str) -> str:
         """
-        Expand a leading slash skill invocation:
+        Expand manual slash skill invocations.
+
+        A leading slash skill invocation:
           /skill arg text
         to:
           <skill body>
 
           ARGUMENTS: arg text
+
+        Later occurrences of /skill are replaced inline with the skill body.
         """
         cls.ensure_loaded()
         stripped = text.strip()
-        if not stripped.startswith("/"):
+        if stripped.startswith("/"):
+            token, sep, rest = stripped.partition(" ")
+            name = token[1:]
+            skill = cls.get(name)
+            if skill is not None and skill.user_invocable:
+                expanded = skill.body.strip()
+                if rest.strip():
+                    rest = cls.expand_inline_manual_invocations(rest)
+                    expanded += f"\n\nARGUMENTS: {rest.strip()}"
+                if not expanded.strip():
+                    return text
+                return expanded
+        return cls.expand_inline_manual_invocations(text)
+
+    @classmethod
+    def expand_inline_manual_invocations(cls, text: str) -> str:
+        """Replace user-invocable /skill tokens anywhere in the prompt."""
+        from macllm.core.user_request import UserRequest
+
+        shortcuts = [
+            (start, end, shortcut_text)
+            for start, end, shortcut_text in UserRequest.find_shortcuts(text)
+            if shortcut_text.startswith("/")
+        ]
+        if not shortcuts:
             return text
-        token, sep, rest = stripped.partition(" ")
-        name = token[1:]
-        skill = cls.get(name)
-        if skill is None or not skill.user_invocable:
-            return text
-        expanded = skill.body.strip()
-        if rest.strip():
-            expanded += f"\n\nARGUMENTS: {rest.strip()}"
-        if not expanded.strip():
-            return text
-        return expanded
+
+        expanded_text = text
+        for start, end, shortcut_text in reversed(shortcuts):
+            name = shortcut_text[1:]
+            skill = cls.get(name)
+            if skill is None or not skill.user_invocable:
+                continue
+            body = skill.body.strip()
+            if not body:
+                continue
+            expanded_text = expanded_text[:start] + body + expanded_text[end:]
+        return expanded_text
 
     @classmethod
     def _plugin_slash_prefixes(cls, plugins) -> set[str]:

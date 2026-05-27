@@ -87,6 +87,20 @@ class TestUserInvocable:
         assert "body" in result
         assert "ARGUMENTS: some args" in result
 
+    def test_expand_manual_invocation_works_inside_prompt(self):
+        result = SkillsRegistry.expand_manual_invocation("Please use /public here")
+        assert result == "Please use body here"
+
+    def test_expand_manual_invocation_works_at_end_of_prompt(self):
+        result = SkillsRegistry.expand_manual_invocation("Please use /public")
+        assert result == "Please use body"
+
+    def test_expand_manual_invocation_expands_skills_in_leading_args(self):
+        SkillsRegistry._skills["other"] = _make_skill("other", body="other body")
+        result = SkillsRegistry.expand_manual_invocation("/public then /other")
+        assert "body" in result
+        assert "ARGUMENTS: then other body" in result
+
     def test_expand_manual_invocation_blocked_for_non_user_invocable(self):
         result = SkillsRegistry.expand_manual_invocation("/agent-only some args")
         assert result == "/agent-only some args"

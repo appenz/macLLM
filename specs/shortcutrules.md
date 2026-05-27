@@ -4,7 +4,7 @@
 
 macLLM has two request-expansion mechanisms:
 
-- leading `/skill` expansion, owned by `SkillsRegistry`
+- user-invocable `/skill` expansion, owned by `SkillsRegistry`
 - `@...` and plugin-owned `/...` token expansion, owned by tag plugins
 
 ## Processing Order
@@ -12,9 +12,9 @@ macLLM has two request-expansion mechanisms:
 The current processing order is:
 
 1. Start with the original prompt.
-2. If the prompt begins with a skill command, `SkillsRegistry.expand_manual_invocation()` expands it.
+2. `SkillsRegistry.expand_manual_invocation()` expands user-invocable skill commands wherever they appear in the prompt.
 3. Build a `UserRequest` from that result.
-4. `UserRequest.process_tags()` scans the expanded prompt for `@...` and `/...` tokens.
+4. `UserRequest.process_tags()` scans the expanded prompt for `@...` and remaining `/...` tokens.
 5. Matching plugins rewrite the expanded prompt and may update request state such as agent, speed, images, or context.
 6. The original prompt is stored in conversation history, while the expanded prompt is sent to the agent.
 
