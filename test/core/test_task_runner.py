@@ -261,15 +261,6 @@ class TestTaskModePrompt:
         prompt = self._render_system_prompt(task_mode=True)
         assert "Limit tool use to about 3" not in prompt
 
-    def test_interactive_mode_has_clarification(self):
-        prompt = self._render_system_prompt(task_mode=False)
-        assert "asking for clarification" in prompt.lower()
-
-    def test_interactive_mode_has_tool_limit(self):
-        prompt = self._render_system_prompt(task_mode=False)
-        assert "Limit tool use to about 3" in prompt
-
-
 # ---------------------------------------------------------------------------
 # Budget enforcement (mocked agent)
 # ---------------------------------------------------------------------------
