@@ -13,6 +13,8 @@ import pytest
 from macllm.tags.file_tag import FileTag
 from macllm.core.agent_service import create_agent
 
+from .conftest import MOUNT_NAME
+
 
 class DummyApp:
     class _Args:
@@ -31,6 +33,17 @@ class DummyApp:
 def notes_env(tmp_path):
     """Create a temporary notes directory with test files and configure FileTag."""
     from macllm.macllm import MacLLM
+
+    old_mount_points = dict(FileTag._mount_points)
+    old_indexed_directories = list(FileTag._indexed_directories)
+    old_index = list(FileTag._index)
+    old_filepath_to_idx = dict(FileTag._filepath_to_idx)
+    old_embeddings = FileTag._embeddings
+    old_embedding_ready = FileTag._embedding_ready.is_set()
+    old_file_mtimes = dict(FileTag._file_mtimes)
+    old_first_build_done = FileTag._first_build_done
+    old_macllm = FileTag._macllm
+    old_instance = MacLLM._instance
 
     notes = tmp_path / "notes"
     notes.mkdir()
@@ -55,6 +68,7 @@ def notes_env(tmp_path):
     dummy = DummyApp()
     FileTag._macllm = dummy
     MacLLM._instance = dummy
+    FileTag._mount_points = {MOUNT_NAME: str(notes)}
     FileTag._indexed_directories = [str(notes)]
 
     FileTag.build_index()
@@ -62,15 +76,19 @@ def notes_env(tmp_path):
 
     yield notes
 
-    FileTag._index = []
-    FileTag._indexed_directories = []
-    FileTag._filepath_to_idx = {}
-    FileTag._embeddings = None
-    FileTag._embedding_ready.clear()
-    FileTag._file_mtimes = {}
-    FileTag._first_build_done = False
-    FileTag._macllm = None
-    MacLLM._instance = None
+    FileTag._mount_points = old_mount_points
+    FileTag._indexed_directories = old_indexed_directories
+    FileTag._index = old_index
+    FileTag._filepath_to_idx = old_filepath_to_idx
+    FileTag._embeddings = old_embeddings
+    if old_embedding_ready:
+        FileTag._embedding_ready.set()
+    else:
+        FileTag._embedding_ready.clear()
+    FileTag._file_mtimes = old_file_mtimes
+    FileTag._first_build_done = old_first_build_done
+    FileTag._macllm = old_macllm
+    MacLLM._instance = old_instance
 
 
 def _skip_if_no_gemini():
@@ -117,7 +135,7 @@ def test_note_agent_creates_note(notes_env):
     from macllm.agents.note_agent import NoteAgent
     agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
-        f"Create a new note at {notes_env}/shopping-list.md with the content:\n"
+        f"Create a new note at {MOUNT_NAME}/shopping-list.md with the content:\n"
         "# Shopping List\n- Milk\n- Eggs\n- Bread",
         max_steps=5,
     )
@@ -137,7 +155,7 @@ def test_note_agent_appends(notes_env):
     from macllm.agents.note_agent import NoteAgent
     agent = create_agent(agent_cls=NoteAgent, speed="normal")
     result = agent.run(
-        "Find the recipes file and append a new recipe:\n"
+        f"Find the recipes file in the {MOUNT_NAME} mount and append a new recipe:\n"
         "## Scrambled Eggs\nEggs, butter, salt.",
         max_steps=5,
     )
