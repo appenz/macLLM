@@ -16,6 +16,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_description = "General-purpose macLLM assistant"
     macllm_tools = [
         "web_search",
+        "web_fetch",
         "run_command",
         "read_skill",
         "remember",

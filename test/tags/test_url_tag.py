@@ -1,6 +1,35 @@
 import time
 import pytest
 
+from macllm.core.chat_history import Conversation
+from macllm.tags.url_tag import URLTag
+
+
+class DummyApp:
+    class _Args:
+        debug = False
+
+    args = _Args()
+
+    def debug_log(self, *args, **kwargs):
+        pass
+
+
+def test_url_tag_registers_web_ref():
+    tag = URLTag(DummyApp())
+    conversation = Conversation()
+
+    result = tag.expand("@https://example.com/some/long/path?a=1", conversation, None)
+
+    assert "web://example.com/1" in result
+    assert 'web_fetch("web://example.com/1")' in result
+    assert "some/long/path" not in result
+    assert conversation.web_pages["web://example.com/1"]["url"] == "https://example.com/some/long/path?a=1"
+    assert conversation.context_history[0]["context"] == (
+        "Web page reference: web://example.com/1\n"
+        'Use web_fetch("web://example.com/1") to retrieve the page text if needed.'
+    )
+
 
 @pytest.mark.external
 def test_url_tag_real(app_real):

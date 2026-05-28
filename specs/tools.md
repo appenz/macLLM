@@ -20,7 +20,7 @@ Tools return human-readable strings. smolagents records each model-planned tool 
 
 The current tool set is organized by domain:
 
-- general utilities such as web search
+- general utilities such as web search and web page fetch
 - note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
 - calendar tools for scheduling and event lookup
 - Things tools for task management
@@ -40,7 +40,7 @@ Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapp
 
 ## Families (structural)
 
-- General — e.g. web search.
+- General — e.g. web search and web page fetch.
 - Files — Mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
@@ -60,3 +60,17 @@ Tools that need user approval (e.g., `run_command`) set `conversation.pending_ap
 Tools are not tag plugins. User @ expansion happens before the agent; tools operate on the expanded task and return string observations to the agent loop.
 
 Current export surface: see macllm/tools/__all__ for the authoritative name list.
+
+## Web Search And Fetch
+
+`web_search(queries)` searches Brave and returns compact results. Each result with a URL is registered on the current `Conversation` and shown to the agent as a synthetic reference such as `web://example.com/1`, plus the result title and snippet. The real URL is stored privately in the conversation registry and is not returned in the search output.
+
+`web_fetch(ref, start=0)` resolves a `web://...` reference, fetches the real URL, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Cleaned page text is cached on the registry entry after the first fetch so later chunks are stable and avoid repeated downloads. Stored cleaned text is capped at 100,000 characters per page.
+
+If a fetch result is not complete, it begins with a compact range marker:
+
+```text
+[page truncated, chars 0-10000 of 84321]
+```
+
+The next chunk starts at the end of the displayed range, for example `web_fetch("web://example.com/1", start=10000)`.

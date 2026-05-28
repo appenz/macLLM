@@ -16,6 +16,7 @@ class CalendarAgent(MacLLMAgent):
     )
     macllm_tools = [
         "web_search",
+        "web_fetch",
         "cal_list_calendars",
         "cal_get_events",
         "cal_find_events",

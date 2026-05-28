@@ -77,7 +77,8 @@ The agent has access to the following tools:
 
 | Tool                      | Description                                                                          |
 | ------------------------- | ------------------------------------------------------------------------------------ |
-| **web_search**            | Searches the web via Brave Search. The agent can issue multiple queries per request. |
+| **web_search**            | Searches the web via Brave Search and returns compact `web://domain/n` result refs. |
+| **web_fetch**             | Fetches readable page text for a `web://domain/n` ref in 10k-character chunks.      |
 | **search_notes**          | Semantic search across your indexed notes.                                           |
 | **read_note**             | Reads the full content of an indexed note.                                           |
 | **note_append**           | Appends text to an existing note.                                                    |
@@ -119,6 +120,8 @@ When typing `@` followed by 3+ characters, autocomplete suggests matching notes 
 
 When the agent needs current information, it uses the `web_search` tool backed by the Brave Search API. This happens automatically — just ask a question that requires up-to-date information, like opening hours, recent events, or current statistics.
 
+Search results include short `web://domain/n` references, titles, and snippets. The real source URLs are kept in the current conversation rather than exposed directly to the agent. If the agent needs the full page, it calls `web_fetch` with the `web://...` reference. `web_fetch` returns up to 10,000 characters at a time and can continue from a later character offset if the page is longer, up to a 100,000-character page cap.
+
 Requires `BRAVE_API_KEY` to be set.
 
 ## Shell Commands (Sandboxed)
@@ -152,7 +155,7 @@ Tags start with `@` and attach external data as context for the conversation:
 | `@window`    | Screenshot of a desktop window (click to select)           |
 | `@selection` | Screenshot of a selected screen area                       |
 | `@<path>`    | Any file — path must start with `/` or `~`                 |
-| `@<url>`     | Web page content — must start with `http://` or `https://` |
+| `@<url>`     | Web page reference — must start with `http://` or `https://`; page text is fetched with `web_fetch` |
 
 
 Tags can be used inline: "translate @clipboard into French" or "summarize the slide @window".

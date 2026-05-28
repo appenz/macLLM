@@ -1,10 +1,9 @@
-import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+
 from .base import TagPlugin
 
 class URLTag(TagPlugin):
-    """Expands @http://... or @https://... by fetching page text and adding it as context."""
+    """Expands @http://... or @https://... into a fetchable web page reference."""
 
     def get_prefixes(self):
         return ["@http://", "@https://"]
@@ -12,12 +11,16 @@ class URLTag(TagPlugin):
     def expand(self, tag: str, conversation, request):
         url = tag[1:]  # remove '@'
         try:
-            content = self._retrieve_url(url)
+            ref = self._register_url(conversation, url)
         except Exception as e:
             if self.macllm.args.debug:
                 self.macllm.debug_log(str(e), 2)
             return tag
 
+        content = (
+            f"Web page reference: {ref}\n"
+            f"Use web_fetch(\"{ref}\") to retrieve the page text if needed."
+        )
         context_name = conversation.add_context(
             "url",
             url,
@@ -29,19 +32,8 @@ class URLTag(TagPlugin):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _retrieve_url(self, url: str) -> str:
+    def _register_url(self, conversation, url: str) -> str:
         result = urlparse(url)
-        if not all([result.scheme, result.netloc]):
+        if result.scheme not in {"http", "https"} or not result.netloc:
             raise ValueError("Invalid URL format")
-
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        for element in soup(['script', 'style', 'header', 'footer', 'nav']):
-            element.decompose()
-
-        text = soup.get_text(separator='\n')
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        return '\n'.join(chunk for chunk in chunks if chunk) 
+        return conversation.register_web_page(url)

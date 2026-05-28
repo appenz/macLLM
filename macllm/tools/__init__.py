@@ -1,4 +1,4 @@
-from macllm.tools.web_search import web_search, reset_search_counter
+from macllm.tools.web_search import web_search, web_fetch, reset_search_counter
 from macllm.tools.note import (
     search_notes,
     read_note,
@@ -56,6 +56,7 @@ from macllm.tools.memory import remember
 # not a tool. Import it directly when needed.
 __all__ = [
     "web_search",
+    "web_fetch",
     "search_notes",
     "read_note",
     "note_resolve_path",

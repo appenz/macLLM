@@ -47,6 +47,7 @@ class TestAgentDefinitions:
     def test_default_agent_attributes(self):
         assert MacLLMDefaultAgent.macllm_name == "default"
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
+        assert "web_fetch" in MacLLMDefaultAgent.macllm_tools
 
     def test_default_agent_uses_notes_subagent(self):
         assert "notes" in MacLLMDefaultAgent.macllm_managed_agents

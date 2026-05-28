@@ -2,8 +2,10 @@ import importlib
 
 import pytest
 
-from macllm.tools.web_search import web_search, reset_search_counter, _state
+from macllm.core.chat_history import Conversation
+from macllm.core.context import set_current_conversation
 from macllm.core.config import MacLLMConfig, ApiKeys
+from macllm.tools.web_search import web_fetch, web_search, reset_search_counter, _state
 
 
 class DummyApp:
@@ -82,6 +84,101 @@ def test_missing_api_key():
             web_search(["test query"])
     finally:
         ws_module.get_runtime_config = original_get_runtime_config
+
+
+def test_web_search_registers_refs(monkeypatch):
+    reset_search_counter()
+    conversation = Conversation()
+    set_current_conversation(conversation)
+
+    ws_module = importlib.import_module("macllm.tools.web_search")
+    monkeypatch.setattr(
+        ws_module,
+        "get_runtime_config",
+        lambda: MacLLMConfig(api_keys=ApiKeys(brave="test-key")),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "web": {
+                    "results": [
+                        {
+                            "url": "https://example.com/long/path?a=1",
+                            "title": "Example Page",
+                            "description": "Useful snippet",
+                        }
+                    ]
+                }
+            }
+
+    monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
+
+    try:
+        result = web_search(["example query"])
+    finally:
+        set_current_conversation(None)
+
+    assert "web://example.com/1" in result
+    assert "Example Page" in result
+    assert "Useful snippet" in result
+    assert conversation.web_pages["web://example.com/1"]["url"] == "https://example.com/long/path?a=1"
+
+
+def test_web_fetch_returns_chunks(monkeypatch):
+    conversation = Conversation()
+    ref = conversation.register_web_page("https://example.com/page")
+    set_current_conversation(conversation)
+
+    ws_module = importlib.import_module("macllm.tools.web_search")
+    page_text = "x" * 12050
+
+    class Response:
+        text = f"<html><body><p>{page_text}</p></body></html>"
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
+
+    try:
+        first = web_fetch(ref)
+        second = web_fetch(ref, start=10000)
+    finally:
+        set_current_conversation(None)
+
+    assert first.startswith("[page truncated, chars 0-10000 of 12050]\n\n")
+    assert first.endswith("x" * 10000)
+    assert second == "x" * 2050
+
+
+def test_web_fetch_caps_page_text(monkeypatch):
+    conversation = Conversation()
+    ref = conversation.register_web_page("https://example.com/large")
+    set_current_conversation(conversation)
+
+    ws_module = importlib.import_module("macllm.tools.web_search")
+    page_text = "x" * 100001
+
+    class Response:
+        text = f"<html><body><p>{page_text}</p></body></html>"
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
+
+    try:
+        result = web_fetch(ref, start=90000)
+    finally:
+        set_current_conversation(None)
+
+    assert result.startswith("[page truncated, chars 90000-100000 of 100000]\n\n")
+    assert len(conversation.web_pages[ref]["content"]) == 100000
+    assert conversation.web_pages[ref]["content_truncated"] is True
 
 
 @pytest.mark.external

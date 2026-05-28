@@ -1,17 +1,22 @@
 
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
 
+from bs4 import BeautifulSoup
 import requests
 
 from macllm.core.config import get_runtime_config
+from macllm.core.context import get_current_conversation
 from macllm.tools._debug import macllm_tool, set_tool_message
 
 _state = {"search_count": 0, "tool_call_counter": 0}
 MAX_SEARCHES_PER_RUN = 50
 MAX_PARALLEL_SEARCHES = 5
+WEB_FETCH_CHARS = 10_000
+WEB_PAGE_MAX_CHARS = 100_000
 
 BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search"
+WEB_USER_AGENT = "Mozilla/5.0"
 
 
 def reset_search_counter():
@@ -33,9 +38,40 @@ def _search_single_query(query: str, api_key: str) -> dict:
     return {"query": query, "results": response.json()}
 
 
+def _extract_page_text(html: str) -> str:
+    """Extract readable text from an HTML document."""
+    soup = BeautifulSoup(html, "html.parser")
+    for element in soup(["script", "style", "header", "footer", "nav"]):
+        element.decompose()
+
+    text = soup.get_text(separator="\n")
+    lines = (line.strip() for line in text.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    return "\n".join(chunk for chunk in chunks if chunk)
+
+
+def _retrieve_url_text(url: str) -> tuple[str, bool]:
+    """Fetch *url* and return cleaned text plus whether it hit the page cap."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Invalid URL format")
+
+    response = requests.get(url, headers={"User-Agent": WEB_USER_AGENT}, timeout=30)
+    response.raise_for_status()
+
+    text = _extract_page_text(response.text)
+    truncated = len(text) > WEB_PAGE_MAX_CHARS
+    return text[:WEB_PAGE_MAX_CHARS], truncated
+
+
+def _get_conversation():
+    return get_current_conversation()
+
+
 def _format_results(search_results: list[dict]) -> str:
-    """Format search results into a readable string with just the content."""
+    """Format search results and register result URLs with the conversation."""
     output = []
+    conversation = _get_conversation()
     
     for item in search_results:
         query = item["query"]
@@ -49,9 +85,22 @@ def _format_results(search_results: list[dict]) -> str:
             continue
         
         for result in web_results[:5]:
+            url = result.get("url", "")
+            title = result.get("title", "")
             description = result.get("description", "")
+            label_parts = []
+            if url and conversation is not None:
+                ref = conversation.register_web_page(url, title=title, snippet=description)
+                label_parts.append(ref)
+            elif title:
+                label_parts.append(title)
+
+            if title and (not label_parts or label_parts[-1] != title):
+                label_parts.append(title)
             if description:
-                output.append(f"- {description}")
+                label_parts.append(description)
+            if label_parts:
+                output.append("- " + " — ".join(label_parts))
         
         output.append("")
     
@@ -112,3 +161,54 @@ def web_search(queries: list[str]) -> str:
     results.sort(key=lambda x: query_order.get(x["query"], len(queries)))
     
     return _format_results(results)
+
+
+@macllm_tool
+def web_fetch(ref: str, start: int = 0) -> str:
+    """
+    Fetch readable text for a registered web page reference.
+
+    Args:
+        ref: A web page reference returned by web_search or @url expansion, e.g. "web://example.com/1".
+        start: Zero-based character offset for fetching the next chunk.
+
+    Returns:
+        Up to 10,000 characters of cleaned page text. If more text is available,
+        the result begins with a compact truncation line showing the returned range.
+    """
+    conversation = _get_conversation()
+    if conversation is None:
+        return "Error: No active conversation for web page lookup."
+
+    entry = conversation.get_web_page(ref)
+    if entry is None:
+        return f"Error: Unknown web page reference: {ref}"
+
+    try:
+        start = int(start)
+    except (TypeError, ValueError):
+        return f"Error: start must be an integer offset, got {start!r}."
+    if start < 0:
+        return "Error: start must be >= 0."
+
+    set_tool_message(f"Fetching {entry['ref']}")
+
+    if entry.get("content") is None:
+        try:
+            content, truncated = _retrieve_url_text(entry["url"])
+        except Exception as exc:
+            return f"Error fetching {entry['ref']}: {exc}"
+        entry["content"] = content
+        entry["content_truncated"] = truncated
+
+    content = entry["content"] or ""
+    total = len(content)
+    if start >= total:
+        return f"Error: start {start} is beyond available content length {total}."
+
+    end = min(start + WEB_FETCH_CHARS, total)
+    chunk = content[start:end]
+    has_more = end < total or bool(entry.get("content_truncated"))
+    if has_more:
+        return f"[page truncated, chars {start}-{end} of {total}]\n\n{chunk}"
+    return chunk

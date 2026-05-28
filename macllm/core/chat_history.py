@@ -6,6 +6,7 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Union
+from urllib.parse import urlparse
 
 from macllm.core.agent_status import PendingApproval
 
@@ -394,6 +395,38 @@ class Conversation:
         self.context_history.append(entry)
         return actual_name
 
+    def register_web_page(self, url: str, title: str = "", snippet: str = "") -> str:
+        """Register a real URL behind a short per-conversation web:// reference."""
+        existing = self.web_page_sources.get(url)
+        if existing is not None:
+            entry = self.web_pages[existing]
+            if title and not entry.get("title"):
+                entry["title"] = title
+            if snippet and not entry.get("snippet"):
+                entry["snippet"] = snippet
+            return existing
+
+        parsed = urlparse(url)
+        domain = (parsed.hostname or parsed.netloc or "unknown").lower()
+        self.web_page_counter += 1
+        ref = f"web://{domain}/{self.web_page_counter}"
+        entry = {
+            "ref": ref,
+            "url": url,
+            "domain": domain,
+            "title": title,
+            "snippet": snippet,
+            "content": None,
+            "content_truncated": False,
+        }
+        self.web_pages[ref] = entry
+        self.web_page_sources[url] = ref
+        return ref
+
+    def get_web_page(self, ref: str) -> dict | None:
+        """Return the registered web page entry for *ref*, if present."""
+        return self.web_pages.get(ref.strip())
+
     def has_path_in_context(self, path: str) -> bool:
         """Check if a file path was explicitly referenced in this conversation's context."""
         for ctx in self.context_history:
@@ -427,6 +460,9 @@ class Conversation:
         """Clears messages and metadata, restores default welcome message."""
         self.messages = []
         self.context_history = []
+        self.web_pages: dict[str, dict] = {}
+        self.web_page_sources: dict[str, str] = {}
+        self.web_page_counter = 0
         self.granted_dirs: list[str] = []
         self.speed_level = "normal"
         self.title = "New Agent"

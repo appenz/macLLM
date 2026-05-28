@@ -32,6 +32,12 @@ Key design decisions:
 - plugins may mutate `UserRequest` and `Conversation` as side effects
 - context plugins maintain both `Conversation.context_history` for the UI and embedded context in `expanded_prompt` for the agent
 
+## URL Tags
+
+`@http://...` and `@https://...` tags do not embed full page text directly. Instead, the URL tag registers the real URL on the current `Conversation` web page registry and inserts a compact context block containing a synthetic `web://domain/n` reference.
+
+The agent retrieves page text by calling `web_fetch("web://domain/n")`. This keeps user-provided URLs and web-search results on the same retrieval path and avoids injecting large page bodies into the prompt before the agent decides whether it needs them.
+
 ## Autocomplete and Configuration
 
 Autocomplete is plugin-driven through optional hooks on `TagPlugin`.
