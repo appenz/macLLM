@@ -10,7 +10,7 @@ def _mock_agent_for_thread():
     mock_agent = Mock()
     mock_agent.run = Mock(return_value="MOCK_RESPONSE")
     mock_agent.model = Mock()
-    mock_agent.model.model_id = "openai/mercury-2"
+    mock_agent.model.model_id = "gpt-5.4-nano"
     mock_agent.memory = Mock()
     mock_agent.memory.steps = []
     return mock_agent
@@ -54,7 +54,7 @@ class TestStickySpeedPreference:
         # Test slow speed
         with patch('macllm.core.agent_service.create_agent') as mock_create_agent:
             mock_agent = _mock_agent_for_thread()
-            mock_agent.model.model_id = "gpt-5"
+            mock_agent.model.model_id = "gpt-5.4"
             mock_create_agent.return_value = mock_agent
 
             mac.chat_history.submit("Please reason carefully /think")

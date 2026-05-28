@@ -41,19 +41,21 @@ def refresh_models():
     inception_key = cfg.api_keys.inception
     openai_key = cfg.api_keys.openai
     gemini_key = cfg.api_keys.gemini
+    _ = (inception_key, gemini_key)
 
     MODELS['fast'] = (
         LiteLLMModel(
-            model_id='openai/mercury-2',
-            api_key=inception_key,
-            api_base=_inception_api_base
-        ) if inception_key else None
+            model_id='gpt-5.4-nano',
+            api_key=openai_key,
+            api_base='https://api.openai.com/v1'
+        ) if openai_key else None
     )
     MODELS['normal'] = (
         LiteLLMModel(
-            model_id='gemini/gemini-3-flash-preview',
-            api_key=gemini_key,
-        ) if gemini_key else None
+            model_id='gpt-5.4-mini',
+            api_key=openai_key,
+            api_base='https://api.openai.com/v1'
+        ) if openai_key else None
     )
     MODELS['slow'] = (
         LiteLLMModel(

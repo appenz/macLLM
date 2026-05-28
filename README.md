@@ -169,11 +169,11 @@ Quoted forms like `@"~/My Notes/file.md"` are supported for paths with spaces.
 Speed levels select different models for the tradeoff between speed and capability:
 
 
-| Command             | Speed  | Model                                    |
-| ------------------- | ------ | ---------------------------------------- |
-| *(default)*         | Normal | `gemini/gemini-3-flash-preview` (Gemini) |
-| `/fast`             | Fast   | `openai/mercury-2` (Inception Labs)      |
-| `/slow` or `/think` | Slow   | `gpt-5` (OpenAI)                         |
+| Command             | Speed  | Model                    |
+| ------------------- | ------ | ------------------------ |
+| *(default)*         | Normal | `gpt-5.4-mini` (OpenAI)  |
+| `/fast`             | Fast   | `gpt-5.4-nano` (OpenAI)  |
+| `/slow` or `/think` | Slow   | `gpt-5.4` (OpenAI)       |
 
 
 There are two ways to set the speed:
