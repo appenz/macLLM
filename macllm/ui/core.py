@@ -65,8 +65,7 @@ class QuickWindowPanel(NSPanel):
                 if self.macllm_ui and self.macllm_ui.macllm:
                     shift = flags & (1 << 17)  # NSShiftKeyMask
                     delta = 1 if shift else -1
-                    self.macllm_ui.macllm.cycle_conversation(delta)
-                    self.macllm_ui.update_window()
+                    self.macllm_ui.cycle_conversation(delta)
                     return True
 
         # Cmd-Return: abort + optional submit
@@ -836,6 +835,28 @@ class MacLLMUI:
             InputFieldHandler.clear_input_field(self.input_field)
         self.update_window()
         self._restore_input_from_conversation()
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
+
+    def cycle_conversation(self, delta):
+        """Cycle conversations while preserving per-tab draft input."""
+        self._save_input_to_conversation()
+        old_index = self.macllm.conversation_history.active_index
+        self.macllm.cycle_conversation(delta)
+        new_index = self.macllm.conversation_history.active_index
+        if new_index != old_index and hasattr(self, "input_field"):
+            InputFieldHandler.clear_input_field(self.input_field)
+        self._restore_input_from_conversation()
+        if hasattr(self, "input_field"):
+            InputFieldHandler.focus_input_field(self.input_field)
+
+    def new_conversation(self):
+        """Create a conversation while preserving the current tab's draft."""
+        self._save_input_to_conversation()
+        self.macllm.new_conversation()
+        if hasattr(self, "input_field"):
+            InputFieldHandler.clear_input_field(self.input_field)
+        self.update_window()
         if hasattr(self, "input_field"):
             InputFieldHandler.focus_input_field(self.input_field)
 

@@ -103,10 +103,7 @@ class UITestDriver:
 
     def new_conversation(self) -> None:
         """Create a new conversation (equivalent to Cmd+N)."""
-        self._ui.macllm.new_conversation()
-        from macllm.ui.input_field import InputFieldHandler
-        InputFieldHandler.clear_input_field(self._ui.input_field)
-        self._ui.update_window()
+        self._ui.new_conversation()
         self.spin(0.1)
 
     def close_conversation(self, index: int) -> None:

@@ -55,6 +55,19 @@ def test_active_tab_is_newest(ui):
     assert ui.conversation_text().strip() == ""
 
 
+@pytest.mark.uitest
+def test_new_conversation_preserves_original_tab_draft(ui):
+    """Creating a new tab preserves draft input in the original tab."""
+    ui.type_text("partial request")
+    ui.new_conversation()
+    ui.spin(0.3)
+    assert ui.input_text() == ""
+
+    ui._ui.switch_conversation(0)
+    ui.spin(0.3)
+    assert ui.input_text() == "partial request"
+
+
 # ---------------------------------------------------------------------------
 # Ctrl+Tab / Ctrl+Shift+Tab navigation (newest-left tab ordering)
 #
@@ -90,6 +103,23 @@ def test_ctrl_shift_tab_goes_to_newer(ui):
     ui.press_ctrl_shift_tab()
     ui.spin(0.3)
     assert app.conversation_history.active_index == 1
+
+
+@pytest.mark.uitest
+def test_ctrl_tab_preserves_per_tab_drafts(ui):
+    """Keyboard tab cycling preserves each tab's draft input."""
+    ui.type_text("older draft")
+    ui.new_conversation()
+    ui.spin(0.3)
+    ui.type_text("newer draft")
+
+    ui.press_ctrl_tab()
+    ui.spin(0.3)
+    assert ui.input_text() == "older draft"
+
+    ui.press_ctrl_shift_tab()
+    ui.spin(0.3)
+    assert ui.input_text() == "newer draft"
 
 
 @pytest.mark.uitest

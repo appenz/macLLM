@@ -123,11 +123,7 @@ class InputFieldDelegate(NSObject):
                             self._perform_undo()
                         return True
                     if key == 'n':
-                        self.macllm_ui.macllm.new_conversation()
-                        from macllm.ui.input_field import InputFieldHandler
-                        InputFieldHandler.clear_input_field(self.text_view)
-                        self.macllm_ui.update_window()
-                        InputFieldHandler.focus_input_field(self.macllm_ui.input_field)
+                        self.macllm_ui.new_conversation()
                         return True
                     if key == 'w':
                         active_idx = self.macllm_ui.macllm.conversation_history.active_index
