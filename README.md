@@ -23,10 +23,11 @@ Example Image
 macLLM uses the [uv](https://github.com/astral-sh/uv) package manager. Install it first, then run:
 
 ```bash
-uv run -m macllm
+make install
+make run
 ```
 
-uv handles all dependencies automatically.
+`make install` downloads the local embedding model used for semantic note search.
 
 ### API Keys
 

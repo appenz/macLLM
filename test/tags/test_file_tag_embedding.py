@@ -36,7 +36,8 @@ def file_tag_with_files(tmp_path):
     FileTag._indexed_directories = [str(tmp_path)]
     FileTag.build_index()
 
-    yield tag, tmp_path
+    with patch.object(FileTag, "_cache_dir", return_value=tmp_path / "no_cache"):
+        yield tag, tmp_path
 
     FileTag._index = []
     FileTag._mount_points = {}

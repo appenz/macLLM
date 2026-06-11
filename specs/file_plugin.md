@@ -52,6 +52,9 @@ When an agent needs the real filesystem path (e.g. to pass to an external tool l
 
 The index is global to the running app and shared by autocomplete, context expansion, and note tools.
 
+Semantic indexing loads the embedding model from the app-managed local copy
+installed and verified by `make install`.
+
 ## Request Model
 
 The file plugin handles two different request patterns.

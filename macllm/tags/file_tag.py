@@ -14,6 +14,8 @@ from typing import List, Optional
 
 import txtai
 
+from macllm.core.model_paths import get_embedding_model_dir
+
 from .base import TagPlugin
 
 
@@ -48,7 +50,7 @@ class FileTag(TagPlugin):
     SEARCH_RESULTS_COUNT = 5
 
     REINDEX_INTERVAL = 5 * 60  # seconds between periodic re-indexes
-    CACHE_SUBDIR = "embeddings"
+    CACHE_SUBDIR = "embeddings-local-v1"
 
     # Class-level state for file index and embeddings
     _macllm = None
@@ -387,21 +389,8 @@ class FileTag(TagPlugin):
 
     @classmethod
     def _load_embedding_model(cls) -> txtai.Embeddings:
-        """Load the sentence-transformer model.
-
-        Attempts one normal load (which may check for updates or download the
-        model on the very first run).  If that fails (e.g. network is down),
-        retries in offline/cache-only mode.  After loading, locks the process
-        to offline so the periodic reindex never triggers network requests.
-        """
-        model_path = "sentence-transformers/all-mpnet-base-v2"
-        try:
-            embeddings = txtai.Embeddings(path=model_path)
-        except Exception:
-            os.environ["HF_HUB_OFFLINE"] = "1"
-            embeddings = txtai.Embeddings(path=model_path)
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        return embeddings
+        """Load embeddings from the app-managed local model snapshot only."""
+        return txtai.Embeddings(path=str(get_embedding_model_dir()))
 
     @classmethod
     def _cache_dir(cls) -> Path:

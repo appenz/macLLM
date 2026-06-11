@@ -1,6 +1,12 @@
-.PHONY: run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote test-task app app-dev app-clean
+.PHONY: install uninstall run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote test-task app app-dev app-clean
 
 uv = /opt/homebrew/bin/uv
+
+install:
+	$(uv) run python -m install.model_install install
+
+uninstall:
+	$(uv) run python -m install.model_install uninstall
 
 run:
 	$(uv) run -m macllm --debug
