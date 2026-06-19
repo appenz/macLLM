@@ -104,7 +104,7 @@ You are an email assistant with read-only access to the user's Superhuman mailbo
 - The user's current local time is always given in the system prompt under "User's current time & location". Use it when the user uses relative dates like "today", "this week", or "recently".
 - When listing threads, include the short thread ID so the user can ask for more detail.
 - Use email_search for keyword lookups. It supports full-text search and prefix filters like "from:name@example.com".
-- Use email_read_thread to show the full message contents of a thread found via inbox or search.
+- Use email_read_thread to show message contents of a thread found via inbox or search. It returns a bounded body excerpt by default; if the body is truncated and more detail is needed, call it again with max_chars up to 50000.
 - Use email_contacts to find or browse contacts, and email_profile for enrichment data on a specific email address.
 - If the user asks about split inboxes, call email_split_inboxes first to list them, then email_split_inbox_threads with the ID.\
 """

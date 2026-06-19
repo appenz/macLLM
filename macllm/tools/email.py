@@ -5,6 +5,18 @@ from __future__ import annotations
 from macllm.tools._debug import macllm_tool, set_tool_message
 
 
+DEFAULT_EMAIL_BODY_CHARS = 2000
+MAX_EMAIL_BODY_CHARS = 50000
+
+
+def _parse_body_char_limit(value: str) -> int:
+    try:
+        requested = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_EMAIL_BODY_CHARS
+    return max(1, min(requested, MAX_EMAIL_BODY_CHARS))
+
+
 def _mailbox():
     from shmail import Mailbox
 
@@ -106,7 +118,7 @@ def email_search(query: str, limit: str = "20") -> str:
 
 
 @macllm_tool
-def email_read_thread(thread_id: str) -> str:
+def email_read_thread(thread_id: str, max_chars: str = "2000") -> str:
     """
     Read the full content of an email thread by its ID (or ID prefix).
     Use this after finding a thread via email_inbox or email_search
@@ -114,9 +126,11 @@ def email_read_thread(thread_id: str) -> str:
 
     Args:
         thread_id: The thread ID or short ID prefix (e.g. "19db387d").
+        max_chars: Maximum number of full-body characters to return. Defaults to 2000.
+            Increase this if the body is truncated. Hard limit is 50000.
 
     Returns:
-        Full thread with all messages, senders, dates, and snippets.
+        Thread metadata, message snippets, and a bounded full-body excerpt when available.
     """
     set_tool_message(f"Reading thread {thread_id}")
     try:
@@ -130,7 +144,20 @@ def email_read_thread(thread_id: str) -> str:
 
     header = f"Thread: {thread.subject}\nID: {thread.id}\nMessages: {thread.message_count}"
     messages = "\n\n---\n\n".join(_fmt_message(m) for m in thread.messages)
-    return f"{header}\n\n{messages}"
+    body_limit = _parse_body_char_limit(max_chars)
+    thread_body_text = (getattr(thread, "body_text", "") or "").strip()
+    if thread_body_text.strip():
+        body = thread_body_text[:body_limit]
+        if len(thread_body_text) > body_limit:
+            body = (
+                body
+                + f"\n\n[email body truncated at {body_limit} of {len(thread_body_text)} characters; "
+                f"call email_read_thread with max_chars up to {MAX_EMAIL_BODY_CHARS} for more]"
+            )
+        output = f"{header}\n\nMessage metadata and snippets:\n{messages}\n\nFull body:\n{body}"
+    else:
+        output = f"{header}\n\n{messages}"
+    return output
 
 
 @macllm_tool
