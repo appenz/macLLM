@@ -81,7 +81,7 @@ def test_clipboard_tag_image(app_mocked, monkeypatch):
 def test_clipboard_tag_text_no_image(app_mocked, monkeypatch):
     """When clipboard has text but no image, images kwarg should not be passed."""
     app_mocked.ui.read_clipboard = lambda: "plain text"
-    app_mocked.ui.read_clipboard_image = lambda: None
+    app_mocked.ui.read_clipboard_image = Mock(side_effect=AssertionError("text clipboard should not read image data"))
 
     captured_kwargs = []
 

@@ -17,11 +17,22 @@ class ClipboardTag(TagPlugin):
         else:
             source_name = f"clipboard-{context_count}"
 
+        content = self.ui.read_clipboard()
+        if content is not None:
+            context_name = conversation.add_context(
+                "clipboard",
+                source_name,
+                "clipboard",
+                content,
+                icon="📋",
+            )
+            return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---" 
+
         image = self.ui.read_clipboard_image()
         if image is not None:
             request.images.append(image)
 
-            context_name = conversation.add_context(
+            conversation.add_context(
                 "clipboard",
                 source_name,
                 "image",
@@ -30,16 +41,7 @@ class ClipboardTag(TagPlugin):
             )
             return f"\n\n[Attached image from clipboard]"
 
-        content = self.ui.read_clipboard()
-
-        context_name = conversation.add_context(
-            "clipboard",
-            source_name,
-            "clipboard",
-            content,
-            icon="📋",
-        )
-        return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---" 
+        return tag
     
     def display_string(self, suggestion: str) -> str:
         return "📋" + suggestion
