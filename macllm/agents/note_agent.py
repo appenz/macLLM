@@ -11,9 +11,9 @@ class NoteAgent(MacLLMAgent):
 
     macllm_name = "notes"
     macllm_description = (
-        "Searches, reads, creates, modifies, moves, and deletes "
-        "the user's local notes; creates and deletes folders within indexed roots. "
-        "Can map note paths to absolute system paths."
+        "Agent that handles simple operations for the user's personal notes."
+        "Use for finding, retrieving, creating, modifying, moving, appending to, and deleting notes."
+        "Do not use for complex tasks such as summarizing, categorizing, or organizing notes."
     )
     macllm_tools = [
         "search_notes",

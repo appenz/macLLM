@@ -255,7 +255,6 @@ def main():
     project_root = Path(__file__).resolve().parents[2]
     legacy = [
         project_root / "config" / "default_shortcuts.toml",
-        project_root / "config" / "myshortcuts.toml",
     ]
     for p in legacy:
         if p.exists() and macLLM.args.debug:

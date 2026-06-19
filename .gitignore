@@ -10,7 +10,6 @@ __pycache__/
 
 # API, local only tests keys etc.
 .env
-config/myshortcuts.toml
 
 # Screenshot test output
 macllm_test_screenshot.png
