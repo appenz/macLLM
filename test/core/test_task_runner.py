@@ -241,21 +241,21 @@ class TestTaskModePrompt:
         from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES
         from smolagents.agents import populate_template
 
+        template_name = "task_runner_system_prompt" if task_mode else "supervising_system_prompt"
         return populate_template(
-            MACLLM_AGENT_PROMPT_TEMPLATES["system_prompt"],
+            MACLLM_AGENT_PROMPT_TEMPLATES[template_name],
             variables={
                 "tools": {},
                 "managed_agents": {},
                 "custom_instructions": "",
                 "user_situation": "Test",
-                "task_mode": task_mode,
             },
         )
 
     def test_task_mode_no_clarification(self):
         prompt = self._render_system_prompt(task_mode=True)
-        assert "Do NOT ask" in prompt or "do not ask" in prompt.lower()
-        assert "no user present" in prompt.lower()
+        assert "Operate autonomously" in prompt
+        assert "ask_user" not in prompt
 
     def test_task_mode_no_tool_limit(self):
         prompt = self._render_system_prompt(task_mode=True)

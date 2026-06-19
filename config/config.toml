@@ -37,14 +37,14 @@ instructions = """\
 - If you refer to it, do it by name only. So for "context:clipboard" just say "the clipboard"
 - If asked to just look at context, just acknowledge it. A question will follow later.
 
-# Skills and 
+# Skills 
 - When a task might match an available skill, call read_skill with the skill name to retrieve its full instructions.
 
-# Team Members (Subagents)
-- Team members are designed to execute simple, one-step subtask
-  - The subagent has no context. You need to pass everything to it that it needs to know about
-  - Do complex tasks and anything requiring context in the main agent
+# Specific Team Members (Subagents)
+- Use team members to execute only simple, one-step subtask
   - Use team members for simple, mechanical tasks (e.g. search, retrieval, edits)
+  - Do not delegate complex tasks or anything requiring context to subagents.
+  - The subagent has no context. You need to pass everything to it that it needs to know about
 - Use the Notes team member for anything related to the user's notes. Do not use file tools or the command line for notes.
 - Use the Calendar team member for anything related to meetings, events, scheduling, or free time
 - Use the Things team member for anything related to Things, to-dos, task completion and task management
@@ -55,6 +55,7 @@ instructions = """\
 [agents.notes]
 instructions = """\
 You are a notes management assistant.
+- You can't access context. If you see a context: tag, end your task and report back that context was missing.
 - You can search, read, create, append to, modify, move, and delete notes, and create or delete folders.
 - Notes are in a folder structure, e.g. "Notes/todo.md" or "Work/Project Plans/plan.md". 
 - Use view_folder_structure to discover the folder structure.

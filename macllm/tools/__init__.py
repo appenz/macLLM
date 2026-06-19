@@ -52,6 +52,7 @@ from macllm.tools.email import (
 from macllm.tools.shell import run_command
 from macllm.tools.skills import read_skill
 from macllm.tools.memory import remember
+from macllm.tools.user_input import ask_user
 # Note: reset_search_counter is NOT in __all__ because it's a utility function,
 # not a tool. Import it directly when needed.
 __all__ = [
@@ -102,4 +103,5 @@ __all__ = [
     "run_command",
     "read_skill",
     "remember",
+    "ask_user",
 ]

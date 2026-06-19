@@ -47,6 +47,7 @@ class MacLLMAgent(ToolCallingAgent):
                  planning_interval: int = 3,
                  no_tools: bool = False,
                  task_mode: bool = False,
+                 managed_mode: bool = False,
                  **kwargs):
         from macllm.core.llm_service import MODELS
         from macllm import tools as tools_module
@@ -57,12 +58,30 @@ class MacLLMAgent(ToolCallingAgent):
 
         reset_search_counter()
         self._task_mode = task_mode
+        self._managed_mode = managed_mode
 
         model = MODELS.get(speed.lower(), MODELS['normal'])
         if model is None:
             raise ValueError(f"Model for speed '{speed}' is not configured (missing API key)")
 
-        tools = [getattr(tools_module, n) for n in self.macllm_tools]
+        tool_names = list(self.macllm_tools)
+        if task_mode:
+            tool_names = [n for n in tool_names if n != "ask_user"]
+        if not task_mode and not managed_mode:
+            try:
+                from macllm.macllm import MacLLM
+                app = MacLLM._instance
+                if app is not None and getattr(app, "ephemeral", False):
+                    tool_names = [n for n in tool_names if n != "ask_user"]
+            except Exception:
+                pass
+
+        tools = [getattr(tools_module, n) for n in tool_names]
+        self._interactive_mode = (
+            not task_mode
+            and not managed_mode
+            and "ask_user" in tool_names
+        )
         step_callback = create_step_callback(conversation)
 
         cfg = get_runtime_config()
@@ -83,7 +102,7 @@ class MacLLMAgent(ToolCallingAgent):
                 self._debug(f"[agent:{self.macllm_name}] preload_skill '{agent_cfg.preload_skill}' not found")
 
         skill_names = agent_cfg.skills if agent_cfg and agent_cfg.skills else None
-        has_read_skill = "read_skill" in self.macllm_tools
+        has_read_skill = "read_skill" in tool_names
         if skill_names is not None and not has_read_skill:
             tools.append(getattr(tools_module, "read_skill"))
             has_read_skill = True
@@ -153,14 +172,23 @@ class MacLLMAgent(ToolCallingAgent):
 
         from macllm.core.device_context import get_device_context
 
+        if self._managed_mode:
+            template_name = "subagent_system_prompt"
+        elif self._interactive_mode:
+            template_name = "supervising_system_prompt"
+        else:
+            template_name = "task_runner_system_prompt"
+
         return populate_template(
-            self.prompt_templates["system_prompt"],
+            self.prompt_templates[template_name],
             variables={
                 "tools": self.tools,
                 "managed_agents": self.managed_agents,
                 "custom_instructions": self.instructions,
                 "user_situation": get_device_context(),
                 "task_mode": self._task_mode,
+                "managed_mode": self._managed_mode,
+                "interactive_mode": self._interactive_mode,
             },
         )
 

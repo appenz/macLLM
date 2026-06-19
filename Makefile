@@ -1,4 +1,4 @@
-.PHONY: install uninstall run test screenshot test-llm test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote test-task app app-dev app-clean
+.PHONY: install uninstall run test screenshot test-llm test-prompts test-calendar test-things test-ui test-ui-external debug-render test-skill-passnote test-task app app-dev app-clean
 
 uv = /opt/homebrew/bin/uv
 
@@ -18,6 +18,9 @@ QUERY ?= What is the URL of Google
 
 test-llm:
 	QUERY="$(QUERY)" $(uv) run python -m pytest -v -s test/manual_tests/llm_check.py
+
+test-prompts:
+	$(uv) run python -m pytest -v -s test/manual_tests/prompt_dump.py
 
 test:
 	$(uv) run python -m pytest -rx -v

@@ -9,6 +9,7 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_tools = [
         "web_search",
         "read_skill",
+        "ask_user",
     ]
     macllm_managed_agents = ["notes"]
 

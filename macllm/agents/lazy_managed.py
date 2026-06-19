@@ -66,6 +66,7 @@ class LazyManagedMacLLMAgent:
             conversation=self._conversation,
             managed_agents=[],
             max_steps=5,
+            managed_mode=True,
             **self._kwargs,
         )
         self._impl.planning_interval = None

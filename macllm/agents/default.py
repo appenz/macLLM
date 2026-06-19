@@ -20,6 +20,7 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "run_command",
         "read_skill",
         "remember",
+        "ask_user",
     ]
     macllm_managed_agents = ["notes", "calendar", "things", "email"]
 

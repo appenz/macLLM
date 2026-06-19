@@ -11,9 +11,7 @@ class NoteAgent(MacLLMAgent):
 
     macllm_name = "notes"
     macllm_description = (
-        "Agent that handles simple operations for the user's personal notes."
-        "Use for finding, retrieving, creating, modifying, moving, appending to, and deleting notes."
-        "Do not use for complex tasks such as summarizing, categorizing, or organizing notes."
+        "Notes specialist for mechanical note storage operations only: search, read, create, append, modify, move, delete, list folders. Do not delegate summarization, rewriting, formatting, categorization, filing judgment, or user-facing response decisions. If content must be written, pass the exact final text."
     )
     macllm_tools = [
         "search_notes",

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Union
 from urllib.parse import urlparse
 
-from macllm.core.agent_status import PendingApproval
+from macllm.core.agent_status import PendingApproval, PendingUserInput
 
 
 @dataclass
@@ -34,6 +34,7 @@ class Conversation:
         self.abort_event: threading.Event = threading.Event()
         self.usage: Usage = Usage()
         self.pending_approval: PendingApproval | None = None
+        self.pending_user_input: PendingUserInput | None = None
         self.pending_input: str = ""
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
@@ -113,6 +114,12 @@ class Conversation:
         """
         user_input = user_input.strip()
         if not user_input:
+            return
+
+        if self.pending_user_input is not None:
+            self.add_user_message(user_input)
+            self.resolve_user_input(user_input)
+            self._notify_ui()
             return
 
         if self.is_agent_running():
@@ -258,6 +265,8 @@ class Conversation:
         self.abort_event.set()
         if self.pending_approval is not None:
             self.resolve_approval("deny")
+        if self.pending_user_input is not None:
+            self.cancel_user_input()
         if self.agent:
             self.agent.interrupt_switch = True
             for agent in getattr(self.agent, 'managed_agents', {}).values():
@@ -270,6 +279,35 @@ class Conversation:
             self.pending_approval.event.set()
             self.pending_approval = None
             self._notify_ui()
+
+    def request_user_input(self, question: str) -> str:
+        """Ask a question in chat and wait for the next normal user input."""
+        pending = PendingUserInput(question=question.strip())
+        self.pending_user_input = pending
+        self.add_assistant_message(pending.question)
+        self._notify_ui()
+
+        pending.event.wait()
+        try:
+            if pending.cancelled:
+                return "User input request was cancelled."
+            return pending.response or ""
+        finally:
+            if self.pending_user_input is pending:
+                self.pending_user_input = None
+            self._notify_ui()
+
+    def resolve_user_input(self, response: str) -> None:
+        """Resolve a pending user-input tool call with normal chat text."""
+        if self.pending_user_input is not None:
+            self.pending_user_input.response = response
+            self.pending_user_input.event.set()
+
+    def cancel_user_input(self) -> None:
+        """Cancel a pending user-input request without blocking the agent thread."""
+        if self.pending_user_input is not None:
+            self.pending_user_input.cancelled = True
+            self.pending_user_input.event.set()
 
     def _handle_abort(self, app) -> None:
         """After an abort, persist state without adding any message."""
@@ -467,6 +505,7 @@ class Conversation:
         self.speed_level = "normal"
         self.title = "New Agent"
         self.tool_calls = []
+        self.pending_user_input = None
         self.activity_trace = None
         self._active_query_text = None
         self.plan_text = None
