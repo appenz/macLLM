@@ -108,7 +108,7 @@ def test_default_agent_system_prompt_includes_user_situation(monkeypatch):
     try:
         agent = create_agent(agent_cls=MacLLMDefaultAgent, speed="normal")
         prompt = agent.initialize_system_prompt()
-        assert "User's current time & location" in prompt
+        assert "The user's current time & location" in prompt
         assert "Current time:" in prompt
         assert "Location:" in prompt
         assert "GPS:" in prompt

@@ -29,7 +29,7 @@ def test_interactive_supervising_prompt_has_ask_user(monkeypatch):
     agent = MacLLMDefaultAgent(speed="normal")
 
     assert "You are an interactive assistant" in agent.system_prompt
-    assert "Use ask_user when" in agent.system_prompt
+    assert "use the ask_user tool to ask the user" in agent.system_prompt
     assert "ask_user:" in agent.system_prompt
 
 
@@ -52,7 +52,7 @@ def test_subagent_prompt_is_specialist_prompt(monkeypatch):
     assert "Use final_answer to report back to the supervising agent" in agent.system_prompt
     assert "You are an interactive assistant" not in agent.system_prompt
     assert "You can also give tasks to team members" not in agent.system_prompt
-    assert "Use ask_user when" not in agent.system_prompt
+    assert "ask_user tool" not in agent.system_prompt
     assert "ask_user" not in agent.tools
 
 
