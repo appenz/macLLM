@@ -15,15 +15,18 @@ This document is the architectural entry point for the codebase.
 
 ## Key Concept
 
-MacLLM is structured as a number of conversations , each rendered by the UI in a tab. 
+MacLLM is structured as a number of conversations, each rendered by the UI in a tab. 
 
-- The `UI` is a passive renderer for the `conversation`:
+- Each `conversation` has one Smolagents `agent` 
+  - It can invoke `tools`
+  - It can call `subagents`
+  - Most conversation state is inside the agent itself
+  - Additional UI relevant state is stored in the `ConversationLog`
+
+- The `UI` is a purely passive renderer for the `conversation`:
   - The `UI` reads the `conversation` object and renders it via Cocoa
   - The `UI` passes user requests to the `agent` via the a queue in the `conversation`
   - `Tools` that need approval for actions, add an approval request to the `conversation`
-- Each `conversation` has exactly one supervising `agent` 
-  - It can invoke `tools`
-  - It can call `subagents`
 
 Each agents is a separate thread. The UI is a separate thread as well.
 
