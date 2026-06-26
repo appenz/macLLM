@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import Union
 from urllib.parse import urlparse
 
-from macllm.core.agent_status import PendingApproval, PendingUserInput
-from macllm.core.conversationlog import (
+from macllm.core.user_interaction import PendingApproval, PendingUserInput
+from macllm.core.conversation_log import (
     ConversationLog,
     append_plan,
     add_tool_call as log_add_tool_call,
@@ -172,7 +172,7 @@ class Conversation:
     def _start_agent_thread(self, request, app) -> None:
         """Spawn the background agent thread for this conversation."""
         from macllm.core.context import set_current_conversation
-        from macllm.core.memory import save_all_conversations
+        from macllm.core.persistence import save_all_conversations
         from macllm.core.llm_service import model_supports_vision
 
         conversation = self
@@ -300,7 +300,7 @@ class Conversation:
     def _handle_abort(self, app) -> None:
         """After an abort, persist state without adding any message."""
         if not app.ephemeral:
-            from macllm.core.memory import save_all_conversations
+            from macllm.core.persistence import save_all_conversations
             save_all_conversations(app.conversation_history)
 
     def _finish_activity_trace(self) -> None:
@@ -323,7 +323,7 @@ class Conversation:
         try:
             from macllm.macllm import MacLLM
             from macllm.core.llm_service import generate
-            from macllm.core.memory import save_all_conversations
+            from macllm.core.persistence import save_all_conversations
             app = MacLLM._instance
             user_text = user_msgs[0]["content"][:200]
             asst_text = asst_msgs[0]["content"][:200]
@@ -481,7 +481,7 @@ class Conversation:
             self.agent = None
 
         if clear_persisted:
-            from macllm.core.memory import clear_conversation
+            from macllm.core.persistence import clear_conversation
             clear_conversation()
 
     def _create_agent(self, conversation=None, no_tools=False):

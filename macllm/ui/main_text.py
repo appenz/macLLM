@@ -2,7 +2,7 @@ from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundC
 from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.core.skills import SkillsRegistry
-from macllm.core.conversationlog import (
+from macllm.core.conversation_log import (
     current_activity_trace,
     latest_plan,
     messages_from_log,

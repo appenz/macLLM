@@ -7,7 +7,7 @@ from macllm.core.abortable_model import AbortableModel
 from macllm.core.activity_trace import ActivityTrace, crop_text, estimate_text_tokens
 from macllm.core.agent_service import create_step_callback
 from macllm.core.chat_history import Usage
-from macllm.core.conversationlog import ConversationLog, current_activity_trace, start_activity_trace
+from macllm.core.conversation_log import ConversationLog, current_activity_trace, start_activity_trace
 
 
 @dataclass

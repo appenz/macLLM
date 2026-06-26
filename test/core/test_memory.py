@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from macllm.core.memory import get_storage_dir, save_conversation, load_conversation
-from macllm.core.conversationlog import log_from_messages
+from macllm.core.persistence import get_storage_dir, save_conversation, load_conversation
+from macllm.core.conversation_log import log_from_messages
 
 
 class MockAgentMemory:
@@ -35,25 +35,25 @@ def make_mock_conversation(agent=None):
 
 @pytest.fixture
 def temp_storage(tmp_path, monkeypatch):
-    monkeypatch.setattr('macllm.core.memory.get_storage_dir', lambda: tmp_path)
+    monkeypatch.setattr('macllm.core.persistence.get_storage_dir', lambda: tmp_path)
     return tmp_path
 
 
 class TestGetStorageDir:
     def test_creates_directory(self, tmp_path, monkeypatch):
         test_dir = tmp_path / "macLLM"
-        monkeypatch.setattr('macllm.core.memory.Path.home', lambda: tmp_path)
+        monkeypatch.setattr('macllm.core.persistence.Path.home', lambda: tmp_path)
         
-        from macllm.core import memory
-        original_func = memory.get_storage_dir
+        from macllm.core import persistence
+        original_func = persistence.get_storage_dir
         
         def patched_get_storage_dir():
             path = tmp_path / "Library" / "Application Support" / "macLLM"
             path.mkdir(parents=True, exist_ok=True)
             return path
         
-        monkeypatch.setattr(memory, 'get_storage_dir', patched_get_storage_dir)
-        result = memory.get_storage_dir()
+        monkeypatch.setattr(persistence, 'get_storage_dir', patched_get_storage_dir)
+        result = persistence.get_storage_dir()
         
         assert result.exists()
         assert result.is_dir()
@@ -156,10 +156,10 @@ class TestResetBehavior:
     def test_reset_deletes_persisted_file(self, temp_storage, monkeypatch):
         from macllm.core.chat_history import Conversation
         from macllm.core import agent_service
-        from macllm.core import memory
+        from macllm.core import persistence
         
         monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: MockAgent())
-        monkeypatch.setattr(memory, 'get_storage_dir', lambda: temp_storage)
+        monkeypatch.setattr(persistence, 'get_storage_dir', lambda: temp_storage)
         
         with open(temp_storage / "latest.pkl", 'wb') as f:
             pickle.dump([{'task': 'old'}], f)

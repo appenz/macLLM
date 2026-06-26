@@ -83,7 +83,7 @@ Denial of a shell command approval also triggers a full abort.
 
 ## Persistence
 
-Persistence lives in `macllm/core/memory.py`.
+Persistence lives in `macllm/core/persistence.py`.
 
 All conversations are persisted together in `conversations.pkl` via `save_all_conversations()` / `load_all_conversations()`. For each conversation the persisted state is:
 

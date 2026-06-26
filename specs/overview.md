@@ -41,7 +41,7 @@ At a high level, the flow is as follows:
 5. The original prompt is stored in the conversation for UI/history.
 6. If the expanded prompt is non-empty, it is passed to the supervising agent of the conversation
 7. The agent calls tools and managed subagents as needed.
-8. Tool progress is shown from `agent.memory.steps` (smolagents steps) and, for `@macllm_tool` wrappers, from transient `conversation.tool_calls` lines while tools execute.
+8. Tool progress is shown from `agent.memory.steps` (smolagents steps) and, for `@macllm_tool` wrappers, from transient `conversation_log` tool-call entries while tools execute.
 9. The final assistant response is appended to the conversation and persisted.
 
 ## Key Objects
@@ -108,7 +108,7 @@ Via LiteLLM integration in `macllm/core/llm_service.py`.
 
 ### Persistence
 
-Persistence lives in `macllm/core/memory.py`.
+Persistence lives in `macllm/core/persistence.py`.
 
 Persists conversation messages, active agent name, and the agent memory step list.
 This allows the last conversation to be restored between runs.

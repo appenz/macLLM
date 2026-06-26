@@ -76,7 +76,7 @@ def run_command(command: str, working_directory: str = "") -> str:
 
         if needs_approval:
             conversation.pop_last_tool_call()
-            from macllm.core.agent_status import PendingApproval
+            from macllm.core.user_interaction import PendingApproval
 
             approval = PendingApproval(
                 command=command,

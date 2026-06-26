@@ -5,7 +5,7 @@ import time
 from unittest.mock import Mock, patch, PropertyMock
 
 from macllm.core.chat_history import Conversation
-from macllm.core.conversationlog import messages_from_log
+from macllm.core.conversation_log import messages_from_log
 from macllm.macllm import create_macllm
 
 
@@ -49,7 +49,7 @@ class TestAbortMessage:
         app.ephemeral = False
 
         conv.agent = Mock()
-        with patch("macllm.core.memory.save_all_conversations") as mock_save:
+        with patch("macllm.core.persistence.save_all_conversations") as mock_save:
             conv._handle_abort(app)
             mock_save.assert_called_once_with(app.conversation_history)
 
@@ -59,7 +59,7 @@ class TestAbortMessage:
         app.ephemeral = True
 
         conv.agent = Mock()
-        with patch("macllm.core.memory.save_all_conversations") as mock_save:
+        with patch("macllm.core.persistence.save_all_conversations") as mock_save:
             conv._handle_abort(app)
             mock_save.assert_not_called()
 

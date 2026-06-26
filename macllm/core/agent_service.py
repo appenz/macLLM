@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from smolagents import PlanningStep, ActionStep, TaskStep
-from macllm.core.conversationlog import append_plan, current_activity_trace
+from macllm.core.conversation_log import append_plan, current_activity_trace
 
 if TYPE_CHECKING:
     from macllm.core.chat_history import Conversation

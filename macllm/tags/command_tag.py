@@ -42,7 +42,7 @@ class CommandTag(TagPlugin):
         conversation.add_assistant_message(summary)
         conversation._notify_ui()
 
-        from macllm.core.memory import save_all_conversations
+        from macllm.core.persistence import save_all_conversations
         if not app.ephemeral:
             save_all_conversations(app.conversation_history)
 

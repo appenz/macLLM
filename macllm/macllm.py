@@ -14,7 +14,7 @@ from macllm.ui import MacLLMUI  # noqa: F401
 
 from macllm.core.chat_history import ConversationHistory
 from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug, refresh_models
-from macllm.core.memory import save_all_conversations, load_all_conversations
+from macllm.core.persistence import save_all_conversations, load_all_conversations
 from macllm.core.config import load_runtime_config
 from macllm.core.skills import SkillsRegistry
 from macllm.tags.base import TagPlugin

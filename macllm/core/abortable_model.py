@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 from typing import TYPE_CHECKING, Any
-from macllm.core.conversationlog import current_activity_trace
+from macllm.core.conversation_log import current_activity_trace
 
 if TYPE_CHECKING:
     from smolagents.models import ChatMessage

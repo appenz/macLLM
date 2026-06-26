@@ -3,7 +3,7 @@ import pickle
 import threading
 from pathlib import Path
 
-from macllm.core.conversationlog import log_from_messages, persistable_log
+from macllm.core.conversation_log import log_from_messages, persistable_log
 
 _save_lock = threading.Lock()
 
@@ -33,7 +33,6 @@ def _conversation_log(conversation):
 # ---------------------------------------------------------------------------
 # Single-conversation persistence (kept for backward compat / migration)
 # ---------------------------------------------------------------------------
-
 def save_conversation(conversation) -> bool:
     if conversation.agent is None:
         return False
@@ -95,7 +94,6 @@ def clear_conversation() -> bool:
 # ---------------------------------------------------------------------------
 # Multi-conversation persistence
 # ---------------------------------------------------------------------------
-
 def _serialize_conversation(conversation) -> dict | None:
     """Serialize a single Conversation to a plain dict."""
     if conversation.agent is None:

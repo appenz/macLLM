@@ -73,7 +73,7 @@ class LazyManagedMacLLMAgent:
         return self._impl
 
     def __call__(self, task: str, **kwargs):
-        from macllm.core.conversationlog import current_activity_trace
+        from macllm.core.conversation_log import current_activity_trace
 
         trace = current_activity_trace(getattr(self._conversation, "conversation_log", []))
         label = f"{self.name.capitalize()} agent: {task}"

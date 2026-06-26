@@ -1,5 +1,5 @@
 from macllm.core.chat_history import Conversation
-from macllm.core.conversationlog import (
+from macllm.core.conversation_log import (
     ConversationLog,
     ConversationLogEntry,
     log_from_messages,

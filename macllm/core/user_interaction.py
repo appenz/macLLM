@@ -1,4 +1,4 @@
-"""Pending approval dataclass for shell command approval flow."""
+"""Pending user-facing interaction state for conversation runtime flows."""
 
 from __future__ import annotations
 

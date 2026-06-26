@@ -74,9 +74,9 @@ class TestUserRequestAgentName:
 class TestMemoryAgentPersistence:
     def test_save_includes_agent_name(self, tmp_path, monkeypatch):
         import pickle
-        from macllm.core.memory import save_conversation
+        from macllm.core.persistence import save_conversation
 
-        monkeypatch.setattr('macllm.core.memory.get_storage_dir', lambda: tmp_path)
+        monkeypatch.setattr('macllm.core.persistence.get_storage_dir', lambda: tmp_path)
 
         conv = Mock()
         conv.agent = Mock()
@@ -92,9 +92,9 @@ class TestMemoryAgentPersistence:
 
     def test_load_old_format_defaults_to_default(self, tmp_path, monkeypatch):
         import pickle
-        from macllm.core.memory import load_conversation
+        from macllm.core.persistence import load_conversation
 
-        monkeypatch.setattr('macllm.core.memory.get_storage_dir', lambda: tmp_path)
+        monkeypatch.setattr('macllm.core.persistence.get_storage_dir', lambda: tmp_path)
 
         data = {'steps': [], 'messages': []}
         with open(tmp_path / "latest.pkl", 'wb') as f:

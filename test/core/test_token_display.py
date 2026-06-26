@@ -8,7 +8,7 @@ from smolagents.memory import TokenUsage, Timing
 
 from macllm.core.agent_service import create_step_callback, extract_plan, extract_status
 from macllm.core.chat_history import Conversation, Usage
-from macllm.core.conversationlog import latest_plan
+from macllm.core.conversation_log import latest_plan
 from macllm.core.llm_service import get_model_for_speed
 from macllm.macllm import create_macllm
 

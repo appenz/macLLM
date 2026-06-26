@@ -22,7 +22,7 @@ It combines three layers of protection:
 
 - `macllm/core/config.py` / `MacLLMConfig` — new `[shell]` config section
 - `macllm/core/chat_history.py` / `Conversation` — directory grant tracking
-- `macllm/core/agent_status.py` — new `"pending"` tool-call status for approval UI
+- `macllm/core/user_interaction.py` — pending approval state for user-facing tool interactions
 - `macllm/ui/main_text.py` — inline approval rendering and keyboard handling
 - `macllm/tags/file_tag.py` — directory `@`-mention expansion (register granted dirs on conversation)
 - `macllm/tools/__init__.py` — export `run_command`

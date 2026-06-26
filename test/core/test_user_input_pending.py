@@ -3,8 +3,8 @@ import time
 from unittest.mock import Mock
 
 from macllm.core.chat_history import Conversation
-from macllm.core.agent_status import PendingUserInput
-from macllm.core.conversationlog import messages_from_log
+from macllm.core.user_interaction import PendingUserInput
+from macllm.core.conversation_log import messages_from_log
 
 
 def _displayable(conv):

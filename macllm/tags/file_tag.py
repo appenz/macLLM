@@ -395,7 +395,7 @@ class FileTag(TagPlugin):
 
     @classmethod
     def _cache_dir(cls) -> Path:
-        from macllm.core.memory import get_storage_dir
+        from macllm.core.persistence import get_storage_dir
         return get_storage_dir() / cls.CACHE_SUBDIR
 
     @classmethod

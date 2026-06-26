@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from macllm.core.memory import get_storage_dir
+from macllm.core.persistence import get_storage_dir
 
 
 EMBEDDING_MODEL_ID = "sentence-transformers/all-mpnet-base-v2"

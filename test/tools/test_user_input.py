@@ -3,7 +3,7 @@ import time
 
 from macllm.core.chat_history import Conversation
 from macllm.core.context import set_current_conversation, _thread_context
-from macllm.core.conversationlog import messages_from_log
+from macllm.core.conversation_log import messages_from_log
 from macllm.tools.user_input import ask_user
 
 

@@ -14,7 +14,7 @@ The main design choice is that tools are the operational boundary of the agent s
 - tools perform the concrete work
 - tool names are the stable contract between agent configuration and implementation
 
-Tools return human-readable strings. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation.tool_calls` while a tool body runs; `set_tool_message` updates the latest line. That list is cleared when a new agent run starts on the conversation.
+Tools return human-readable strings. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
 
 ## Tool Families
 
@@ -32,7 +32,7 @@ Files and calendar have deeper subsystem docs because they combine tools with ad
 
 # Tools (agent API)
 
-Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapper around smolagents `tool` that adds debug logging and the live `conversation.tool_calls` behavior above. Only `_debug.py` imports `smolagents.tool` directly. Tools are referenced by name on each `MacLLMAgent` (`macllm_tools`).
+Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapper around smolagents `tool` that adds debug logging and the live `conversation_log` tool-call behavior above. Only `_debug.py` imports `smolagents.tool` directly. Tools are referenced by name on each `MacLLMAgent` (`macllm_tools`).
 
 ## Resolution
 

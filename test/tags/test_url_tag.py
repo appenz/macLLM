@@ -43,7 +43,7 @@ def test_url_tag_real(app_real):
     max_wait = 15
     waited = 0
     while waited < max_wait:
-        from macllm.core.conversationlog import messages_from_log
+        from macllm.core.conversation_log import messages_from_log
 
         messages = [
             m for m in messages_from_log(app_real.chat_history.conversation_log)
