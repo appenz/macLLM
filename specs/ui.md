@@ -20,7 +20,7 @@ The UI is split into a few focused parts:
 
 - `MacLLMUI` coordinates window creation, layout, updates, and high-level user actions
 - `TopBarHandler` renders the top metadata strip, including context pills and model/token information
-- `MainTextHandler` renders the conversation view, assistant markdown, and live agent status
+- `MainTextHandler` renders regular and debug views from the conversation log
 - `InputFieldHandler` and `InputFieldDelegate` manage text editing, pills, commands, and autocomplete
 - `AutocompleteController` provides token suggestions and selection behavior
 - `HistoryBrowseDelegate` handles keyboard-driven navigation through prior messages
@@ -29,7 +29,7 @@ This keeps rendering, editing, and navigation behavior separate while still allo
 
 ## Update Model
 
-The UI is a pure renderer of conversation state. It reads from the active `Conversation` and renders. The only signal from the agent runtime to the UI is a generic repaint callback.
+The UI is a pure renderer of conversation state. It reads `ConversationLogEntry` items from the active conversation's append-only `ConversationLog` and renders either the regular view or the debug view. The only signal from the agent runtime to the UI is a generic repaint callback.
 
 `MacLLMUI.request_update()` is the key boundary between background work and Cocoa rendering. If the caller is already on the main thread, the window is updated immediately. Otherwise the update is marshaled back to the main thread via `performSelectorOnMainThread` with `waitUntilDone_: False`, so agent threads never block on UI rendering.
 
@@ -37,15 +37,14 @@ Multiple conversations may have agents running simultaneously. Each agent thread
 
 ## Conversation Rendering
 
-The main conversation view is a text-based rendering pipeline. The conversation is the sole data source.
+The main conversation view is a text-based rendering pipeline. `ConversationLog` is the sole chronological data source.
 
-- user messages are rendered as plain text with pills for recognized tags and commands
-- assistant messages are rendered through the markdown subsystem
-- tool call progress is rendered from `agent.memory.steps` while an agent run is active
-- pending shell approvals are rendered from `conversation.pending_approval`
-- pending user input is rendered as a dimmed block from `conversation.pending_input`
+- regular mode renders user messages as pill-aware text and assistant messages through markdown
+- debug mode renders the same log with raw payload detail such as agent steps, activity traces, approvals, errors, and token metadata
+- live state such as pending approvals and pending user input may still be read from current conversation fields until appended to the log
+- UI code interprets log entry kinds and payloads; agent/core code does not create UI-specific rows
 
-The UI reads displayable messages from conversation state rather than reconstructing the request from the expanded prompt.
+The UI reads recorded conversation facts rather than reconstructing requests from expanded prompts or calling agent/tool code.
 
 ## Input Model
 

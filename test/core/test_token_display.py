@@ -8,6 +8,7 @@ from smolagents.memory import TokenUsage, Timing
 
 from macllm.core.agent_service import create_step_callback, extract_plan, extract_status
 from macllm.core.chat_history import Conversation, Usage
+from macllm.core.conversationlog import latest_plan
 from macllm.core.llm_service import get_model_for_speed
 from macllm.macllm import create_macllm
 
@@ -130,8 +131,9 @@ class TestCreateStepCallback:
             token_usage=TokenUsage(input_tokens=10, output_tokens=5),
         )
         on_step(step, agent=None)
-        assert conv.plan_text == "[ ] Search for dinner details"
-        assert conv.plan_status == "Found only Friday dinner details so far."
+        plan = latest_plan(conv.conversation_log)
+        assert plan["text"] == "[ ] Search for dinner details"
+        assert plan["status"] == "Found only Friday dinner details so far."
 
     def test_task_step_ignored(self):
         conv = Conversation()

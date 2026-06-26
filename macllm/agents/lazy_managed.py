@@ -59,7 +59,6 @@ class LazyManagedMacLLMAgent:
     def _materialize(self):
         if self._impl is not None:
             return self._impl
-        from macllm.macllm import MacLLM
 
         self._impl = self._agent_cls(
             speed=self._speed,
@@ -71,14 +70,12 @@ class LazyManagedMacLLMAgent:
         )
         self._impl.planning_interval = None
         self._impl.interrupt_switch = self._interrupt_switch
-        if MacLLM._instance is not None:
-            MacLLM._instance.debug_log(
-                f"[agent] managed subagent {self.name!r} materialized (lazy)"
-            )
         return self._impl
 
     def __call__(self, task: str, **kwargs):
-        trace = getattr(self._conversation, "activity_trace", None)
+        from macllm.core.conversationlog import current_activity_trace
+
+        trace = current_activity_trace(getattr(self._conversation, "conversation_log", []))
         label = f"{self.name.capitalize()} agent: {task}"
         if trace is None:
             result = self._materialize().__call__(task, **kwargs)
@@ -89,10 +86,4 @@ class LazyManagedMacLLMAgent:
                 result = self._materialize().__call__(task, **kwargs)
             if self._conversation is not None:
                 self._conversation._notify_ui()
-        from macllm.macllm import MacLLM
-        if MacLLM._instance is not None:
-            MacLLM._instance.debug_log(
-                f"[agent] subagent {self.name!r} returned: type={type(result).__name__}, "
-                f"value={result!r}"
-            )
         return result

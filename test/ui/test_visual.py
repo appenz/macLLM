@@ -9,6 +9,8 @@ Run with: make test-ui-external
 
 import pytest
 
+from macllm.ui.main_text import MainTextHandler
+
 
 def _skip_if_no_api_keys():
     from macllm.core.config import get_runtime_config
@@ -28,7 +30,10 @@ def test_one_plus_one_shows_two(ui, tmp_path):
     # Wait for the agent to finish (background thread)
     app = ui._ui.macllm
     done = ui.wait_for(
-        lambda: not app.chat_history.is_agent_running() and len(app.chat_history.messages) >= 3,
+        lambda: (
+            not app.chat_history.is_agent_running()
+            and len(MainTextHandler.displayable_messages(app.chat_history)) >= 3
+        ),
         timeout=30.0,
         interval=0.5,
     )

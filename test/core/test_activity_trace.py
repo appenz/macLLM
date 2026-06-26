@@ -7,6 +7,7 @@ from macllm.core.abortable_model import AbortableModel
 from macllm.core.activity_trace import ActivityTrace, crop_text, estimate_text_tokens
 from macllm.core.agent_service import create_step_callback
 from macllm.core.chat_history import Usage
+from macllm.core.conversationlog import ConversationLog, current_activity_trace, start_activity_trace
 
 
 @dataclass
@@ -124,16 +125,16 @@ def test_final_answer_model_call_is_not_duplicated():
 
     class FakeConversation:
         def __init__(self) -> None:
-            self.activity_trace = ActivityTrace("default agent", clock=Clock())
+            self.conversation_log = ConversationLog()
+            start_activity_trace(self.conversation_log, "default agent")._clock = Clock()
             self.usage = Usage()
             self.agent = None
-            self.tool_calls = []
 
         def _notify_ui(self) -> None:
             pass
 
         def clear_tool_calls(self) -> None:
-            self.tool_calls.clear()
+            pass
 
     conv = FakeConversation()
     model = AbortableModel(FakeModel(), abort_event=type("Event", (), {
@@ -153,8 +154,9 @@ def test_final_answer_model_call_is_not_duplicated():
 
     create_step_callback(conv)(step, agent=None)
 
+    trace = current_activity_trace(conv.conversation_log)
     final_nodes = [
-        node for node in conv.activity_trace.root.children
+        node for node in trace.root.children
         if node.label == "Final answer"
     ]
     assert len(final_nodes) == 1

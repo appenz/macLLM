@@ -2,6 +2,12 @@ from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundC
 from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.core.skills import SkillsRegistry
+from macllm.core.conversationlog import (
+    current_activity_trace,
+    latest_plan,
+    messages_from_log,
+    tool_calls as log_tool_calls,
+)
 
 class MainTextHandler:
     """Handles the main text display functionality for the macLLM UI."""
@@ -50,9 +56,17 @@ class MainTextHandler:
     }
 
     @staticmethod
+    def displayable_messages(conversation):
+        return [
+            m for m in messages_from_log(conversation.conversation_log)
+            if m["role"] in ("user", "assistant")
+        ]
+
+    @staticmethod
     def _render_plan(ts, conversation, muted, light, green, font_sm, font_sm_bold):
         """Render parsed planning checklist and status summary."""
-        plan_text = getattr(conversation, "plan_text", None)
+        plan = latest_plan(conversation.conversation_log)
+        plan_text = plan.get("text") if plan else None
         if not plan_text:
             return False
 
@@ -74,7 +88,7 @@ class MainTextHandler:
                 color = light
             _append(f"  {line}\n", color)
 
-        status = getattr(conversation, "plan_status", None)
+        status = plan.get("status") if plan else None
         if status:
             _append("\n", muted)
             _append("Status: ", muted, font_sm_bold)
@@ -120,8 +134,9 @@ class MainTextHandler:
             getattr(s, 'tool_calls', None)
             for s in steps if isinstance(s, ActionStep)
         )
-        has_live_tool_calls = bool(conversation.tool_calls)
-        has_plan = bool(getattr(conversation, "plan_text", None))
+        live_tool_calls = log_tool_calls(conversation.conversation_log)
+        has_live_tool_calls = bool(live_tool_calls)
+        has_plan = bool(latest_plan(conversation.conversation_log))
         show_steps = has_tool_calls or has_live_tool_calls
 
         _append("\n\n", muted)
@@ -131,7 +146,7 @@ class MainTextHandler:
                 ts, conversation, muted, light, green, font_sm, font_sm_bold
             )
 
-        trace = getattr(conversation, "activity_trace", None)
+        trace = current_activity_trace(conversation.conversation_log)
         if trace is not None and trace.has_activity:
             _append("Steps\n", muted, font_sm_bold)
             for line in trace.format_ui_lines(width=58, unicode=True):
@@ -187,7 +202,7 @@ class MainTextHandler:
                         _append(f" — {err_str}", red)
                     _append("\n", muted)
 
-        for tc in conversation.tool_calls:
+        for tc in live_tool_calls:
             _append("  ⟳ ", muted, font_sm_bold)
             _append(f"{tc['message']}\n", light)
 
@@ -236,7 +251,7 @@ class MainTextHandler:
         text_view.setLinkTextAttributes_({})
         
         conv = macllm.chat_history
-        messages = conv.get_displayable_messages()
+        messages = MainTextHandler.displayable_messages(conv)
         
         user_color = NSColor.blackColor()
         assistant_color = NSColor.darkGrayColor()

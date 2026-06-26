@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from smolagents import PlanningStep, ActionStep, TaskStep
+from macllm.core.conversationlog import append_plan, current_activity_trace
 
 if TYPE_CHECKING:
     from macllm.core.chat_history import Conversation
@@ -70,13 +71,17 @@ def create_step_callback(conversation: Conversation | None = None):
             raw = getattr(getattr(step, "model_output_message", None), "content", "")
             if not isinstance(raw, str):
                 raw = str(raw or "")
-            conversation.plan_text = extract_plan(raw) or None
-            conversation.plan_status = extract_status(raw)
-            if conversation.activity_trace is not None:
+            append_plan(
+                conversation.conversation_log,
+                text=extract_plan(raw) or None,
+                status=extract_status(raw),
+            )
+            trace = current_activity_trace(conversation.conversation_log)
+            if trace is not None:
                 token_usage = None
                 if mark_once(step, "_macllm_trace_tokens_recorded"):
                     token_usage = getattr(step, "token_usage", None)
-                conversation.activity_trace.close_current_model_step(
+                trace.close_current_model_step(
                     label="Planning",
                     token_usage=token_usage,
                 )
@@ -86,7 +91,8 @@ def create_step_callback(conversation: Conversation | None = None):
             is_parent = (agent is conversation.agent)
             step_done = (getattr(step, 'observations', None) is not None
                          or getattr(step, 'error', None) is not None)
-            if conversation.activity_trace is not None:
+            trace = current_activity_trace(conversation.conversation_log)
+            if trace is not None:
                 label = "Final answer" if getattr(step, "is_final_answer", False) else "Thinking"
                 token_usage = None
                 if mark_once(step, "_macllm_trace_tokens_recorded"):
@@ -100,13 +106,13 @@ def create_step_callback(conversation: Conversation | None = None):
                                 getattr(step, "observations", None),
                             )
                 if step_done:
-                    conversation.activity_trace.close_current_model_step(
+                    trace.close_current_model_step(
                         label=label,
                         token_usage=token_usage,
                         state="error" if getattr(step, "error", None) else "success",
                     )
                 else:
-                    conversation.activity_trace.update_current_model_step(
+                    trace.update_current_model_step(
                         label=label,
                         token_usage=token_usage,
                     )

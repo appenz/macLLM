@@ -17,6 +17,7 @@ debug_screenshot.png
 
 # Log files
 *.log
+session_logs/
 
 # py2app build artifacts
 build/

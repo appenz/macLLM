@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from macllm.core.memory import get_storage_dir, save_conversation, load_conversation
+from macllm.core.conversationlog import log_from_messages
 
 
 class MockAgentMemory:
@@ -26,7 +27,7 @@ class MockAgent:
 def make_mock_conversation(agent=None):
     conv = Mock()
     conv.agent = agent if agent is not None else MockAgent()
-    conv.messages = []
+    conv.conversation_log = []
     conv.context_history = []
     conv.speed_level = "normal"
     return conv
@@ -203,23 +204,23 @@ class TestStepsPersistence:
         assert conv2.agent.memory.steps == [{'task': 'remember_this'}]
 
 
-class TestMessagesPersistence:
-    def test_save_includes_messages(self, temp_storage):
+class TestConversationLogPersistence:
+    def test_save_includes_conversation_log(self, temp_storage):
         conv = make_mock_conversation()
-        conv.messages = [
+        test_messages = [
             {'role': 'user', 'content': 'Hello'},
             {'role': 'assistant', 'content': 'Hi there'}
         ]
+        conv.conversation_log = log_from_messages(test_messages)
         conv.agent.memory.steps = [{'task': 'test'}]
         
         save_conversation(conv)
         
         with open(temp_storage / "latest.pkl", 'rb') as f:
             data = pickle.load(f)
-        assert 'messages' in data
-        assert data['messages'] == conv.messages
+        assert 'conversation_log' in data
     
-    def test_load_restores_messages(self, temp_storage):
+    def test_load_restores_legacy_messages_as_conversation_log(self, temp_storage):
         test_messages = [
             {'role': 'user', 'content': 'Saved question'},
             {'role': 'assistant', 'content': 'Saved answer'}
@@ -235,7 +236,7 @@ class TestMessagesPersistence:
         result = load_conversation(conv)
         
         assert result is True
-        assert conv.messages == test_messages
+        assert [entry.payload for entry in conv.conversation_log] == test_messages
     
     def test_load_handles_old_format(self, temp_storage):
         old_steps = [{'task': 'old_format'}]
@@ -247,3 +248,4 @@ class TestMessagesPersistence:
         
         assert result is True
         assert conv.agent.memory.steps == old_steps
+        assert conv.conversation_log == []

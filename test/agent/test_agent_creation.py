@@ -82,7 +82,7 @@ class TestMemoryAgentPersistence:
         conv.agent = Mock()
         conv.agent.memory = Mock(steps=[])
         conv.agent.macllm_name = "smolagent"
-        conv.messages = []
+        conv.conversation_log = []
 
         save_conversation(conv)
 

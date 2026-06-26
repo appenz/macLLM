@@ -4,6 +4,11 @@ from unittest.mock import Mock
 
 from macllm.core.chat_history import Conversation
 from macllm.core.agent_status import PendingUserInput
+from macllm.core.conversationlog import messages_from_log
+
+
+def _displayable(conv):
+    return [m for m in messages_from_log(conv.conversation_log) if m["role"] in ("user", "assistant")]
 
 
 def test_submit_resolves_pending_user_input_before_queueing():
@@ -17,7 +22,7 @@ def test_submit_resolves_pending_user_input_before_queueing():
     assert conv.pending_input == ""
     assert conv.pending_user_input.response == "Use a16z/Pitches 2026"
     assert conv.pending_user_input.event.is_set()
-    assert conv.messages == [
+    assert _displayable(conv) == [
         {"role": "user", "content": "Use a16z/Pitches 2026"},
     ]
 
@@ -37,7 +42,7 @@ def test_request_user_input_records_question_and_answer():
         time.sleep(0.01)
 
     assert conv.pending_user_input is not None
-    assert conv.messages == [
+    assert _displayable(conv) == [
         {"role": "assistant", "content": "Which note should I update?"},
     ]
 
@@ -46,7 +51,7 @@ def test_request_user_input_records_question_and_answer():
 
     assert result_holder == ["The weekly note"]
     assert conv.pending_user_input is None
-    assert conv.messages == [
+    assert _displayable(conv) == [
         {"role": "assistant", "content": "Which note should I update?"},
         {"role": "user", "content": "The weekly note"},
     ]

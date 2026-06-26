@@ -3,6 +3,8 @@ import pickle
 import threading
 from pathlib import Path
 
+from macllm.core.conversationlog import log_from_messages, persistable_log
+
 _save_lock = threading.Lock()
 
 
@@ -20,6 +22,14 @@ def get_conversations_path() -> Path:
     return get_storage_dir() / "conversations.pkl"
 
 
+def _conversation_log(conversation):
+    log = getattr(conversation, 'conversation_log', None)
+    if isinstance(log, list) and log:
+        return persistable_log(log)
+    messages = getattr(conversation, 'messages', [])
+    return log_from_messages(messages if isinstance(messages, list) else [])
+
+
 # ---------------------------------------------------------------------------
 # Single-conversation persistence (kept for backward compat / migration)
 # ---------------------------------------------------------------------------
@@ -30,7 +40,7 @@ def save_conversation(conversation) -> bool:
     try:
         data = {
             'steps': conversation.agent.memory.steps,
-            'messages': conversation.messages,
+            'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
         }
         with open(get_latest_path(), 'wb') as f:
@@ -59,9 +69,13 @@ def load_conversation(conversation) -> bool:
                 pass
 
             conversation.agent.memory.steps = data.get('steps', [])
-            conversation.messages = data.get('messages', [])
+            conversation.conversation_log = data.get(
+                'conversation_log',
+                log_from_messages(data.get('messages', [])),
+            )
         else:
             conversation.agent.memory.steps = data
+            conversation.conversation_log = log_from_messages([])
         return True
     except Exception:
         return False
@@ -89,7 +103,7 @@ def _serialize_conversation(conversation) -> dict | None:
     try:
         return {
             'steps': conversation.agent.memory.steps,
-            'messages': conversation.messages,
+            'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
             'title': getattr(conversation, 'title', 'New'),
         }
@@ -164,7 +178,10 @@ def load_all_conversations(conversation_history) -> bool:
             except KeyError:
                 pass
             conv.agent.memory.steps = entry.get('steps', [])
-            conv.messages = entry.get('messages', [])
+            conv.conversation_log = entry.get(
+                'conversation_log',
+                log_from_messages(entry.get('messages', [])),
+            )
             conv.title = entry.get('title', 'New')
             from macllm.core.context import register_conversation
             register_conversation(conv)

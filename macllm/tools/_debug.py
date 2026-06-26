@@ -1,5 +1,5 @@
-"""macllm_tool: drop-in replacement for ``@smolagents.tool`` with debug logging
-and live tool-call tracking on the current conversation."""
+"""macllm_tool: drop-in replacement for ``@smolagents.tool`` with live
+tool-call tracking on the current conversation."""
 
 import functools
 import inspect
@@ -20,7 +20,7 @@ def _get_conversation(conv_id: str | None = None):
     try:
         from macllm.core.context import get_current_conversation
         conv = get_current_conversation(conv_id)
-        if conv is not None and hasattr(conv, 'tool_calls'):
+        if conv is not None and hasattr(conv, 'conversation_log'):
             return conv
     except Exception:
         pass
@@ -42,15 +42,9 @@ def set_tool_message(message: str, conv_id: str | None = None) -> None:
 
 
 def macllm_tool(fn):
-    """Register a smolagents tool and log every invocation via ``MacLLM.debug_log``."""
+    """Register a smolagents tool and preserve invocation state on the conversation."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        from macllm.macllm import MacLLM
-        app = MacLLM._instance
-        dbg = getattr(app, "debug_log", None) if app is not None else None
-        if dbg is not None:
-            dbg(f"[tool] {fn.__name__} called")
-
         conv = _get_conversation()
         conv_id = getattr(conv, 'conv_id', None) if conv is not None else None
         _tool_conv_id.value = conv_id

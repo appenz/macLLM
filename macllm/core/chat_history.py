@@ -5,10 +5,24 @@ import threading
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Union
+from typing import Union
 from urllib.parse import urlparse
 
 from macllm.core.agent_status import PendingApproval, PendingUserInput
+from macllm.core.conversationlog import (
+    ConversationLog,
+    append_plan,
+    add_tool_call as log_add_tool_call,
+    clear_tool_calls as log_clear_tool_calls,
+    complete_last_tool_call as log_complete_last_tool_call,
+    current_activity_trace,
+    message,
+    messages_from_log,
+    pop_last_tool_call as log_pop_last_tool_call,
+    record_last_tool_result as log_record_last_tool_result,
+    start_activity_trace,
+    update_last_tool_message as log_update_last_tool_message,
+)
 
 
 @dataclass
@@ -38,10 +52,7 @@ class Conversation:
         self.pending_input: str = ""
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
-        self.activity_trace = None
         self._active_query_text: str | None = None
-        self.plan_text: str | None = None
-        self.plan_status: str | None = None
 
         self.reset()
 
@@ -49,53 +60,32 @@ class Conversation:
     # Live tool-call tracking (transient, not persisted)
     # ------------------------------------------------------------------
 
-    tool_calls: list
-
     def add_tool_call(self, tool_name: str, message: str) -> None:
         """Append a live tool-call entry and repaint the UI."""
-        trace_node = None
-        if self.activity_trace is not None:
-            trace_node = self.activity_trace.open_node(message, kind="tool")
-        self.tool_calls.append({"tool": tool_name, "message": message, "trace_node": trace_node})
+        log_add_tool_call(self.conversation_log, tool_name, message)
         self._notify_ui()
 
     def update_last_tool_message(self, message: str) -> None:
         """Override the message of the most recent tool-call entry."""
-        if self.tool_calls:
-            self.tool_calls[-1]["message"] = message
-            trace_node = self.tool_calls[-1].get("trace_node")
-            if trace_node is not None:
-                trace_node.label = message
-            self._notify_ui()
+        log_update_last_tool_message(self.conversation_log, message)
+        self._notify_ui()
 
     def complete_last_tool_call(self, *, failed: bool = False) -> None:
         """Mark the most recent live tool-call entry complete in the activity trace."""
-        if self.tool_calls:
-            trace_node = self.tool_calls[-1].get("trace_node")
-            if trace_node is not None and self.activity_trace is not None:
-                self.activity_trace.close_node(trace_node, state="error" if failed else "success")
-            self._notify_ui()
+        log_complete_last_tool_call(self.conversation_log, failed=failed)
+        self._notify_ui()
 
     def record_last_tool_result(self, tool_name: str, result) -> None:
         """Attach result-size metadata to the most recent live tool-call entry."""
-        if self.tool_calls and self.activity_trace is not None:
-            entry = self.tool_calls[-1]
-            if entry.get("tool") != tool_name:
-                return
-            trace_node = entry.get("trace_node")
-            self.activity_trace.record_tool_result(trace_node, result)
+        log_record_last_tool_result(self.conversation_log, tool_name, result)
 
     def pop_last_tool_call(self) -> None:
-        if self.tool_calls:
-            entry = self.tool_calls.pop()
-            trace_node = entry.get("trace_node")
-            if trace_node is not None and self.activity_trace is not None:
-                self.activity_trace.discard_node(trace_node)
-            self._notify_ui()
+        log_pop_last_tool_call(self.conversation_log)
+        self._notify_ui()
 
     def clear_tool_calls(self) -> None:
         """Reset the live tool-call list (e.g. after a step completes)."""
-        self.tool_calls.clear()
+        log_clear_tool_calls(self.conversation_log)
 
     def is_agent_running(self) -> bool:
         return self.agent_thread is not None and self.agent_thread.is_alive()
@@ -223,8 +213,6 @@ class Conversation:
                     save_all_conversations(app.conversation_history)
 
                 conversation._maybe_generate_title()
-
-                app.debug_log(f'Output: {result}\n')
             except Exception as e:
                 if conversation.abort_event.is_set():
                     conversation._handle_abort(app)
@@ -234,7 +222,7 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
-                conversation._finish_activity_trace(app)
+                conversation._finish_activity_trace()
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
@@ -315,28 +303,21 @@ class Conversation:
             from macllm.core.memory import save_all_conversations
             save_all_conversations(app.conversation_history)
 
-    def _finish_activity_trace(self, app) -> None:
-        """Close the current trace and print a debug summary when requested."""
-        trace = self.activity_trace
+    def _finish_activity_trace(self) -> None:
+        """Close the current activity trace stored in the conversation log."""
+        trace = current_activity_trace(self.conversation_log)
         if trace is None:
             return
         state = "error" if self.abort_event.is_set() else "success"
         trace.finish(state=state)
-        if getattr(getattr(app, "args", None), "debug", False):
-            app.debug_log(
-                trace.format_debug_summary(
-                    query=self._active_query_text,
-                    width=72,
-                    unicode=True,
-                )
-            )
 
     def _maybe_generate_title(self) -> None:
         """Generate a short title after the first exchange."""
         if self.title != "New Agent":
             return
-        user_msgs = [m for m in self.messages if m["role"] == "user"]
-        asst_msgs = [m for m in self.messages if m["role"] == "assistant"]
+        messages = messages_from_log(self.conversation_log)
+        user_msgs = [m for m in messages if m["role"] == "user"]
+        asst_msgs = [m for m in messages if m["role"] == "assistant"]
         if len(user_msgs) != 1 or len(asst_msgs) != 1:
             return
         try:
@@ -372,15 +353,11 @@ class Conversation:
 
     def _reset_run_state(self) -> None:
         """Reset transient per-run UI state before starting an agent run."""
-        from macllm.core.activity_trace import ActivityTrace
-
         self.usage.reset()
         self.clear_tool_calls()
         agent_cls = self._get_agent_cls()
         agent_name = getattr(agent_cls, "macllm_name", "agent") or "agent"
-        self.activity_trace = ActivityTrace(f"{agent_name} agent")
-        self.plan_text = None
-        self.plan_status = None
+        start_activity_trace(self.conversation_log, f"{agent_name} agent")
 
     # ------------------------------------------------------------------
     # Message management
@@ -388,25 +365,15 @@ class Conversation:
 
     def add_user_message(self, content: str) -> None:
         """Add a user message (display text only)."""
-        self.messages.append({"role": "user", "content": content})
+        self.conversation_log.append(message("user", content))
 
     def add_assistant_message(self, content: str) -> None:
         """Add an assistant message."""
-        self.messages.append({"role": "assistant", "content": content})
+        self.conversation_log.append(message("assistant", content))
 
     def add_system_message(self, content: str) -> None:
         """Add or update system message (typically only at conversation start)."""
-        if self.messages and self.messages[0]["role"] == "system":
-            self.messages[0]["content"] = content
-        else:
-            self.messages.insert(0, {"role": "system", "content": content})
-
-    def get_displayable_messages(self) -> List[Dict]:
-        """Returns messages for UI rendering (user and assistant only)."""
-        return [
-            m for m in self.messages
-            if m["role"] in ("user", "assistant")
-        ]
+        self.conversation_log.append(message("system", content))
 
     def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon=None) -> str:
         """Add context entry, returns the actual name used. Avoids duplicates based on source."""
@@ -496,7 +463,7 @@ class Conversation:
 
     def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""
-        self.messages = []
+        self.conversation_log = ConversationLog()
         self.context_history = []
         self.web_pages: dict[str, dict] = {}
         self.web_page_sources: dict[str, str] = {}
@@ -504,12 +471,8 @@ class Conversation:
         self.granted_dirs: list[str] = []
         self.speed_level = "normal"
         self.title = "New Agent"
-        self.tool_calls = []
         self.pending_user_input = None
-        self.activity_trace = None
         self._active_query_text = None
-        self.plan_text = None
-        self.plan_status = None
 
         self._get_agent_cls()
 

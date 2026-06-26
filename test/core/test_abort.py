@@ -5,7 +5,12 @@ import time
 from unittest.mock import Mock, patch, PropertyMock
 
 from macllm.core.chat_history import Conversation
+from macllm.core.conversationlog import messages_from_log
 from macllm.macllm import create_macllm
+
+
+def _displayable(conv):
+    return [m for m in messages_from_log(conv.conversation_log) if m["role"] in ("user", "assistant")]
 
 
 class TestAbortMessage:
@@ -22,7 +27,7 @@ class TestAbortMessage:
 
         conv.abort()
 
-        assistant_msgs = [m for m in conv.messages if m["role"] == "assistant"]
+        assistant_msgs = [m for m in _displayable(conv) if m["role"] == "assistant"]
         assert len(assistant_msgs) == 1
         assert assistant_msgs[0]["content"] == "Interrupted."
 
@@ -35,7 +40,7 @@ class TestAbortMessage:
         conv.agent = Mock()
         conv._handle_abort(app)
 
-        assistant_msgs = [m for m in conv.messages if m["role"] == "assistant"]
+        assistant_msgs = [m for m in _displayable(conv) if m["role"] == "assistant"]
         assert len(assistant_msgs) == 0
 
     def test_abort_saves_when_not_ephemeral(self):
@@ -85,7 +90,7 @@ class TestAbortMessage:
             conv.abort()
             time.sleep(0.5)
 
-        interrupted_msgs = [m for m in conv.messages
+        interrupted_msgs = [m for m in _displayable(conv)
                             if m["role"] == "assistant" and m["content"] == "Interrupted."]
         assert len(interrupted_msgs) == 1, "Expected exactly one 'Interrupted.' message"
         mock_agent.provide_final_answer.assert_not_called()
@@ -106,7 +111,7 @@ class TestPendingInput:
         assert conv.pending_input == "first\nsecond"
 
         # No user messages should be added while accumulating
-        user_msgs = [m for m in conv.messages if m["role"] == "user"]
+        user_msgs = [m for m in _displayable(conv) if m["role"] == "user"]
         assert len(user_msgs) == 0
 
     def test_submit_when_idle_does_not_accumulate(self):

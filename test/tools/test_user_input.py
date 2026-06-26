@@ -3,6 +3,7 @@ import time
 
 from macllm.core.chat_history import Conversation
 from macllm.core.context import set_current_conversation, _thread_context
+from macllm.core.conversationlog import messages_from_log
 from macllm.tools.user_input import ask_user
 
 
@@ -10,6 +11,10 @@ def _clear_current_conversation():
     from macllm.macllm import MacLLM
     _thread_context.conversation = None
     MacLLM._instance = None
+
+
+def _displayable(conv):
+    return [m for m in messages_from_log(conv.conversation_log) if m["role"] in ("user", "assistant")]
 
 
 def test_ask_user_returns_unavailable_without_conversation():
@@ -38,7 +43,7 @@ def test_ask_user_waits_for_conversation_response():
         time.sleep(0.01)
 
     assert conv.pending_user_input is not None
-    assert conv.messages == [
+    assert _displayable(conv) == [
         {"role": "assistant", "content": "Which folder?"},
     ]
 

@@ -10,6 +10,8 @@ Run with: make test-ui            (functional)
 
 import pytest
 
+from macllm.ui.main_text import MainTextHandler
+
 
 # ---------------------------------------------------------------------------
 # Functional tests (no API keys needed)
@@ -257,7 +259,10 @@ def test_title_changes_after_query(ui):
 
     app = ui._ui.macllm
     done = ui.wait_for(
-        lambda: not app.chat_history.is_agent_running() and len(app.chat_history.messages) >= 3,
+        lambda: (
+            not app.chat_history.is_agent_running()
+            and len(MainTextHandler.displayable_messages(app.chat_history)) >= 3
+        ),
         timeout=30.0,
         interval=0.5,
     )

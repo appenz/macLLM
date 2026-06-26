@@ -111,8 +111,14 @@ def test_clipboard_tag_real(app_real):
     max_wait = 15
     waited = 0
     while waited < max_wait:
-        if not app_real.chat_history.is_agent_running() and len(app_real.chat_history.messages) > 0:
-            last_msg = app_real.chat_history.messages[-1]
+        from macllm.core.conversationlog import messages_from_log
+
+        messages = [
+            m for m in messages_from_log(app_real.chat_history.conversation_log)
+            if m["role"] in ("user", "assistant")
+        ]
+        if not app_real.chat_history.is_agent_running() and len(messages) > 0:
+            last_msg = messages[-1]
             if last_msg['role'] == 'assistant':
                 assert "2" in last_msg['content']
                 return

@@ -407,9 +407,7 @@ class MacLLMUI:
         # (tab bar sits directly on top of main area with no gap)
         total_padding = padding * 4
 
-        conv_has_messages = bool(
-            self.macllm.chat_history.get_displayable_messages()
-        )
+        conv_has_messages = bool(MainTextHandler.displayable_messages(self.macllm.chat_history))
 
         if conv_has_messages:
             # Calculate optimal main area height based on minimum text height
@@ -684,7 +682,7 @@ class MacLLMUI:
         if self.browsing_history:
             return
         self.browsing_history = True
-        messages = self.macllm.chat_history.get_displayable_messages()
+        messages = MainTextHandler.displayable_messages(self.macllm.chat_history)
         self.history_index = max(0, len(messages) - 1)
         # Focus main area and highlight
         if hasattr(self, "text_area"):
@@ -700,7 +698,7 @@ class MacLLMUI:
     def copy_current_history_to_clipboard(self):
         """Copy the selected history entry (raw text only) to the clipboard."""
         try:
-            messages = self.macllm.chat_history.get_displayable_messages()
+            messages = MainTextHandler.displayable_messages(self.macllm.chat_history)
             message = messages[self.history_index]
             text = message['content']
             self.write_clipboard(text)
@@ -710,7 +708,7 @@ class MacLLMUI:
     def insert_current_history_into_input(self):
         """Paste selected history entry into the input field and exit browsing."""
         try:
-            messages = self.macllm.chat_history.get_displayable_messages()
+            messages = MainTextHandler.displayable_messages(self.macllm.chat_history)
             message = messages[self.history_index]
             entry_text = message['content']
             if hasattr(self, "input_field") and self.input_field:
