@@ -78,15 +78,19 @@ def test_build_embeddings_sets_ready_flag(file_tag_with_files, tmp_path):
     mock_embeddings.index.assert_called_once()
 
 
-def test_start_index_loop_builds_embeddings(file_tag_with_files):
+def test_start_index_loop_defers_embeddings_until_search(file_tag_with_files):
     tag, _ = file_tag_with_files
 
     mock_embeddings = MagicMock()
     with patch("macllm.tags.file_tag.txtai.Embeddings", return_value=mock_embeddings):
         FileTag.start_index_loop(interval=9999)
-        FileTag._embedding_ready.wait(timeout=5.0)
+        deadline = time.time() + 5.0
+        while len(FileTag._index) != 3 and time.time() < deadline:
+            time.sleep(0.01)
 
-    assert FileTag._embedding_ready.is_set()
+    assert len(FileTag._index) == 3
+    assert not FileTag._embedding_ready.is_set()
+    mock_embeddings.assert_not_called()
 
 
 def test_search_returns_results(file_tag_with_files):
@@ -130,6 +134,7 @@ def test_search_waits_for_embedding_ready(file_tag_with_files):
 def test_search_timeout_returns_empty(file_tag_with_files):
     tag, _ = file_tag_with_files
     FileTag._embedding_ready.clear()
+    FileTag._embeddings = MagicMock()
 
     results = FileTag.search("test", timeout=0.01)
     assert results == []

@@ -364,21 +364,22 @@ class FileTag(TagPlugin):
     # ------------------------------------------------------------------
     @classmethod
     def start_index_loop(cls, interval: float = None):
-        """Start a daemon thread that periodically rebuilds the file index
-        and embeddings.  The first cycle runs immediately."""
+        """Start a daemon thread that periodically rebuilds the file index.
+
+        Embeddings are initialized lazily by semantic search so normal app
+        startup does not load model weights.
+        """
         if interval is None:
             interval = cls.REINDEX_INTERVAL
-        thread = threading.Thread(target=cls._index_loop, args=(interval,), daemon=True)
+        thread = threading.Thread(target=cls._index_loop, args=(interval,), daemon=True, name="FileTagIndexLoop")
         thread.start()
 
     @classmethod
     def _index_loop(cls, interval: float):
         while True:
             cls.build_index()
-            if cls._index:
+            if cls._index and (cls._embeddings is not None or cls._first_build_done):
                 cls._build_embeddings()
-            else:
-                cls._embedding_ready.set()
             cls._reindex_event.wait(timeout=interval)
             cls._reindex_event.clear()
 
@@ -515,7 +516,16 @@ class FileTag(TagPlugin):
 
     @classmethod
     def search(cls, query: str, n: int = SEARCH_RESULTS_COUNT, timeout: float = 60.0) -> list[tuple[int, float, str, str, bool]]:
-        if not cls._embedding_ready.wait(timeout=timeout):
+        if not cls._index:
+            cls.build_index()
+
+        if not cls._index:
+            return []
+
+        if cls._embeddings is None:
+            cls._embedding_ready.clear()
+            cls._build_embeddings()
+        elif not cls._embedding_ready.wait(timeout=timeout):
             return []
 
         with cls._embedding_lock:
