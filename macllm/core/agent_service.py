@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from smolagents import PlanningStep, ActionStep, TaskStep
-from macllm.core.conversation_log import append_plan, current_activity_trace
+from macllm.core.conversation_log import append_plan
 
 if TYPE_CHECKING:
     from macllm.core.chat_history import Conversation
@@ -76,49 +76,18 @@ def create_step_callback(conversation: Conversation | None = None):
                 text=extract_plan(raw) or None,
                 status=extract_status(raw),
             )
-            trace = current_activity_trace(conversation.conversation_log)
-            if trace is not None:
-                token_usage = None
-                if mark_once(step, "_macllm_trace_tokens_recorded"):
-                    token_usage = getattr(step, "token_usage", None)
-                trace.close_current_model_step(
-                    label="Planning",
-                    token_usage=token_usage,
-                )
             should_notify = True
 
         if isinstance(step, ActionStep) and conversation is not None:
             is_parent = (agent is conversation.agent)
             step_done = (getattr(step, 'observations', None) is not None
                          or getattr(step, 'error', None) is not None)
-            trace = current_activity_trace(conversation.conversation_log)
-            if trace is not None:
-                label = "Final answer" if getattr(step, "is_final_answer", False) else "Thinking"
-                token_usage = None
-                if mark_once(step, "_macllm_trace_tokens_recorded"):
-                    token_usage = getattr(step, "token_usage", None)
-                    if step_done:
-                        tool_calls = getattr(step, "tool_calls", None) or []
-                        for tc in tool_calls:
-                            name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
-                            conversation.record_last_tool_result(
-                                name,
-                                getattr(step, "observations", None),
-                            )
-                if step_done:
-                    trace.close_current_model_step(
-                        label=label,
-                        token_usage=token_usage,
-                        state="error" if getattr(step, "error", None) else "success",
-                    )
-                else:
-                    trace.update_current_model_step(
-                        label=label,
-                        token_usage=token_usage,
-                    )
             if is_parent and step_done:
                 conversation.clear_tool_calls()
                 should_notify = True
+
+        if isinstance(step, TaskStep) and conversation is not None:
+            should_notify = True
 
         if isinstance(step, (PlanningStep, ActionStep)):
             if (

@@ -40,7 +40,7 @@ Multiple conversations may have agents running simultaneously. Each agent thread
 The main conversation view is a text-based rendering pipeline. `ConversationLog` is the sole chronological data source.
 
 - regular mode renders user messages as pill-aware text and assistant messages through markdown
-- debug mode renders the same log with raw payload detail such as agent steps, activity traces, approvals, errors, and token metadata
+- debug mode renders the same log with raw payload detail such as agent steps, approvals, errors, and token metadata
 - live state such as pending approvals and pending user input may still be read from current conversation fields until appended to the log
 - UI code interprets log entry kinds and payloads; agent/core code does not create UI-specific rows
 

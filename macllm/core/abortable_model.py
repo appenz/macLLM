@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import threading
 from typing import TYPE_CHECKING, Any
-from macllm.core.conversation_log import current_activity_trace
 
 if TYPE_CHECKING:
     from smolagents.models import ChatMessage
@@ -48,7 +47,6 @@ class AbortableModel:
         if self._abort_event.is_set():
             raise AgentInterrupted("Agent interrupted.")
 
-        trace_node = self._start_trace_node(kwargs)
         result_holder: list[Any] = [None]
         error_holder: list[BaseException | None] = [None]
         done = threading.Event()
@@ -66,44 +64,13 @@ class AbortableModel:
 
         while not done.is_set():
             if self._abort_event.wait(timeout=0.1):
-                self._finish_trace_node(trace_node, failed=True, close=True)
                 raise AgentInterrupted("Agent interrupted.")
             if done.is_set():
                 break
 
         if error_holder[0] is not None:
-            self._finish_trace_node(trace_node, failed=True, close=True)
             raise error_holder[0]
-        self._finish_trace_node(trace_node, failed=False, close=False)
         return result_holder[0]
-
-    def _start_trace_node(self, kwargs: dict[str, Any]):
-        trace = current_activity_trace(getattr(self._conversation, "conversation_log", []))
-        if trace is None:
-            return None
-        label = "Final answer" if self._is_final_answer_call(kwargs) else "Thinking"
-        node = trace.start_model_call(label)
-        self._conversation._notify_ui()
-        return node
-
-    def _finish_trace_node(self, node, *, failed: bool, close: bool) -> None:
-        trace = current_activity_trace(getattr(self._conversation, "conversation_log", []))
-        if trace is None or node is None:
-            return
-        if close:
-            trace.close_node(node, state="error" if failed else "success")
-        else:
-            trace.finish_model_call(node, state="error" if failed else "success")
-        self._conversation._notify_ui()
-
-    @staticmethod
-    def _is_final_answer_call(kwargs: dict[str, Any]) -> bool:
-        tools = kwargs.get("tools_to_call_from") or []
-        for tool in tools:
-            name = getattr(tool, "name", None)
-            if name == "final_answer":
-                return True
-        return False
 
     # ------------------------------------------------------------------
     # generate_stream — yield chunks, checking abort between each

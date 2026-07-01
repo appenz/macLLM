@@ -2,10 +2,12 @@ from macllm.core.chat_history import Conversation
 from macllm.core.conversation_log import (
     ConversationLog,
     ConversationLogEntry,
+    add_tool_call,
     log_from_messages,
     message,
     messages_from_log,
     persistable_log,
+    update_last_tool_message,
 )
 
 
@@ -54,3 +56,16 @@ def test_conversation_displayable_messages_come_from_log():
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": "hi"},
     ]
+
+
+def test_tool_call_entries_store_simple_log_payloads():
+    log = ConversationLog()
+
+    add_tool_call(log, "search_notes", "Using tool: search_notes")
+    update_last_tool_message(log, 'Searching notes for "budget"')
+
+    assert log[0].kind == "tool_call"
+    assert log[0].payload == {
+        "tool": "search_notes",
+        "message": 'Searching notes for "budget"',
+    }

@@ -32,37 +32,11 @@ def message(role: str, content: str) -> ConversationLogEntry:
     return entry("message", {"role": role, "content": content})
 
 
-def start_activity_trace(log: list[ConversationLogEntry], label: str):
-    from macllm.core.activity_trace import ActivityTrace
-
-    trace = ActivityTrace(label)
-    log.append(ConversationLogEntry(
-        kind="activity_trace",
-        timestamp=time.time(),
-        payload=trace,
-    ))
-    return trace
-
-
-def current_activity_trace(log: list[ConversationLogEntry]):
-    for item in reversed(log):
-        if item.kind != "activity_trace":
-            continue
-        trace = item.payload
-        root = getattr(trace, "root", None)
-        if root is not None and getattr(root, "finished_at", None) is None:
-            return trace
-        return None
-    return None
-
-
 def add_tool_call(log: list[ConversationLogEntry], tool_name: str, message_text: str) -> None:
-    trace = current_activity_trace(log)
-    trace_node = trace.open_node(message_text, kind="tool") if trace is not None else None
     log.append(ConversationLogEntry(
         kind="tool_call",
         timestamp=time.time(),
-        payload={"tool": tool_name, "message": message_text, "trace_node": trace_node},
+        payload={"tool": tool_name, "message": message_text},
     ))
 
 
@@ -71,30 +45,14 @@ def update_last_tool_message(log: list[ConversationLogEntry], message_text: str)
     if item is None or not isinstance(item.payload, dict):
         return
     item.payload["message"] = message_text
-    trace_node = item.payload.get("trace_node")
-    if trace_node is not None:
-        trace_node.label = message_text
 
 
 def complete_last_tool_call(log: list[ConversationLogEntry], *, failed: bool = False) -> None:
-    item = _last_tool_call_entry(log)
-    if item is None or not isinstance(item.payload, dict):
-        return
-    trace_node = item.payload.get("trace_node")
-    trace = current_activity_trace(log)
-    if trace_node is not None and trace is not None:
-        trace.close_node(trace_node, state="error" if failed else "success")
+    """Compatibility hook for tools; step state is recorded by smolagents."""
 
 
 def record_last_tool_result(log: list[ConversationLogEntry], tool_name: str, result) -> None:
-    item = _last_tool_call_entry(log)
-    if item is None or not isinstance(item.payload, dict):
-        return
-    if item.payload.get("tool") != tool_name:
-        return
-    trace = current_activity_trace(log)
-    if trace is not None:
-        trace.record_tool_result(item.payload.get("trace_node"), result)
+    """Compatibility hook; result text lives on the corresponding ActionStep."""
 
 
 def pop_last_tool_call(log: list[ConversationLogEntry]) -> None:
@@ -102,11 +60,6 @@ def pop_last_tool_call(log: list[ConversationLogEntry]) -> None:
         item = log[index]
         if item.kind != "tool_call":
             continue
-        if isinstance(item.payload, dict):
-            trace = current_activity_trace(log)
-            trace_node = item.payload.get("trace_node")
-            if trace_node is not None and trace is not None:
-                trace.discard_node(trace_node)
         del log[index]
         return
 

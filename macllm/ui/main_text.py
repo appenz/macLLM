@@ -3,7 +3,6 @@ from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.core.skills import SkillsRegistry
 from macllm.core.conversation_log import (
-    current_activity_trace,
     latest_plan,
     messages_from_log,
     tool_calls as log_tool_calls,
@@ -103,7 +102,6 @@ class MainTextHandler:
     @staticmethod
     def _render_agent_steps(text_view, conversation):
         """Render live agent progress from agent.memory.steps and pending approval."""
-        from Foundation import NSMutableAttributedString
         from macllm.ui.approval import ApprovalRenderer
         from smolagents import ActionStep, TaskStep
 
@@ -134,10 +132,11 @@ class MainTextHandler:
             getattr(s, 'tool_calls', None)
             for s in steps if isinstance(s, ActionStep)
         )
+        has_task_steps = any(isinstance(s, TaskStep) for s in steps)
         live_tool_calls = log_tool_calls(conversation.conversation_log)
         has_live_tool_calls = bool(live_tool_calls)
         has_plan = bool(latest_plan(conversation.conversation_log))
-        show_steps = has_tool_calls or has_live_tool_calls
+        show_steps = has_tool_calls or has_task_steps or has_live_tool_calls
 
         _append("\n\n", muted)
 
@@ -145,15 +144,6 @@ class MainTextHandler:
             MainTextHandler._render_plan(
                 ts, conversation, muted, light, green, font_sm, font_sm_bold
             )
-
-        trace = current_activity_trace(conversation.conversation_log)
-        if trace is not None and trace.has_activity:
-            _append("Steps\n", muted, font_sm_bold)
-            for line in trace.format_ui_lines(width=58, unicode=True):
-                _append(f"  {line}\n", light)
-            if conversation.pending_approval:
-                ApprovalRenderer.render_pending(ts, conversation.pending_approval)
-            return
 
         if show_steps:
             _append("Steps\n", muted, font_sm_bold)
@@ -201,6 +191,12 @@ class MainTextHandler:
                         err_str = str(error)[:80]
                         _append(f" — {err_str}", red)
                     _append("\n", muted)
+
+            elif isinstance(step, TaskStep):
+                task = str(getattr(step, "task", "") or "managed agent task")
+                display_task = task if len(task) <= 80 else task[:77] + "..."
+                _append("  ⟳ ", muted, font_sm_bold)
+                _append(f"Thinking: {display_task}\n", light)
 
         for tc in live_tool_calls:
             _append("  ⟳ ", muted, font_sm_bold)

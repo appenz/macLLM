@@ -10,9 +10,12 @@ The display has three goals:
 - show the progress of tool calls and managed-agent delegation
 - show pending shell approval requests that need user action
 
-## Data Source
+## Data Sources
 
-All progress data comes from `agent.memory.steps` on the conversation's agent instance.
+Progress data comes from two conversation-owned sources:
+
+- `agent.memory.steps` on the conversation's agent instance
+- transient `tool_call` entries in `Conversation.conversation_log` while `@macllm_tool` wrappers are actively executing
 
 smolagents records each step as a dataclass in the step list:
 
@@ -25,7 +28,7 @@ smolagents records each step as a dataclass in the step list:
 - `text`: extracted text between `### Plan:` and `### Status:` (or `<end_plan>`)
 - `status`: extracted text after `### Status:` until `<end_plan>` or end of output (optional)
 
-The UI reads the latest plan through `latest_plan()` in `macllm/core/conversation_log.py`, plus tool/activity data from `agent.memory.steps`. There is no intermediate status manager object.
+The UI reads the latest plan through `latest_plan()` in `macllm/core/conversation_log.py`, completed/planned tool and delegation data from `agent.memory.steps`, and live in-tool status text from `conversation_log` `tool_call` entries. There is no intermediate status manager or activity-tree object.
 
 ### Determining tool state from ActionStep
 
@@ -39,13 +42,13 @@ Shell approval state lives on `Conversation.pending_approval` (a transient `Pend
 
 ## Rendering
 
-`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list, latest conversation-log plan, and pending approval to render:
+`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list, latest conversation-log plan, transient live tool-call entries, and pending approval to render:
 
 - a **"Plan"** section when the latest conversation-log plan has text (checkbox-style lines from planning output)
 - a **"Status"** summary under the plan when the latest conversation-log plan has status text
-- a **"Steps"** section with status markers (running, success, error) once tool calls exist
+- a **"Steps"** section with status markers (running, success, error) once tool calls or managed-agent task steps exist
 - **"Thinking..."** when the agent is running and neither plan text nor tool calls are available yet
-- nested indentation for managed-agent delegation (from `TaskStep` entries)
+- managed-agent delegation rows from `TaskStep` entries
 - an inline approval prompt when `conversation.pending_approval` is set
 
 ### Per-tool display formatting
@@ -62,4 +65,6 @@ applies its own presentation rules. No imports from `macllm.tools`.
 
 The previous `AgentStatusManager` class has been removed. It used to track plan text, tool call entries, and pending approvals as a separate object owned by `MacLLM`. Tools reported their own progress by calling `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()`.
 
-This was replaced by rendering directly from `agent.memory.steps` and `conversation_log`, which smolagents and the conversation runtime already maintain as part of execution. This eliminates a redundant layer and makes the conversation the sole data source for the UI. Transient `@macllm_tool` status lines also read from `conversation_log` tool-call entries (see `specs/tools.md`).
+This was replaced by rendering directly from `agent.memory.steps` and `conversation_log`, which smolagents and the conversation runtime already maintain as part of execution. This eliminates redundant layers and makes the conversation the sole data source for the UI. Transient `@macllm_tool` status lines also read from `conversation_log` tool-call entries (see `specs/tools.md`).
+
+The later `ActivityTrace` activity tree was also removed for the same reason: it duplicated step/log state as a transient object inside the conversation log. Live status should remain a direct projection of the conversation log plus smolagents memory.

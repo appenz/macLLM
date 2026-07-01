@@ -15,12 +15,10 @@ from macllm.core.conversation_log import (
     add_tool_call as log_add_tool_call,
     clear_tool_calls as log_clear_tool_calls,
     complete_last_tool_call as log_complete_last_tool_call,
-    current_activity_trace,
     message,
     messages_from_log,
     pop_last_tool_call as log_pop_last_tool_call,
     record_last_tool_result as log_record_last_tool_result,
-    start_activity_trace,
     update_last_tool_message as log_update_last_tool_message,
 )
 
@@ -71,12 +69,12 @@ class Conversation:
         self._notify_ui()
 
     def complete_last_tool_call(self, *, failed: bool = False) -> None:
-        """Mark the most recent live tool-call entry complete in the activity trace."""
+        """Compatibility hook for tools that finish a live tool-call entry."""
         log_complete_last_tool_call(self.conversation_log, failed=failed)
         self._notify_ui()
 
     def record_last_tool_result(self, tool_name: str, result) -> None:
-        """Attach result-size metadata to the most recent live tool-call entry."""
+        """Compatibility hook for tools; observations are stored on ActionStep."""
         log_record_last_tool_result(self.conversation_log, tool_name, result)
 
     def pop_last_tool_call(self) -> None:
@@ -222,7 +220,6 @@ class Conversation:
                     if not app.ephemeral:
                         save_all_conversations(app.conversation_history)
             finally:
-                conversation._finish_activity_trace()
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
@@ -233,6 +230,7 @@ class Conversation:
 
         self.agent_thread = threading.Thread(target=run_agent, daemon=True)
         self.agent_thread.start()
+        self._notify_ui()
 
     def _drain_pending_input(self) -> None:
         """Submit accumulated pending input as a single query, if any."""
@@ -303,14 +301,6 @@ class Conversation:
             from macllm.core.persistence import save_all_conversations
             save_all_conversations(app.conversation_history)
 
-    def _finish_activity_trace(self) -> None:
-        """Close the current activity trace stored in the conversation log."""
-        trace = current_activity_trace(self.conversation_log)
-        if trace is None:
-            return
-        state = "error" if self.abort_event.is_set() else "success"
-        trace.finish(state=state)
-
     def _maybe_generate_title(self) -> None:
         """Generate a short title after the first exchange."""
         if self.title != "New Agent":
@@ -355,9 +345,6 @@ class Conversation:
         """Reset transient per-run UI state before starting an agent run."""
         self.usage.reset()
         self.clear_tool_calls()
-        agent_cls = self._get_agent_cls()
-        agent_name = getattr(agent_cls, "macllm_name", "agent") or "agent"
-        start_activity_trace(self.conversation_log, f"{agent_name} agent")
 
     # ------------------------------------------------------------------
     # Message management
