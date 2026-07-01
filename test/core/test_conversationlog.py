@@ -3,6 +3,9 @@ from macllm.core.conversation_log import (
     ConversationLog,
     ConversationLogEntry,
     add_tool_call,
+    append_run_end,
+    append_run_start,
+    append_step,
     log_from_messages,
     message,
     messages_from_log,
@@ -69,3 +72,24 @@ def test_tool_call_entries_store_simple_log_payloads():
         "tool": "search_notes",
         "message": 'Searching notes for "budget"',
     }
+
+
+def test_runtime_fact_entries_are_persistable():
+    log = ConversationLog()
+
+    append_run_start(log, {"query": "hello", "expanded_prompt": "hello expanded"})
+    append_step(log, {
+        "agent_name": "default",
+        "agent_role": "parent",
+        "step_type": "action",
+        "tool_calls": [{"name": "search", "arguments": {"query": "hello"}}],
+        "observations": "verbatim result",
+        "token_usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+    }, tokens=15)
+    append_run_end(log, {"status": "success", "elapsed_seconds": 1.25, "total_tokens": 15})
+
+    stable = persistable_log(log)
+
+    assert [item.kind for item in stable] == ["run_start", "step", "run_end"]
+    assert stable[1].tokens == 15
+    assert stable[1].payload["observations"] == "verbatim result"

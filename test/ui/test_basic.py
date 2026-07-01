@@ -35,6 +35,20 @@ def test_window_initial_state(ui):
 
 
 @pytest.mark.uitest
+def test_debug_button_opens_window(ui):
+    """Clicking the bug icon opens the separate debug window."""
+    button = getattr(ui._ui, "debug_button_view", None)
+    assert button is not None
+
+    button.mouseDown_(None)
+    ui.spin(0.2)
+
+    debug_window = getattr(ui._ui, "debug_window", None)
+    assert debug_window is not None
+    assert debug_window.panel is not None
+
+
+@pytest.mark.uitest
 def test_screenshot_capture(ui, tmp_path):
     """Screenshot captures a PNG file of the window."""
     path = str(tmp_path / "test_capture.png")

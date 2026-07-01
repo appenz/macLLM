@@ -4,6 +4,8 @@ from Cocoa import (
     NSNoBorder,
     NSImageView,
     NSTextView,
+    NSView,
+    NSTextField,
     NSFont,
     NSColor,
     NSMutableParagraphStyle,
@@ -19,6 +21,24 @@ from Quartz import CGColorCreateGenericRGB
 def _cgcolor_from_nscolor(nscolor):
     rgb = nscolor.colorUsingColorSpaceName_("NSCalibratedRGBColorSpace")
     return CGColorCreateGenericRGB(rgb.redComponent(), rgb.greenComponent(), rgb.blueComponent(), rgb.alphaComponent())
+
+
+class _DebugButton(NSView):
+    macllm_ui = None
+
+    def hitTest_(self, point):
+        frame = self.frame()
+        ox, oy = frame[0]
+        w, h = frame[1]
+        px, py = float(point[0]), float(point[1])
+        if (ox <= px <= ox + w and oy <= py <= oy + h) or (0 <= px <= w and 0 <= py <= h):
+            return self
+        return None
+
+    def mouseDown_(self, event):
+        if self.macllm_ui is not None:
+            self.macllm_ui.open_debug_window()
+
 
 # Main Handler for the top bar that renders the logo, context and statistics
 class TopBarHandler:
@@ -217,8 +237,11 @@ class TopBarHandler:
         text_y = icon_y
         text_height = macllm_ui.top_bar_height - text_y - 10
 
+        debug_button_size = 24
+        debug_button_gap = 4
         context_area_x = icon_x_internal + macllm_ui.icon_width + top_bar_internal_padding
-        text_field_x = macllm_ui.text_area_width - macllm_ui.top_bar_text_field_width - top_bar_internal_padding
+        debug_button_x = macllm_ui.text_area_width - debug_button_size - top_bar_internal_padding
+        text_field_x = debug_button_x - debug_button_gap - macllm_ui.top_bar_text_field_width
         context_available_width = max(0, text_field_x - context_area_x)
 
         # Logo image view
@@ -269,6 +292,45 @@ class TopBarHandler:
             top_bar_text_view.setFrame_(((text_field_x, text_y), (macllm_ui.top_bar_text_field_width, text_height)))
             top_bar_text_view.setTextContainerInset_((0.0, 0.0))
 
+        # Debug log button to the right of the mode/model/token status text.
+        if not hasattr(macllm_ui, "debug_button_view"):
+            debug_button = _DebugButton.alloc().initWithFrame_(
+                ((debug_button_x, text_y), (debug_button_size, text_height))
+            )
+            debug_button.macllm_ui = macllm_ui
+            label = NSTextField.alloc().initWithFrame_(((0, 0), (debug_button_size, text_height)))
+            label.setEditable_(False)
+            label.setSelectable_(False)
+            label.setBezeled_(False)
+            label.setDrawsBackground_(False)
+            label.setBordered_(False)
+            para = NSMutableParagraphStyle.alloc().init()
+            para.setAlignment_(1)
+            attrs = {
+                NSFontAttributeName: NSFont.systemFontOfSize_(14.0),
+                NSForegroundColorAttributeName: macllm_ui.text_grey,
+                NSParagraphStyleAttributeName: para,
+            }
+            label.setAttributedStringValue_(
+                NSAttributedString.alloc().initWithString_attributes_("🐞", attrs)
+            )
+            debug_button.addSubview_(label)
+            top_bar_container.addSubview_(debug_button)
+            macllm_ui.debug_button_view = debug_button
+            macllm_ui.debug_button_label = label
+        else:
+            debug_button = macllm_ui.debug_button_view
+            if debug_button.superview() is None or debug_button.superview() != top_bar_container:
+                debug_button.removeFromSuperview()
+                top_bar_container.addSubview_(debug_button)
+            debug_button.macllm_ui = macllm_ui
+            debug_button.setFrame_(((debug_button_x, text_y), (debug_button_size, text_height)))
+            if hasattr(macllm_ui, "debug_button_label"):
+                macllm_ui.debug_button_label.setFrame_(((0, 0), (debug_button_size, text_height)))
+            # Keep the click target above the non-editable status text in z-order.
+            debug_button.removeFromSuperview()
+            top_bar_container.addSubview_(debug_button)
+
         # Render context items area (step 1: single fixed pill)
         TopBarHandler.render_context_items(
             macllm_ui=macllm_ui,
@@ -276,5 +338,5 @@ class TopBarHandler:
             origin_x=context_area_x,
             origin_y=text_y,
             height=text_height,
-            available_width=(text_field_x - context_area_x),
+            available_width=context_available_width,
         )

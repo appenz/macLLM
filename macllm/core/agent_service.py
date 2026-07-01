@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from smolagents import PlanningStep, ActionStep, TaskStep
-from macllm.core.conversation_log import append_plan
+from macllm.core.conversation_log import append_agent_step, append_plan
 
 if TYPE_CHECKING:
     from macllm.core.chat_history import Conversation
@@ -67,6 +67,26 @@ def create_step_callback(conversation: Conversation | None = None):
 
     def on_step(step, agent):
         should_notify = False
+        if conversation is not None and isinstance(step, (PlanningStep, ActionStep, TaskStep)):
+            if isinstance(step, PlanningStep):
+                step_type = "planning"
+            elif isinstance(step, ActionStep):
+                step_type = "action"
+            else:
+                step_type = "task"
+            append_agent_step(
+                conversation.conversation_log,
+                step,
+                step_type=step_type,
+                agent_name=(
+                    getattr(agent, "macllm_name", None)
+                    or getattr(agent, "name", None)
+                    or "agent"
+                ),
+                agent_role="parent" if agent is conversation.agent else "subagent",
+            )
+            should_notify = True
+
         if isinstance(step, PlanningStep) and conversation is not None:
             raw = getattr(getattr(step, "model_output_message", None), "content", "")
             if not isinstance(raw, str):

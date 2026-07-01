@@ -90,6 +90,41 @@ class TestCreateStepCallback:
         assert conv.usage.input_tokens == 300
         assert conv.usage.output_tokens == 130
 
+    def test_records_step_fact_with_tokens_and_agent_role(self):
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        parent_agent = Mock(macllm_name="default")
+        conv.agent = parent_agent
+        on_step = create_step_callback(conv)
+
+        step = self._make_action_step(100, 50)
+        step.tool_calls = [{"name": "lookup", "arguments": {"query": "budget"}}]
+        step.observations = "full tool result"
+
+        on_step(step, agent=parent_agent)
+
+        entry = conv.conversation_log[-1]
+        assert entry.kind == "step"
+        assert entry.tokens == 150
+        assert entry.payload["agent_role"] == "parent"
+        assert entry.payload["agent_name"] == "default"
+        assert entry.payload["tool_calls"][0]["arguments"] == {"query": "budget"}
+        assert entry.payload["observations"] == "full tool result"
+
+    def test_records_subagent_step_fact_with_same_callback(self):
+        conv = Conversation()
+        conv.ui_update_callback = lambda: None
+        conv.agent = Mock(macllm_name="default")
+        subagent = Mock(macllm_name="notes")
+        on_step = create_step_callback(conv)
+
+        on_step(self._make_action_step(10, 5), agent=subagent)
+
+        entry = conv.conversation_log[-1]
+        assert entry.kind == "step"
+        assert entry.payload["agent_role"] == "subagent"
+        assert entry.payload["agent_name"] == "notes"
+
     def test_accumulates_planning_step_tokens(self):
         conv = Conversation()
         conv.ui_update_callback = lambda: None

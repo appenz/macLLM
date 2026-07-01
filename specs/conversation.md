@@ -61,6 +61,8 @@ When an agent is recreated, existing `agent.memory.steps` are preserved so the a
 
 Before each `agent.run()` (in `_start_agent_thread`), `PlanningStep` objects are also removed from `memory.steps` while keeping `TaskStep` and `ActionStep` history. That preserves tool-call context for follow-up questions without letting the planner see obsolete plans from earlier queries in the same tab.
 
+Runtime facts that need durable chronological rendering are projected into `Conversation.conversation_log` as compact primitive entries. This includes run start/end facts and accessible smolagents step facts from the shared step callback for both supervisor agents and managed subagents. Core records these as conversation facts, not as UI/debug-specific state.
+
 `Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. Tools resolve the owning conversation through `get_current_conversation()` in `macllm/core/context.py` (see `specs/tools.md`).
 
 ### Pending Input
@@ -87,7 +89,7 @@ Persistence lives in `macllm/core/persistence.py`.
 
 All conversations are persisted together in `conversations.pkl` via `save_all_conversations()` / `load_all_conversations()`. For each conversation the persisted state is:
 
-- `conversation.messages`
+- stable `conversation.conversation_log` entries
 - `conversation.agent.memory.steps`
 - the active agent name
 - `conversation.title`

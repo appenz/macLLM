@@ -58,6 +58,8 @@ formatter lambdas `(args_dict) -> str`. When a tool name has an entry in this di
 the renderer uses its formatter instead of the generic `name(key=value, ...)` display.
 `run_command` is handled separately (monospaced font for the command text).
 
+The detailed debug window is a separate passive renderer. It reads compact chronological runtime facts from `Conversation.conversation_log`, including run start/end facts and accessible step projections recorded by the same step callback for supervisor and managed subagents. The live status view remains intentionally compact.
+
 This keeps the renderer passive — it only reads step data from the conversation and
 applies its own presentation rules. No imports from `macllm.tools`.
 

@@ -20,7 +20,7 @@ The UI is split into a few focused parts:
 
 - `MacLLMUI` coordinates window creation, layout, updates, and high-level user actions
 - `TopBarHandler` renders the top metadata strip, including context pills and model/token information
-- `MainTextHandler` renders regular and debug views from the conversation log
+- `MainTextHandler` renders the regular conversation view; `DebugWindow` renders the separate debug log window from the same conversation state
 - `InputFieldHandler` and `InputFieldDelegate` manage text editing, pills, commands, and autocomplete
 - `AutocompleteController` provides token suggestions and selection behavior
 - `HistoryBrowseDelegate` handles keyboard-driven navigation through prior messages
@@ -29,7 +29,7 @@ This keeps rendering, editing, and navigation behavior separate while still allo
 
 ## Update Model
 
-The UI is a pure renderer of conversation state. It reads `ConversationLogEntry` items from the active conversation's append-only `ConversationLog` and renders either the regular view or the debug view. The only signal from the agent runtime to the UI is a generic repaint callback.
+The UI is a pure renderer of conversation state. It reads `ConversationLogEntry` items from the active conversation's append-only `ConversationLog` for the regular view and for the separate debug log window. The only signal from the agent runtime to the UI is a generic repaint callback.
 
 `MacLLMUI.request_update()` is the key boundary between background work and Cocoa rendering. If the caller is already on the main thread, the window is updated immediately. Otherwise the update is marshaled back to the main thread via `performSelectorOnMainThread` with `waitUntilDone_: False`, so agent threads never block on UI rendering.
 
@@ -40,7 +40,7 @@ Multiple conversations may have agents running simultaneously. Each agent thread
 The main conversation view is a text-based rendering pipeline. `ConversationLog` is the sole chronological data source.
 
 - regular mode renders user messages as pill-aware text and assistant messages through markdown
-- debug mode renders the same log with raw payload detail such as agent steps, approvals, errors, and token metadata
+- the separate debug window renders the same conversation facts with raw payload detail such as agent steps, approvals, errors, token metadata, and timing
 - live state such as pending approvals and pending user input may still be read from current conversation fields until appended to the log
 - UI code interprets log entry kinds and payloads; agent/core code does not create UI-specific rows
 

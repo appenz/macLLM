@@ -40,7 +40,7 @@ class _UIUpdater(NSObject):
     
     def run_(self, sender):
         if _UIUpdater.target:
-            _UIUpdater.target.update_window()
+            _UIUpdater.target._perform_update_from_callback()
 
 _ui_updater = _UIUpdater.alloc().init()
 
@@ -247,6 +247,7 @@ class MacLLMUI:
         self.pending_screenshot = None
 
         self.quick_window = None
+        self.debug_window = None
         if getattr(sys, "frozen", None):
             assets_dir = os.path.join(os.environ["RESOURCEPATH"], "assets")
         else:
@@ -369,13 +370,19 @@ class MacLLMUI:
             'scheduleQuitTimer:', None, False)
 
     def request_update(self):
-        if not getattr(self, 'quick_window', None):
+        if not getattr(self, 'quick_window', None) and not getattr(self, 'debug_window', None):
             return
         if NSThread.isMainThread():
-            self.update_window()
+            self._perform_update_from_callback()
         else:
             _UIUpdater.target = self
             _ui_updater.performSelectorOnMainThread_withObject_waitUntilDone_('run:', None, False)
+
+    def _perform_update_from_callback(self):
+        if getattr(self, 'quick_window', None):
+            self.update_window()
+        else:
+            self.refresh_debug_window()
 
     def update_window(self):
 
@@ -566,6 +573,7 @@ class MacLLMUI:
 
         # Update the top bar text with model and token information
         self.update_top_bar_text()
+        self.refresh_debug_window()
 
         # ----- Input field at bottom with rounded corners ---------------------------------------------------------------
 
@@ -860,12 +868,31 @@ class MacLLMUI:
 
     def close_conversation(self, index):
         """Delete the conversation at *index* and refresh the UI."""
+        conv = None
+        try:
+            conv = self.macllm.conversation_history.conversations[index]
+        except Exception:
+            pass
+        if conv is not None and self.debug_window is not None:
+            self.debug_window.close_for_conversation(getattr(conv, "conv_id", None))
         self.macllm.delete_conversation(index)
         if hasattr(self, "input_field"):
             InputFieldHandler.clear_input_field(self.input_field)
         self.update_window()
         if hasattr(self, "input_field"):
             InputFieldHandler.focus_input_field(self.input_field)
+
+    def open_debug_window(self):
+        """Open a passive debug log window for the active conversation."""
+        from macllm.ui.debug_window import DebugWindow
+
+        if self.debug_window is None:
+            self.debug_window = DebugWindow(self)
+        self.debug_window.open(self.macllm.chat_history)
+
+    def refresh_debug_window(self):
+        if self.debug_window is not None:
+            self.debug_window.refresh()
 
     # ------------------------------------------------------------------
     # Existing methods
@@ -890,6 +917,9 @@ class MacLLMUI:
 
         self.quick_window.orderOut_(None)
         self.quick_window = None
+        if self.debug_window is not None:
+            self.debug_window.close()
+            self.debug_window = None
         # Deactivate our app to return focus to the previous application
         self.app.hide_(None)
     

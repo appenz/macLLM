@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
@@ -12,6 +13,8 @@ from macllm.core.user_interaction import PendingApproval, PendingUserInput
 from macllm.core.conversation_log import (
     ConversationLog,
     append_plan,
+    append_run_end,
+    append_run_start,
     add_tool_call as log_add_tool_call,
     clear_tool_calls as log_clear_tool_calls,
     complete_last_tool_call as log_complete_last_tool_call,
@@ -51,6 +54,7 @@ class Conversation:
         self.saved_input_text: str = ""
         self._run_step_offset: int = 0
         self._active_query_text: str | None = None
+        self._active_run_started_monotonic: float | None = None
 
         self.reset()
 
@@ -171,12 +175,14 @@ class Conversation:
         """Spawn the background agent thread for this conversation."""
         from macllm.core.context import set_current_conversation
         from macllm.core.persistence import save_all_conversations
-        from macllm.core.llm_service import model_supports_vision
+        from macllm.core.llm_service import get_model_for_speed, model_supports_vision
 
         conversation = self
 
         def run_agent():
             set_current_conversation(conversation)
+            run_status = "success"
+            run_error = None
             try:
                 conversation.abort_event.clear()
                 conversation.clear_tool_calls()
@@ -191,6 +197,18 @@ class Conversation:
 
                 max_steps = 1 if request.no_tools else 10
                 run_kwargs = dict(max_steps=max_steps, reset=False)
+                conversation._active_run_started_monotonic = time.monotonic()
+                agent_cls = conversation._get_agent_cls()
+                append_run_start(conversation.conversation_log, {
+                    "query": conversation._active_query_text,
+                    "expanded_prompt": request.expanded_prompt,
+                    "agent": getattr(agent_cls, "macllm_name", None),
+                    "speed": conversation.speed_level,
+                    "model": get_model_for_speed(conversation.speed_level),
+                    "max_steps": max_steps,
+                    "has_images": bool(request.images),
+                    "no_tools": bool(request.no_tools),
+                })
                 if request.images:
                     if model_supports_vision(conversation.speed_level):
                         run_kwargs["images"] = request.images
@@ -207,19 +225,35 @@ class Conversation:
                 else:
                     conversation.add_assistant_message("Error: No output from agent")
 
-                if not app.ephemeral:
-                    save_all_conversations(app.conversation_history)
-
                 conversation._maybe_generate_title()
             except Exception as e:
                 if conversation.abort_event.is_set():
+                    run_status = "aborted"
                     conversation._handle_abort(app)
                 else:
+                    run_status = "error"
+                    run_error = str(e)
                     app.debug_exception(e)
                     conversation.add_assistant_message(f"Error: {str(e)}")
-                    if not app.ephemeral:
-                        save_all_conversations(app.conversation_history)
             finally:
+                started = conversation._active_run_started_monotonic
+                append_run_end(conversation.conversation_log, {
+                    "status": run_status,
+                    "error": run_error,
+                    "elapsed_seconds": (
+                        time.monotonic() - started
+                        if started is not None else None
+                    ),
+                    "input_tokens": conversation.usage.input_tokens,
+                    "output_tokens": conversation.usage.output_tokens,
+                    "total_tokens": (
+                        conversation.usage.input_tokens
+                        + conversation.usage.output_tokens
+                    ),
+                })
+                conversation._active_run_started_monotonic = None
+                if not app.ephemeral:
+                    save_all_conversations(app.conversation_history)
                 conversation.agent_thread = None
                 conversation.abort_event.clear()
                 conversation._notify_ui()
