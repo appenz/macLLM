@@ -13,6 +13,8 @@ class MainTextHandler:
     
     _separator_paragraph_style = None
     _separator_attributes = None
+    _last_highlight_range = None
+    _message_ranges = []
     
     @classmethod
     def _init_separator_attributes(cls):
@@ -239,6 +241,8 @@ class MainTextHandler:
     def set_text_content(macllm, text_view, highlight_index=None):
         from macllm.markdown import reset_code_blocks
         reset_code_blocks()
+        MainTextHandler._last_highlight_range = None
+        MainTextHandler._message_ranges = []
 
         MainTextHandler._init_separator_attributes()
         
@@ -277,8 +281,10 @@ class MainTextHandler:
                 MainTextHandler.append_markdown(text_view, text, color)
 
             end_pos = text_view.textStorage().length()
+            MainTextHandler._message_ranges.append((start_pos, end_pos - start_pos))
             if highlight_index is not None and i == highlight_index:
                 highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+                MainTextHandler._last_highlight_range = (start_pos, end_pos - start_pos)
                 text_view.textStorage().addAttributes_range_(
                     {NSBackgroundColorAttributeName: highlight_color},
                     (start_pos, end_pos - start_pos)

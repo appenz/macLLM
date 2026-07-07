@@ -119,6 +119,8 @@ History browsing is a separate interaction mode layered on top of the conversati
 
 When active, the conversation text view becomes the keyboard target. The user can move through prior messages, copy them, or insert one back into the input field. This is handled by a dedicated delegate rather than by the normal input delegate.
 
+Conversation viewport state is rendered from the active target: input focus clears history selection and shows the bottom; history focus highlights and reveals the selected message.
+
 ## Layout Model
 
 The window layout is computed dynamically from rendered content height.

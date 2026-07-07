@@ -15,7 +15,7 @@ from Cocoa import NSColor
 from Cocoa import NSScrollView, NSTextView
 from Cocoa import NSFont
 from Cocoa import NSBox, NSBoxCustom, NSNoBorder
-from Cocoa import NSFontAttributeName, NSForegroundColorAttributeName, NSParagraphStyleAttributeName
+from Cocoa import NSFontAttributeName, NSForegroundColorAttributeName, NSParagraphStyleAttributeName, NSBackgroundColorAttributeName
 from Cocoa import NSMutableParagraphStyle
 from Cocoa import NSGraphicsContext
 from Cocoa import NSMutableAttributedString
@@ -267,6 +267,7 @@ class MacLLMUI:
         # Browsing history mode state
         self.browsing_history = False
         self.history_index = 0
+        self.conversation_viewport_target = "input"
 
         # Code block keyboard focus state (-1 = none focused)
         self.focused_code_block = -1
@@ -568,8 +569,7 @@ class MacLLMUI:
         need_scroll = rendered_height > (visible_height + scroll_threshold)
         scroll_view.setHasVerticalScroller_(need_scroll)
 
-        # Scroll to the bottom so the latest messages are visible
-        text_view.scrollRangeToVisible_((text_view.textStorage().length(), 0))
+        self.render_conversation_viewport()
 
         # Update the top bar text with model and token information
         self.update_top_bar_text()
@@ -690,18 +690,96 @@ class MacLLMUI:
         if self.browsing_history:
             return
         self.browsing_history = True
+        self.conversation_viewport_target = "history"
         messages = MainTextHandler.displayable_messages(self.macllm.chat_history)
         self.history_index = max(0, len(messages) - 1)
         # Focus main area and highlight
         if hasattr(self, "text_area"):
             self.text_area.window().makeFirstResponder_(self.text_area)
-        self.highlight_current_history()
+        self.render_conversation_viewport()
 
-    def highlight_current_history(self):
-        """Re-render main text with the current selection highlighted."""
+    def _history_range_is_visible(self, text_range):
+        """Return True when any part of *text_range* is already visible."""
+        try:
+            layout_manager = self.text_area.layoutManager()
+            text_container = self.text_area.textContainer()
+            if not layout_manager or not text_container:
+                return False
+            glyph_range = layout_manager.glyphRangeForCharacterRange_actualCharacterRange_(text_range, None)
+            rect = layout_manager.boundingRectForGlyphRange_inTextContainer_(glyph_range, text_container)
+            origin = self.text_area.textContainerOrigin()
+            rect.origin.x += origin.x
+            rect.origin.y += origin.y
+            visible = self.text_area.visibleRect()
+            rect_top = rect.origin.y + rect.size.height
+            visible_top = visible.origin.y + visible.size.height
+            return rect_top >= visible.origin.y and rect.origin.y <= visible_top
+        except Exception:
+            return False
+
+    def _remove_history_highlight(self):
+        highlight_range = MainTextHandler._last_highlight_range
+        if not highlight_range or not hasattr(self, "text_area"):
+            MainTextHandler._last_highlight_range = None
+            return
+        text_storage = self.text_area.textStorage()
+        text_length = text_storage.length()
+        if highlight_range[0] + highlight_range[1] <= text_length:
+            text_storage.removeAttribute_range_(NSBackgroundColorAttributeName, highlight_range)
+        MainTextHandler._last_highlight_range = None
+
+    def _scroll_conversation_to_bottom(self):
         if not hasattr(self, "text_area"):
             return
-        MainTextHandler.set_text_content(self.macllm, self.text_area, highlight_index=self.history_index)
+        self.text_area.scrollRangeToVisible_((self.text_area.textStorage().length(), 0))
+
+    def activate_input_viewport(self):
+        """Make the input field the active conversation viewport target."""
+        self.browsing_history = False
+        self.focused_code_block = -1
+        self.conversation_viewport_target = "input"
+        self.render_conversation_viewport()
+
+    def render_conversation_viewport(self):
+        """Render highlight and scroll from the active viewport target."""
+        if not hasattr(self, "text_area"):
+            return
+
+        if self.conversation_viewport_target != "history":
+            self._remove_history_highlight()
+            self._scroll_conversation_to_bottom()
+            return
+
+        message_ranges = MainTextHandler._message_ranges
+        if not (0 <= self.history_index < len(message_ranges)):
+            self._remove_history_highlight()
+            return
+
+        text_storage = self.text_area.textStorage()
+        text_length = text_storage.length()
+        previous_range = MainTextHandler._last_highlight_range
+        if previous_range and previous_range[0] + previous_range[1] <= text_length:
+            text_storage.removeAttribute_range_(NSBackgroundColorAttributeName, previous_range)
+
+        start, length = message_ranges[self.history_index]
+        if start + length > text_length:
+            MainTextHandler.set_text_content(self.macllm, self.text_area, highlight_index=self.history_index)
+            return
+
+        highlight_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.9, 0.9, 1.0, 1.0)
+        highlight_range = (start, length)
+        text_storage.addAttributes_range_(
+            {NSBackgroundColorAttributeName: highlight_color},
+            highlight_range,
+        )
+        MainTextHandler._last_highlight_range = highlight_range
+        if not self._history_range_is_visible(highlight_range):
+            self.text_area.scrollRangeToVisible_((start, max(1, length)))
+
+    def highlight_current_history(self):
+        """Move the history highlight without disturbing the current scroll."""
+        self.conversation_viewport_target = "history"
+        self.render_conversation_viewport()
 
     def copy_current_history_to_clipboard(self):
         """Copy the selected history entry (raw text only) to the clipboard."""
@@ -733,11 +811,7 @@ class MacLLMUI:
         """Return to normal mode (remove highlight & focus input)."""
         if not self.browsing_history:
             return
-        self.browsing_history = False
-        self.focused_code_block = -1
-        # Remove highlight by re-rendering without highlight
-        if hasattr(self, "text_area"):
-            MainTextHandler.set_text_content(self.macllm, self.text_area)
+        self.activate_input_viewport()
         # Focus back to input field
         if hasattr(self, "input_field"):
             InputFieldHandler.focus_input_field(self.input_field)

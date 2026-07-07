@@ -27,6 +27,18 @@ import objc
 TAG_ATTR_NAME_CONST = TAG_ATTR_NAME
 
 
+class InputTextView(NSTextView):
+    """Input text view that keeps conversation viewport state in sync."""
+
+    macllm_ui = None
+
+    def becomeFirstResponder(self):
+        became_first_responder = objc.super(InputTextView, self).becomeFirstResponder()
+        if became_first_responder and self.macllm_ui and hasattr(self.macllm_ui, "activate_input_viewport"):
+            self.macllm_ui.activate_input_viewport()
+        return became_first_responder
+
+
 class InputFieldDelegate(NSObject):
     """Delegate class for handling NSTextView events, shortcuts, and autocomplete."""
 
@@ -457,7 +469,8 @@ class InputFieldHandler:
         scroll_view.setHasHorizontalScroller_(False)
         scroll_view.setAutohidesScrollers_(True)
 
-        input_field = NSTextView.alloc().initWithFrame_(((0, 0), scroll_view.frame().size))
+        input_field = InputTextView.alloc().initWithFrame_(((0, 0), scroll_view.frame().size))
+        input_field.macllm_ui = macllm_ui
         input_field.setFont_(NSFont.systemFontOfSize_(13.0))
         input_field.setDrawsBackground_(False)
         input_field.setAutomaticQuoteSubstitutionEnabled_(False)
