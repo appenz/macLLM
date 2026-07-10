@@ -148,7 +148,8 @@ def test_expand_text_file_not_treated_as_image(tmp_path):
     result = tag.expand(f"@{txt_path}", conv, request)
 
     assert len(request.images) == 0
-    assert "hello world" in result
+    assert result == "context:img-ctx"
+    assert "hello world" in request.context
 
 
 # ------------------------------------------------------------------

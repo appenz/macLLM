@@ -190,7 +190,8 @@ class FileTag(TagPlugin):
                     f"Directory access granted: {expanded_path}",
                     icon="📂",
                 )
-                return f"\n\n--- context:{context_name} (directory: {expanded_path}) ---\nDirectory access granted.\n--- end context:{context_name} ---"
+                request.add_context_block(context_name, "Directory access granted.", f"directory: {expanded_path}")
+                return f"context:{context_name}"
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -213,7 +214,8 @@ class FileTag(TagPlugin):
                 f"Directory access granted: {path_spec}",
                 icon="📂",
             )
-            return f"\n\n--- context:{context_name} (directory: {path_spec}) ---\nDirectory access granted.\n--- end context:{context_name} ---"
+            request.add_context_block(context_name, "Directory access granted.", f"directory: {path_spec}")
+            return f"context:{context_name}"
 
         if Path(path_spec).suffix.lower() in self.IMAGE_EXTENSIONS:
             from PIL import Image
@@ -242,7 +244,8 @@ class FileTag(TagPlugin):
             content,
             icon="📁"
         )
-        return f"\n\n--- context:{context_name} (path: {path_spec}) ---\n{content}\n--- end context:{context_name} ---"
+        request.add_context_block(context_name, content, f"path: {path_spec}")
+        return f"context:{context_name}"
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks

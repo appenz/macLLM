@@ -25,12 +25,14 @@ Request expansion is driven by `UserRequest.process_tags()` in `macllm/core/user
 4. Tokens are matched against the plugin prefix index, longest prefix first.
 5. The matching plugin's `expand(...)` method is called.
 6. The returned string replaces the original token inside `expanded_prompt`.
+7. Any context blocks collected on the `UserRequest` are appended once, after
+   all inline replacements are complete.
 
 Key design decisions:
 
 - expansion happens on `UserRequest.expanded_prompt`, not on stored `Conversation.messages`
 - plugins may mutate `UserRequest` and `Conversation` as side effects
-- context plugins maintain both `Conversation.context_history` for the UI and embedded context in `expanded_prompt` for the agent
+- context plugins maintain `Conversation.context_history` for the UI, return an inline reference such as `context:clipboard`, and register full context blocks on `UserRequest` so they are appended centrally to `expanded_prompt`
 
 ## URL Tags
 

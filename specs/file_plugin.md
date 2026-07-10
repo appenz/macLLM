@@ -59,11 +59,12 @@ installed and verified by `make install`.
 
 The file plugin handles two different request patterns.
 
-- path tags such as `@/...` and `@~/...` expand directly to file content embedded in the request
+- path tags such as `@/...` and `@~/...` expand to inline context references and append file content to the request context block section
 - generic `@...` autocomplete can resolve to indexed files by basename match
 
 When a file is expanded into a request, `FileTag` reads the file, registers it in `Conversation.context_history`,
-and returns an embedded context block inside `UserRequest.expanded_prompt`.
+returns an inline `context:<name>` reference, and registers the full context block on `UserRequest`.
+`UserRequest.process_tags()` appends those blocks once after all inline replacements are complete.
 
 ## Autocomplete Model
 

@@ -4,10 +4,11 @@
 
 Context is external data brought into a request, such as clipboard contents, file contents, URLs, or images.
 
-In the current architecture, context has two representations:
+In the current architecture, context has three related pieces:
 
 - structured context state in `Conversation.context_history`
-- embedded context inside the expanded prompt
+- per-request context blocks collected on `UserRequest`
+- embedded context appended to the expanded prompt
 
 This split is deliberate. The UI needs named context entries for pills and previews, while the agent needs inline context in the expanded prompt.
 
@@ -17,7 +18,9 @@ When a plugin adds context:
 
 1. it fetches or generates the external content
 2. it registers that content with `Conversation.add_context(...)`
-3. it returns a replacement string that embeds the context into the expanded prompt
+3. it adds the full context block to `UserRequest`
+4. it returns a short inline reference such as `context:clipboard`
+5. after all tags are processed, `UserRequest.process_tags()` appends the collected context blocks once at the end of the expanded prompt
 
 The original prompt remains the user-visible message stored in conversation history.
 
@@ -38,5 +41,5 @@ The original prompt remains the user-visible message stored in conversation hist
 Context belongs to the conversation in which it was added.
 
 - it remains available in `context_history` for UI rendering
-- the embedded form remains part of the expanded prompt for that request
+- the embedded form remains part of the expanded prompt for that request, appended after the user-facing instruction text
 - a new conversation starts with no prior context

@@ -17,6 +17,9 @@ class UserRequest:
         self.original_prompt = original_prompt  # The original text from the user (may contain @ tags and / commands)
         self.expanded_prompt = original_prompt  # Expanded text (may no longer contain @ tags or / commands)
         self.context = ""                       # Additional context to append
+        self._context_blocks = []               # Context blocks to append after tag replacement
+        self._context_block_names = set()        # Avoid duplicate appended blocks within one request
+        self._current_tag_start = None           # Original position of tag currently being expanded
         self.needs_image = False                # Whether image generation is needed
         self.images = []                        # PIL Images to pass to the agent (e.g. clipboard images)
         self.speed_level = None                 # Speed preference for this request if provided
@@ -94,6 +97,31 @@ class UserRequest:
         
         return shortcuts
 
+    def add_context_block(self, context_name: str, body: str, label: str | None = None) -> None:
+        """Append a full context block once while replacing tags with inline references."""
+        position = self._current_tag_start if self._current_tag_start is not None else 0
+        if context_name in self._context_block_names:
+            self._context_blocks = [
+                (min(existing_position, position), block)
+                if f"--- end context:{context_name} ---" in block else (existing_position, block)
+                for existing_position, block in self._context_blocks
+            ]
+            self.context = "\n\n".join(
+                block for _, block in sorted(self._context_blocks, key=lambda item: item[0])
+            )
+            return
+        self._context_block_names.add(context_name)
+        header = f"context:{context_name}"
+        if label:
+            header = f"{header} ({label})"
+        self._context_blocks.append((
+            position,
+            f"--- {header} ---\n{body}\n--- end context:{context_name} ---",
+        ))
+        self.context = "\n\n".join(
+            block for _, block in sorted(self._context_blocks, key=lambda item: item[0])
+        )
+
     def process_tags(self, plugins, conversation, debug_logger=None, debug_exception=None, prefix_index=None):
         """
         Process the user prompt through all registered TagPlugins.
@@ -120,6 +148,7 @@ class UserRequest:
                 for prefix, plugin in prefix_index:
                     if shortcut_text.startswith(prefix):
                         try:
+                            self._current_tag_start = start
                             replacement = plugin.expand(shortcut_text, conversation, self)
                             self.expanded_prompt = (
                                 self.expanded_prompt[:start]
@@ -132,6 +161,8 @@ class UserRequest:
                             if debug_logger:
                                 debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
                             return False
+                        finally:
+                            self._current_tag_start = None
                         matched = True
                         break
                 if matched:
@@ -140,6 +171,7 @@ class UserRequest:
             for plugin in plugins:
                 if any(shortcut_text.startswith(prefix) for prefix in plugin.get_prefixes()):
                     try:
+                        self._current_tag_start = start
                         replacement = plugin.expand(shortcut_text, conversation, self)
                         self.expanded_prompt = (
                             self.expanded_prompt[:start]
@@ -152,7 +184,11 @@ class UserRequest:
                         if debug_logger:
                             debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
                         return False
+                    finally:
+                        self._current_tag_start = None
                     break  # Stop checking other plugins for this shortcut
+        if self._context_blocks:
+            self.expanded_prompt = f"{self.expanded_prompt.rstrip()}\n\n{self.context}"
         return True
 
     # Maintain backwards-compatibility name

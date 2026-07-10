@@ -27,6 +27,9 @@ class URLTag(TagPlugin):
             "url",
             content,
         )
+        if request is not None:
+            request.add_context_block(context_name, content)
+            return f"context:{context_name}"
         return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---"
 
     # ------------------------------------------------------------------

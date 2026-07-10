@@ -68,8 +68,10 @@ class TagPlugin:
 
         1. The plugin should call `conversation.add_context(...)` as needed to
            store any additional data (clipboard text, file content, etc.).
-        2. It must return the string that will replace the original tag in the
-           user prompt (e.g. the context name returned by `add_context`).
+        2. For text context, the plugin should call `request.add_context_block(...)`
+           and return an inline reference such as `context:clipboard`.
+        3. It must return the string that will replace the original tag in the
+           user prompt.
         """
         raise NotImplementedError 
 

@@ -48,6 +48,32 @@ def test_clipboard_tag_context_block(app_mocked, monkeypatch):
     
     expanded = expanded_prompts[0]
     assert "TEST_TOKEN" in expanded, f"Expanded prompt should contain clipboard content, got: {expanded[:200]}"
+    assert "Summarize the text in context:clipboard" in expanded
+    assert expanded.count("--- context:clipboard ---") == 1
+
+
+def test_repeated_clipboard_tag_reuses_context_block(app_mocked, monkeypatch):
+    app_mocked.ui.read_clipboard = lambda: "TEST_TOKEN"
+    app_mocked.ui.read_clipboard_image = lambda: None
+
+    expanded_prompts = []
+
+    def capture_prompt(prompt, **kwargs):
+        expanded_prompts.append(prompt)
+
+    mock_agent = MockAgent(run_callback=capture_prompt)
+
+    from macllm.core import agent_service
+    monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: mock_agent)
+
+    app_mocked.chat_history.submit("Compare @clipboard with @clipboard")
+
+    time.sleep(0.1)
+
+    expanded = expanded_prompts[0]
+    assert expanded.startswith("Compare context:clipboard with context:clipboard")
+    assert expanded.count("--- context:clipboard ---") == 1
+    assert expanded.count("TEST_TOKEN") == 1
 
 
 def test_clipboard_tag_image(app_mocked, monkeypatch):

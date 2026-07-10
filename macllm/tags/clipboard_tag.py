@@ -11,6 +11,11 @@ class ClipboardTag(TagPlugin):
         return ["@clipboard"]
 
     def expand(self, tag: str, conversation, request):
+        cached_context_name = getattr(request, "_clipboard_text_context_name", None)
+        if cached_context_name:
+            request.add_context_block(cached_context_name, getattr(request, "_clipboard_text_context", ""))
+            return f"context:{cached_context_name}"
+
         context_count = len(conversation.context_history)
         if context_count == 0:
             source_name = "clipboard"
@@ -26,7 +31,10 @@ class ClipboardTag(TagPlugin):
                 content,
                 icon="📋",
             )
-            return f"\n\n--- context:{context_name} ---\n{content}\n--- end context:{context_name} ---" 
+            request._clipboard_text_context_name = context_name
+            request._clipboard_text_context = content
+            request.add_context_block(context_name, content)
+            return f"context:{context_name}"
 
         image = self.ui.read_clipboard_image()
         if image is not None:
