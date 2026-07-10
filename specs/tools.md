@@ -13,8 +13,9 @@ The main design choice is that tools are the operational boundary of the agent s
 - agents decide what work to do
 - tools perform the concrete work
 - tool names are the stable contract between agent configuration and implementation
+- tools are the only way external data reaches an agent after a user request starts
 
-Tools return human-readable strings. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
+Tools return observations. A plain string is a text observation. Tools may also return image-bearing observations through the macLLM tool-result path when the model needs to see an image. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
 
 ## Tool Families
 
@@ -22,6 +23,7 @@ The current tool set is organized by domain:
 
 - general utilities such as web search and web page fetch
 - note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
+- direct local-source tools such as `read_clipboard`, `read_file`, `capture_selection`, and `capture_window`
 - calendar tools for scheduling and event lookup
 - Things tools for task management
 - skill tools such as `read_skill`
@@ -41,15 +43,16 @@ Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapp
 ## Families (structural)
 
 - General — e.g. web search and web page fetch.
-- Files — Mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
+- Files — general local file reads via `read_file`, plus mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
+- Local device — clipboard and screenshot tools such as `read_clipboard`, `capture_selection`, and `capture_window`.
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
 - Memory — `remember` appends to a daily markdown file for long-term recall.
 
-## Threading and conversation context
+## Threading and owning conversation
 
-Tools run on agent background threads. They resolve the owning `Conversation` through `get_current_conversation()` from `macllm/core/context.py`. Resolution order: optional explicit `conv_id` (string UUID on each conversation, looked up in a small process-wide registry), else the thread-local set at agent thread entry via `set_current_conversation`, else `MacLLM._instance.chat_history` for main-thread callers such as tag plugins. The `@macllm_tool` wrapper captures `conv_id` at invocation time so `set_tool_message` targets the correct tab even when the UI focus changes. Tools do not manage threading themselves.
+Tools run on agent background threads. They resolve the owning `Conversation` through the shared conversation resolver. Resolution order: optional explicit `conv_id` (string UUID on each conversation, looked up in a small process-wide registry), else the agent-thread binding, else `MacLLM._instance.chat_history` for main-thread callers. The `@macllm_tool` wrapper captures `conv_id` at invocation time so `set_tool_message` targets the correct tab even when the UI focus changes. Tools do not manage threading themselves.
 
 ## Side effects
 
@@ -57,15 +60,28 @@ Tools that need user approval (e.g., `run_command`) set `conversation.pending_ap
 
 ## Boundaries
 
-Tools are not tag plugins. User @ expansion happens before the agent; tools operate on the expanded task and return string observations to the agent loop.
+Tools are not tag plugins. Tag plugins may rewrite user shorthand before the agent runs, but they do not read external data. Tools operate during the agent loop and return observations to the agent loop.
 
 Current export surface: see macllm/tools/__all__ for the authoritative name list.
 
+## Observations
+
+Every tool call returns one observation.
+
+- A text-only observation may be a plain string.
+- An image-bearing observation contains human-readable text plus one or more images for the next model step.
+- The agent receives observations only through the tool-call loop. Initial user requests do not carry attached files, attached images, or preloaded text payloads.
+- Existing string-returning tools remain valid and are treated as text-only observations.
+
+## Sources
+
+Tools that directly read an external item may add a Source for UI display. Only direct reads count: search, listing, discovery, folder traversal, and result enumeration do not add Sources. Sources are display metadata only; they do not affect tool execution or model input.
+
 ## Web Search And Fetch
 
-`web_search(queries)` searches Brave and returns compact results. Each result with a URL is registered on the current `Conversation` and shown to the agent as a synthetic reference such as `web://example.com/1`, plus the result title and snippet. The real URL is stored privately in the conversation registry and is not returned in the search output.
+`web_search(queries)` searches Brave and returns compact results with titles, snippets, and URLs or short fetchable references.
 
-`web_fetch(ref, start=0)` resolves a `web://...` reference, fetches the real URL, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Cleaned page text is cached on the registry entry after the first fetch so later chunks are stable and avoid repeated downloads. Stored cleaned text is capped at 100,000 characters per page.
+`web_fetch(url_or_ref, start=0)` fetches the requested page, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Fetching a page is a direct read and adds a web Source. Merely seeing a URL in search results does not add a Source.
 
 If a fetch result is not complete, it begins with a compact range marker:
 

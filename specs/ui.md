@@ -8,7 +8,7 @@ The UI layer is responsible for:
 
 - application and window lifecycle
 - rendering conversation state
-- presenting context, model, and status metadata
+- presenting Sources, model, and status metadata
 - handling text input, pills, and autocomplete
 - coordinating history browsing
 
@@ -19,7 +19,7 @@ The main coordinator is `MacLLMUI` in `macllm/ui/core.py`.
 The UI is split into a few focused parts:
 
 - `MacLLMUI` coordinates window creation, layout, updates, and high-level user actions
-- `TopBarHandler` renders the top metadata strip, including context pills and model/token information
+- `TopBarHandler` renders the top metadata strip, including Sources and model/token information
 - `MainTextHandler` renders the regular conversation view; `DebugWindow` renders the separate debug log window from the same conversation state
 - `InputFieldHandler` and `InputFieldDelegate` manage text editing, pills, commands, and autocomplete
 - `AutocompleteController` provides token suggestions and selection behavior
@@ -44,7 +44,7 @@ The main conversation view is a text-based rendering pipeline. `ConversationLog`
 - live state such as pending approvals and pending user input may still be read from current conversation fields until appended to the log
 - UI code interprets log entry kinds and payloads; agent/core code does not create UI-specific rows
 
-The UI reads recorded conversation facts rather than reconstructing requests from expanded prompts or calling agent/tool code.
+The UI reads recorded conversation facts rather than reconstructing requests from rewritten prompts or calling agent/tool code.
 
 ## Input Model
 
@@ -64,19 +64,21 @@ When the user presses Enter while an agent is running in the active tab, the tex
 
 Aborting is an explicit gesture: Cmd-Enter or Ctrl-C. Cmd-Enter aborts the running agent and, if there is text in the input, submits it as the next query. Ctrl-C aborts the running agent without submitting any text. A static "Interrupted." assistant message appears immediately when the agent is aborted — no LLM call is made.
 
-The key design choice is that displayed text and inserted raw token text can differ. The user sees a short pill label, but the input field retains the underlying token needed for later parsing and expansion.
+The key design choice is that displayed text and inserted raw token text can differ. The user sees a short pill label, but the input field retains the underlying token needed for later parsing and rewriting. Pills are input affordances only; they do not carry external data into the request.
 
-## Top Bar and Status
+## Top Bar, Sources, And Status
 
 The top bar is the compact summary of the current conversation state.
 
 It shows:
 
 - branding and window identity
-- recent context pills
+- recent Sources
 - model and token metadata (read from `conversation.usage`)
 
 The menu bar shows a static "LLM" label. Per-tab running state is conveyed by indicators on the tab bar, not the menu bar.
+
+Sources are records of external items that tools actually read. Render newest-first, up to 12, as single-line tiles with short labels and file/note/web/clipboard icons. Web Sources open in the browser, file and note Sources open with the macOS default app when possible, and clipboard Sources are not clickable.
 
 ## Tab Bar
 

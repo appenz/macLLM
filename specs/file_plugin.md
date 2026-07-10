@@ -2,17 +2,17 @@
 
 ## Overview
 
-`FileTag` is both a request-expansion plugin and the indexing backend for file-related agent tools.
+`FileTag` is the file input-sugar and indexing backend for file-related agent tools.
 
 This is the key design choice in the file subsystem: one component owns:
 
-- path-style `@...` expansion
+- path-style `@...` autocomplete and prompt rewriting
 - indexed-file autocomplete
 - semantic search over indexed files
 - the shared index used by note tools
 - mount-point management (logical names for indexed directories)
 
-That keeps file discovery, file context injection, and tool path resolution consistent.
+That keeps file discovery, autocomplete, and tool path resolution consistent. Reading file contents belongs to tools.
 
 ## Mount Points
 
@@ -30,7 +30,7 @@ Each entry maps a logical mount name to an absolute directory path. The legacy l
 
 ## Path Model
 
-All note tools operate on **mount-relative paths** — e.g. `Private/todo.md` or `Work/projects/plan.md`. This keeps paths short, unambiguous across multiple roots, and avoids leaking absolute filesystem paths into agent context.
+All note tools operate on **mount-relative paths** — e.g. `Private/todo.md` or `Work/projects/plan.md`. This keeps paths short and unambiguous across multiple roots.
 
 `FileTag` provides two classmethods for translation:
 
@@ -50,21 +50,20 @@ When an agent needs the real filesystem path (e.g. to pass to an external tool l
 - caches embedding state to disk
 - supports explicit rebuild through `/reindex`
 
-The index is global to the running app and shared by autocomplete, context expansion, and note tools.
+The index is global to the running app and shared by autocomplete and note tools.
 
 Semantic indexing loads the embedding model from the app-managed local copy
 installed and verified by `make install`.
 
 ## Request Model
 
-The file plugin handles two different request patterns.
+The file plugin handles input ergonomics only.
 
-- path tags such as `@/...` and `@~/...` expand to inline context references and append file content to the request context block section
-- generic `@...` autocomplete can resolve to indexed files by basename match
+- path tags such as `@/...` and `@~/...` rewrite to plain prompt text that preserves the path and tells the model to call `read_file(path)` if it needs to read the file
+- generic `@...` autocomplete can resolve to indexed files by basename match and insert a raw path token
+- directory shortcuts such as `@home` may grant directory access for tools such as shell or `read_file`, but do not read files
 
-When a file is expanded into a request, `FileTag` reads the file, registers it in `Conversation.context_history`,
-returns an inline `context:<name>` reference, and registers the full context block on `UserRequest`.
-`UserRequest.process_tags()` appends those blocks once after all inline replacements are complete.
+The file plugin must not read file contents or load image files. Text files and image files are read by `read_file(path)`, which returns an observation during the agent loop.
 
 ## Autocomplete Model
 
@@ -79,7 +78,7 @@ does not start with one of its explicit path prefixes.
 Display and insertion are intentionally different:
 
 - the UI shows a short basename-oriented display string
-- the raw inserted token preserves the full path so expansion later has exact file identity
+- the raw inserted token preserves the full path so the rewritten prompt can contain the exact `read_file(path)` argument
 
 ## Relationship to Note Tools
 
@@ -87,7 +86,17 @@ The note tools in `macllm/tools/note.py` depend on the mount-point and indexed-d
 
 Two boundaries matter:
 
-- `FileTag` owns discovery, autocomplete, context expansion, semantic search, and mount-point path translation
+- `FileTag` owns discovery, autocomplete, input rewriting, semantic search, and mount-point path translation
 - note tools own read/write/move/delete operations, folder management, folder search, and path resolution — validating that all paths stay inside mounted directories
 
-This means the file plugin is not just a UI convenience layer. It is also the discovery, search, and path-resolution backend for the note-tool subsystem.
+This means the file plugin is not just a UI convenience layer. It is also the discovery, search, and path-resolution backend for the note-tool subsystem. Direct file payload access still happens through tools.
+
+## Direct File Reads
+
+General user-file reads are handled by `read_file(path, start=0, max_chars=...)` in the tools layer.
+
+- Text files return bounded text observations, with truncation markers when more content is available.
+- Image files return image-bearing observations.
+- Successful direct file reads add a file Source to the conversation.
+- Search results, folder listings, autocomplete suggestions, and directory traversal do not add Sources.
+- The tool enforces the file access policy. The tag plugin does not bypass that policy.

@@ -5,11 +5,11 @@
 Conversation state in macLLM is split across three layers:
 
 - persistent conversation state in `Conversation`
-- transient per-request expansion state in `UserRequest`
+- transient per-request rewrite state in `UserRequest`
 - agent execution state in `agent.memory.steps`
 
 This split is the main architectural decision in the subsystem. The UI-visible conversation, the
-expanded prompt, and the internal agent trace are related, but they are not the same object.
+rewritten prompt, and the internal agent trace are related, but they are not the same object.
 
 ## Conversation Model
 
@@ -18,7 +18,7 @@ expanded prompt, and the internal agent trace are related, but they are not the 
 It stores:
 
 - `messages` for user-visible conversation history
-- `context_history` for context pills and previews
+- `sources` for the UI Sources strip
 - `speed_level`
 - `agent_cls`
 - `agent`
@@ -31,26 +31,27 @@ It stores:
 
 `ConversationHistory` is a container for `Conversation` objects. It tracks which conversation is active via `active_index`. The tab bar displays recent conversations and the user can switch between them freely, even while agents are running in other tabs.
 
-## Submit and Request Expansion
+## Submit and Request Rewriting
 
 The UI calls `conversation.submit(query)` directly. The conversation handles the full lifecycle:
 
 1. If the agent is running, the text is appended to `pending_input` (joined with newlines) and processed as a single query after the current run.
-2. Skills and tag plugins expand the prompt into `UserRequest.expanded_prompt`. All `/` commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
+2. Skills and tag plugins rewrite the prompt into the text sent to the agent. All `/` commands (including `/reload` and `/reindex`) are handled as tag plugins at this stage.
 3. The original prompt is appended to `Conversation.messages` for UI/history.
-4. If the expanded prompt is non-empty, the agent runs on a background thread.
+4. If the rewritten prompt is non-empty, the agent runs on a background thread.
 
-`MacLLM` is not in this path. `Conversation.messages` is primarily UI/history state, not the exact payload sent to the agent.
+`MacLLM` is not in this path. `Conversation.messages` is primarily UI/history state, not necessarily the exact instruction text sent to the agent.
 
-## Context State
+## Sources
 
-Context added by plugins is tracked separately from message history.
+Sources are UI metadata for external items that tools actually read.
 
-- `Conversation.context_history` stores named context entries for UI pills and previews
-- `Conversation.add_context(...)` deduplicates by source and returns the actual context name
-- plugins may also embed that context into `UserRequest.expanded_prompt`
+- `Conversation.sources` stores short source records for the top-bar Sources strip
+- `Conversation.add_source(...)` records kind, label, optional URL, optional path, and display icon
+- tools call `add_source(...)` only after a successful direct read
+- plugins never add Sources because they do not read external data
 
-This keeps UI context management separate from stored chat text.
+Only direct reads count. Search results, folder listings, autocomplete suggestions, and directory traversal do not add Sources.
 
 ## Agent Runtime State
 
@@ -59,11 +60,11 @@ Each `Conversation` owns its complete agent runtime: the agent instance, the bac
 `Conversation._create_agent()` rebuilds the agent through `create_agent(...)` in `macllm/core/agent_service.py`.
 When an agent is recreated, existing `agent.memory.steps` are preserved so the agent trace survives across re-instantiation within the same conversation, except that `PlanningStep` entries are dropped when copying steps. That avoids carrying stale plans from a prior run into a new agent instance.
 
-Before each `agent.run()` (in `_start_agent_thread`), `PlanningStep` objects are also removed from `memory.steps` while keeping `TaskStep` and `ActionStep` history. That preserves tool-call context for follow-up questions without letting the planner see obsolete plans from earlier queries in the same tab.
+Before each `agent.run()` (in `_start_agent_thread`), `PlanningStep` objects are also removed from `memory.steps` while keeping `TaskStep` and `ActionStep` history. That preserves tool-call history for follow-up questions without letting the planner see obsolete plans from earlier queries in the same tab.
 
 Runtime facts that need durable chronological rendering are projected into `Conversation.conversation_log` as compact primitive entries. This includes run start/end facts and accessible smolagents step facts from the shared step callback for both supervisor agents and managed subagents. Core records these as conversation facts, not as UI/debug-specific state.
 
-`Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. Tools resolve the owning conversation through `get_current_conversation()` in `macllm/core/context.py` (see `specs/tools.md`).
+`Conversation.is_agent_running()` checks whether the agent thread is alive. Multiple conversations can have running agents simultaneously. Tools resolve the owning conversation through the shared conversation resolver (see `specs/tools.md`).
 
 ### Pending Input
 

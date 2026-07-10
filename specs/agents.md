@@ -57,12 +57,13 @@ skills = ["organize-notes", "format-markdown"]
   agents. Users can override per-agent in `~/.config/macllm/config.toml`.
 - `skills` -- list of skill names the agent can access via `read_skill`. When present, the agent
   receives a filtered skill catalog in its system prompt and `read_skill` is auto-added to its
-  tool set. An empty or absent list means no skill access (unless the agent already has `read_skill`
-  in its `macllm_tools`, in which case it sees all model-invocable skills).
+  tool set. The skill bodies are not baked into the prompt; the agent reads them on demand by
+  calling `read_skill`. An empty or absent list means no skill access (unless the agent already
+  has `read_skill` in its `macllm_tools`, in which case it sees all model-invocable skills).
 - `preload_skill` -- name of a skill whose body is appended to the agent's instructions when
   that agent is constructed. For top-level agents this is at conversation agent creation; for **managed**
   subagents this happens when the subagent is **first materialized** (lazy), i.e. on first delegation.
-  The skill content is baked into the system prompt, so it is always available as context
+  Only this preload skill is baked into the system prompt, so it is always available as instructions
   without the agent needing to call `read_skill`. This is useful for user-specific preferences or
   conventions that should always apply (e.g. note formatting rules, calendar defaults). The skill
   is resolved via `SkillsRegistry.get()`, so even skills with `disable-model-invocation: true`
@@ -89,17 +90,18 @@ is recorded by smolagents in `agent.memory.steps` and rendered by the UI from th
 
 Each agent’s system prompt includes **The user's current time & location** (`user_situation` in
 `macllm/agents/prompts/default.yaml`): local date/time with IANA time zone and approximate GPS plus
-reverse-geocoded place text when available. This is assembled in `get_device_context()` in
-`macllm/core/device_context.py` and injected by `MacLLMAgent.initialize_system_prompt()` (not via a tool).
+reverse-geocoded place text when available. This is assembled by the device situation helper and
+injected by `MacLLMAgent.initialize_system_prompt()` (not via a tool).
 
 ## Threading Model
 
 Each conversation runs its agent on its own background thread. Multiple conversations can have
-agents running simultaneously. The agent thread is set up with a thread-local conversation
-context so that tools and step callbacks automatically route to the correct conversation.
+agents running simultaneously. The agent thread is bound to the owning conversation so that tools
+and step callbacks automatically route to the correct conversation.
 
 Agents themselves are not aware of multi-threading. They run the same smolagents tool-calling
-loop as before. Routing of tools to the correct tab uses `macllm/core/context.py`; see `specs/overview.md` (Parallel Tab Execution) and `specs/tools.md` (Threading and conversation context).
+loop as before. Routing of tools to the correct tab uses the shared conversation resolver; see
+`specs/overview.md` (Parallel Tab Execution) and `specs/tools.md` (Threading and owning conversation).
 
 ## Current Agent Topology
 

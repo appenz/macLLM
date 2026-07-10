@@ -24,7 +24,7 @@ It combines three layers of protection:
 - `macllm/core/chat_history.py` / `Conversation` — directory grant tracking
 - `macllm/core/user_interaction.py` — pending approval state for user-facing tool interactions
 - `macllm/ui/main_text.py` — inline approval rendering and keyboard handling
-- `macllm/tags/file_tag.py` — directory `@`-mention expansion (register granted dirs on conversation)
+- `macllm/tags/file_tag.py` — directory `@`-mention rewriting (register granted dirs on conversation)
 - `macllm/tools/__init__.py` — export `run_command`
 
 ## Command Whitelist
@@ -42,7 +42,7 @@ When the agent calls `run_command`, the tool:
 
 ### Approval Flow
 
-The tool sets `conversation.pending_approval` (accessed via thread-local context) and blocks on `pending_approval.event.wait()`. The UI renders the approval prompt inline in the conversation view.
+The tool sets `conversation.pending_approval` (resolved through the owning conversation for the running agent thread) and blocks on `pending_approval.event.wait()`. The UI renders the approval prompt inline in the conversation view.
 It shows the full command, highlights the unrecognized executables, and offers three keyboard-driven options:
 
 - **[R]un once** — execute this command but don't remember the executable
@@ -97,7 +97,7 @@ For convenience, the file tag plugin recognizes shortcut prefixes:
 - `@downloads` → `~/Downloads/`
 - `@documents` → `~/Documents/`
 
-These expand like any other `@` directory mention and grant access to the corresponding path.
+These rewrite like any other `@` directory mention and grant access to the corresponding path.
 
 ### Sandbox Profile (Read-Only System Paths)
 
