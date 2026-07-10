@@ -17,6 +17,8 @@ class MacLLMDefaultAgent(MacLLMAgent):
     macllm_tools = [
         "web_search",
         "web_fetch",
+        "read_clipboard",
+        "read_file",
         "run_command",
         "read_skill",
         "remember",

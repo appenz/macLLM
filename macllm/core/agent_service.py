@@ -99,6 +99,20 @@ def create_step_callback(conversation: Conversation | None = None):
             should_notify = True
 
         if isinstance(step, ActionStep) and conversation is not None:
+            pending_images = conversation.take_observation_images()
+            if pending_images:
+                from macllm.core.llm_service import model_supports_vision
+                speed = getattr(conversation, "speed_level", "normal")
+                if model_supports_vision(speed):
+                    existing = list(getattr(step, "observations_images", None) or [])
+                    step.observations_images = existing + pending_images
+                else:
+                    note = (
+                        "\n[Image observation omitted: current model does not support vision.]"
+                    )
+                    obs = getattr(step, "observations", None) or ""
+                    step.observations = f"{obs}{note}" if obs else note.strip()
+
             is_parent = (agent is conversation.agent)
             step_done = (getattr(step, 'observations', None) is not None
                          or getattr(step, 'error', None) is not None)

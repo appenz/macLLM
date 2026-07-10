@@ -78,8 +78,8 @@ The agent has access to the following tools:
 
 | Tool                      | Description                                                                          |
 | ------------------------- | ------------------------------------------------------------------------------------ |
-| **web_search**            | Searches the web via Brave Search and returns compact `web://domain/n` result refs. |
-| **web_fetch**             | Fetches readable page text for a `web://domain/n` ref in 10k-character chunks.      |
+| **web_search**            | Searches the web via Brave Search and returns URLs, titles, and snippets.            |
+| **web_fetch**             | Fetches readable page text for a URL in 10k-character chunks.                        |
 | **search_notes**          | Semantic search across your indexed notes.                                           |
 | **read_note**             | Reads the full content of an indexed note.                                           |
 | **note_append**           | Appends text to an existing note.                                                    |
@@ -121,7 +121,7 @@ When typing `@` followed by 3+ characters, autocomplete suggests matching notes 
 
 When the agent needs current information, it uses the `web_search` tool backed by the Brave Search API. This happens automatically — just ask a question that requires up-to-date information, like opening hours, recent events, or current statistics.
 
-Search results include short `web://domain/n` references, titles, and snippets. The real source URLs are kept in the current conversation rather than exposed directly to the agent. If the agent needs the full page, it calls `web_fetch` with the `web://...` reference. `web_fetch` returns up to 10,000 characters at a time and can continue from a later character offset if the page is longer, up to a 100,000-character page cap.
+Search results include real URLs, titles, and snippets. If the agent needs the full page, it calls `web_fetch` with the URL. `web_fetch` returns up to 10,000 characters at a time and can continue from a later character offset if the page is longer, up to a 100,000-character page cap.
 
 Requires `BRAVE_API_KEY` to be set.
 
@@ -145,23 +145,22 @@ macLLM can also work with your local [Things](https://culturedcode.com/things/) 
 
 To use write actions, enable Things URLs in Things settings so an auth token is present.
 
-## Tags — Referencing External Data
+## Tags — Input Sugar for Tools
 
-Tags start with `@` and attach external data as context for the conversation:
+Tags start with `@` and rewrite into prompt instructions that name the relevant tool.
+They do not embed data into the request; the agent must call the tool to read anything.
 
 
 | Tag          | Description                                                |
 | ------------ | ---------------------------------------------------------- |
-| `@clipboard` | Current clipboard content (text or image)                  |
-| `@window`    | Screenshot of a desktop window (click to select)           |
-| `@selection` | Screenshot of a selected screen area                       |
-| `@<path>`    | Any file — path must start with `/` or `~`                 |
-| `@<url>`     | Web page reference — must start with `http://` or `https://`; page text is fetched with `web_fetch` |
+| `@clipboard` | Instructs the agent to call `read_clipboard()` (text or image) |
+| `@<path>`    | Any file — path must start with `/` or `~`; use `read_file` |
+| `@<url>`     | Web page — must start with `http://` or `https://`; use `web_fetch` |
 
 
-Tags can be used inline: "translate @clipboard into French" or "summarize the slide @window".
+Tags can be used inline: "translate @clipboard into French" or "summarize @~/notes/todo.md".
 
-Context items persist for the entire conversation and are shown as pills in the top bar. Starting a new conversation (⌘N) clears them.
+Successful direct tool reads appear as Sources in the top bar. Starting a new conversation (⌘N) clears them.
 
 Quoted forms like `@"~/My Notes/file.md"` are supported for paths with spaces.
 

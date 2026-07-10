@@ -64,14 +64,10 @@ class TagPlugin:
         raise NotImplementedError
 
     def expand(self, tag: str, conversation: Conversation, request) -> str:  # noqa: D401
-        """Expand *tag* inside *conversation*.
+        """Expand *tag* inside the rewritten prompt.
 
-        1. The plugin should call `conversation.add_context(...)` as needed to
-           store any additional data (clipboard text, file content, etc.).
-        2. For text context, the plugin should call `request.add_context_block(...)`
-           and return an inline reference such as `context:clipboard`.
-        3. It must return the string that will replace the original tag in the
-           user prompt.
+        Plugins rewrite shorthand into plain prompt text or set run options on
+        *request*. They must not read external data or attach payloads.
         """
         raise NotImplementedError 
 

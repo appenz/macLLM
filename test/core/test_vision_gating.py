@@ -1,8 +1,6 @@
-import time
 from unittest.mock import Mock, patch
 
 import pytest
-from PIL import Image
 
 from macllm.core.llm_service import model_supports_vision, _VISION_OVERRIDES, MODELS
 
@@ -38,59 +36,42 @@ class TestModelSupportsVision:
                     assert model_supports_vision("normal") is False
 
 
-class TestVisionGatingInHandleInstructions:
-    """Verify that images are stripped when the model lacks vision support."""
+class TestObservationImageVisionGating:
+    """Vision gating applies when attaching tool observation images to a step."""
 
-    def test_images_stripped_when_no_vision(self, app_mocked, monkeypatch):
-        app_mocked.ui.read_clipboard_image = lambda: Image.new("RGB", (4, 4))
-        app_mocked.ui.read_clipboard = lambda: None
+    def test_images_attached_when_vision_supported(self):
+        from PIL import Image
+        from smolagents import ActionStep
+        from smolagents.memory import Timing
+        from macllm.core.agent_service import create_step_callback
+        from macllm.core.chat_history import Conversation
 
-        captured_kwargs = []
+        conv = Conversation()
+        img = Image.new("RGB", (4, 4))
+        conv.queue_observation_images([img])
+        step = ActionStep(step_number=1, timing=Timing(start_time=0.0))
+        step.observations = "Clipboard contains an image."
 
-        class MockAgent:
-            def __init__(self):
-                self.memory = Mock(steps=[])
+        with patch("macllm.core.llm_service.model_supports_vision", return_value=True):
+            create_step_callback(conv)(step, Mock())
 
-            def run(self, prompt, **kwargs):
-                captured_kwargs.append(kwargs)
-                return "ok"
+        assert step.observations_images == [img]
 
-        from macllm.core import agent_service
-        monkeypatch.setattr(agent_service, "create_agent", lambda **kw: MockAgent())
-        monkeypatch.setattr(
-            "macllm.core.llm_service.model_supports_vision", lambda speed: False
-        )
+    def test_images_omitted_when_no_vision(self):
+        from PIL import Image
+        from smolagents import ActionStep
+        from smolagents.memory import Timing
+        from macllm.core.agent_service import create_step_callback
+        from macllm.core.chat_history import Conversation
 
-        app_mocked.chat_history.submit("Describe @clipboard")
-        time.sleep(0.2)
+        conv = Conversation()
+        img = Image.new("RGB", (4, 4))
+        conv.queue_observation_images([img])
+        step = ActionStep(step_number=1, timing=Timing(start_time=0.0))
+        step.observations = "Clipboard contains an image."
 
-        assert len(captured_kwargs) > 0
-        assert "images" not in captured_kwargs[0]
+        with patch("macllm.core.llm_service.model_supports_vision", return_value=False):
+            create_step_callback(conv)(step, Mock())
 
-    def test_images_passed_when_vision_supported(self, app_mocked, monkeypatch):
-        test_image = Image.new("RGB", (4, 4))
-        app_mocked.ui.read_clipboard_image = lambda: test_image
-        app_mocked.ui.read_clipboard = lambda: None
-
-        captured_kwargs = []
-
-        class MockAgent:
-            def __init__(self):
-                self.memory = Mock(steps=[])
-
-            def run(self, prompt, **kwargs):
-                captured_kwargs.append(kwargs)
-                return "ok"
-
-        from macllm.core import agent_service
-        monkeypatch.setattr(agent_service, "create_agent", lambda **kw: MockAgent())
-        monkeypatch.setattr(
-            "macllm.core.llm_service.model_supports_vision", lambda speed: True
-        )
-
-        app_mocked.chat_history.submit("Describe @clipboard")
-        time.sleep(0.2)
-
-        assert len(captured_kwargs) > 0
-        assert "images" in captured_kwargs[0]
-        assert captured_kwargs[0]["images"][0] is test_image
+        assert not getattr(step, "observations_images", None)
+        assert "does not support vision" in step.observations

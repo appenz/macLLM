@@ -95,12 +95,14 @@ class TestFindFolder:
 
 
 class TestViewFolderStructure:
-    def test_shows_all_notes(self, file_env):
+    def test_shows_folders_not_notes(self, file_env):
         result = view_folder_structure()
 
-        assert "alpha.md" in result
-        assert "beta.txt" in result
-        assert "gamma.md" in result
+        assert f"{MOUNT_NAME}/" in result
+        assert "subdir/" in result
+        assert "alpha.md" not in result
+        assert "beta.txt" not in result
+        assert "gamma.md" not in result
 
     def test_shows_mount_name_as_root(self, file_env):
         result = view_folder_structure()
@@ -120,8 +122,7 @@ class TestViewFolderStructure:
         result = view_folder_structure()
         assert "No folders" in result
 
-    def test_shows_note_count(self, file_env):
+    def test_empty_mount_still_lists_root(self, file_env):
         result = view_folder_structure()
-        assert "alpha.md" in result
-        assert "beta.txt" in result
-        assert "gamma.md" in result
+        assert f"{MOUNT_NAME}/" in result
+        assert "subdir/" in result

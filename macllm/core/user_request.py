@@ -1,154 +1,100 @@
 class UserRequest:
     """
     Represents a user request that can be processed by macLLM plugins.
-    
-    This class holds the original user prompt and tracks how it gets transformed
-    as plugins expand @ tags and add context. It also tracks whether image
-    generation is needed for the final LLM request.
+
+    Holds the original user prompt and tracks how it is rewritten as plugins
+    expand @ tags into plain instructions or run options. External data is not
+    attached here; tools return observations during the agent loop.
     """
-    
+
     def __init__(self, original_prompt: str):
         """
         Initialize a new user request.
-        
+
         Args:
             original_prompt: The original text from the user (may contain @ tags and / commands)
         """
-        self.original_prompt = original_prompt  # The original text from the user (may contain @ tags and / commands)
-        self.expanded_prompt = original_prompt  # Expanded text (may no longer contain @ tags or / commands)
-        self.context = ""                       # Additional context to append
-        self._context_blocks = []               # Context blocks to append after tag replacement
-        self._context_block_names = set()        # Avoid duplicate appended blocks within one request
-        self._current_tag_start = None           # Original position of tag currently being expanded
-        self.needs_image = False                # Whether image generation is needed
-        self.images = []                        # PIL Images to pass to the agent (e.g. clipboard images)
-        self.speed_level = None                 # Speed preference for this request if provided
-        self.agent_name = None                  # Agent type for this request (set by @agent: tag)
-        self.no_tools = False                   # Disable tools/subagents for this query (/notool)
-    
+        self.original_prompt = original_prompt
+        self.expanded_prompt = original_prompt
+        self.speed_level = None
+        self.agent_name = None
+        self.no_tools = False
+
     @classmethod
     def find_shortcuts(cls, text: str) -> list[tuple[int, int, str]]:
         """
         Find all tags/commands in the text and return their positions and content.
-        
+
         Returns list of (start_pos, end_pos, tag_text) tuples.
         Tags/commands are identified by:
         1. @ or / followed by non-whitespace characters until whitespace
         2. @" or /" followed by characters until " or newline
         3. @ or / followed by characters with backslash-escaped spaces
-        
-        Args:
-            text: The text to search for tags/commands
-            
-        Returns:
-            List of (start_pos, end_pos, tag_text) tuples
         """
         shortcuts = []
         i = 0
         n = len(text)
-        
+
         while i < n:
-            # Find next @ or /
             while i < n and text[i] != '@' and text[i] != '/':
                 i += 1
-            
+
             if i >= n:
                 break
-                
+
             start = i
-            prefix_char = text[i]  # '@' or '/'
-            
-            # Check for quoted tag @" or /"
+            prefix_char = text[i]
+
             if i + 1 < n and text[i + 1] == '"':
-                i += 2  # Skip @" or /"
+                i += 2
                 quote_start = i
                 while i < n and text[i] != '"' and text[i] != '\n':
                     i += 1
                 if i < n and text[i] == '"':
-                    # Strip quotes: keep prefix but remove the surrounding quotes
                     shortcut_content = text[quote_start:i]
                     shortcut_text = prefix_char + shortcut_content
                     shortcuts.append((start, i + 1, shortcut_text))
                     i += 1
                 else:
-                    # Unclosed quote - treat as regular tag
                     shortcut_content = text[quote_start:i]
                     shortcut_text = prefix_char + shortcut_content
                     shortcuts.append((start, i, shortcut_text))
             else:
-                # Regular tag - find end
-                i += 1  # Skip @ or /
+                i += 1
                 shortcut_chars = []
                 while i < n:
                     if text[i] == '\\' and i + 1 < n and text[i + 1].isspace():
-                        # Backslash-escaped space - add space to tag, skip backslash
-                        shortcut_chars.append(text[i + 1])  # Add the space
+                        shortcut_chars.append(text[i + 1])
                         i += 2
                     elif text[i].isspace():
-                        # Unescaped space - end of tag
                         break
                     else:
                         shortcut_chars.append(text[i])
                         i += 1
-                
-                if len(shortcut_chars) > 0:  # At least one character after @ or /
+
+                if len(shortcut_chars) > 0:
                     shortcut_text = prefix_char + ''.join(shortcut_chars)
                     shortcuts.append((start, i, shortcut_text))
-        
-        return shortcuts
 
-    def add_context_block(self, context_name: str, body: str, label: str | None = None) -> None:
-        """Append a full context block once while replacing tags with inline references."""
-        position = self._current_tag_start if self._current_tag_start is not None else 0
-        if context_name in self._context_block_names:
-            self._context_blocks = [
-                (min(existing_position, position), block)
-                if f"--- end context:{context_name} ---" in block else (existing_position, block)
-                for existing_position, block in self._context_blocks
-            ]
-            self.context = "\n\n".join(
-                block for _, block in sorted(self._context_blocks, key=lambda item: item[0])
-            )
-            return
-        self._context_block_names.add(context_name)
-        header = f"context:{context_name}"
-        if label:
-            header = f"{header} ({label})"
-        self._context_blocks.append((
-            position,
-            f"--- {header} ---\n{body}\n--- end context:{context_name} ---",
-        ))
-        self.context = "\n\n".join(
-            block for _, block in sorted(self._context_blocks, key=lambda item: item[0])
-        )
+        return shortcuts
 
     def process_tags(self, plugins, conversation, debug_logger=None, debug_exception=None, prefix_index=None):
         """
         Process the user prompt through all registered TagPlugins.
 
-        The method scans *expanded_prompt* for @tags (context) and /commands, calls the corresponding
-        plugin's *expand()* method which may add context to *conversation*, and
-        replaces the tag/command in-place with the string returned by the plugin.
-
-        Args:
-            plugins: List of TagPlugin instances.
-            conversation: The current Conversation object.
-            debug_logger: Optional debug log callback.
-            debug_exception: Optional exception log callback.
-
-        Returns:
-            bool – True on success, False if any plugin raises and we abort.
+        Scans *expanded_prompt* for @tags and /commands, calls the matching
+        plugin's *expand()* method, and replaces the token in-place with the
+        string returned by the plugin. Plugins may set run options on this
+        request; they must not attach external data payloads.
         """
         shortcuts = self.find_shortcuts(self.expanded_prompt)
 
-        # Replace from the back to preserve string offsets
         for start, end, shortcut_text in reversed(shortcuts):
             if prefix_index is not None:
                 matched = False
                 for prefix, plugin in prefix_index:
                     if shortcut_text.startswith(prefix):
                         try:
-                            self._current_tag_start = start
                             replacement = plugin.expand(shortcut_text, conversation, self)
                             self.expanded_prompt = (
                                 self.expanded_prompt[:start]
@@ -161,17 +107,13 @@ class UserRequest:
                             if debug_logger:
                                 debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
                             return False
-                        finally:
-                            self._current_tag_start = None
                         matched = True
                         break
                 if matched:
                     continue
-            # Fallback to scanning plugins in order
             for plugin in plugins:
                 if any(shortcut_text.startswith(prefix) for prefix in plugin.get_prefixes()):
                     try:
-                        self._current_tag_start = start
                         replacement = plugin.expand(shortcut_text, conversation, self)
                         self.expanded_prompt = (
                             self.expanded_prompt[:start]
@@ -184,12 +126,7 @@ class UserRequest:
                         if debug_logger:
                             debug_logger(f"Aborting request due to plugin error: {str(e)}", 2)
                         return False
-                    finally:
-                        self._current_tag_start = None
-                    break  # Stop checking other plugins for this shortcut
-        if self._context_blocks:
-            self.expanded_prompt = f"{self.expanded_prompt.rstrip()}\n\n{self.context}"
+                    break
         return True
 
-    # Maintain backwards-compatibility name
-    process_plugins = process_tags 
+    process_plugins = process_tags

@@ -161,16 +161,11 @@ class FileTag(TagPlugin):
         return True
 
     def expand(self, tag: str, conversation, request):
-        """Read the referenced file or grant a directory.
+        """Rewrite path tags into tool instructions; grant directories for tools.
 
-        For files: reads content, adds to conversation context, and returns
-        a ``context:<handle>`` replacement string.
-
-        For directories: grants sandbox access on the conversation and
-        returns a context marker noting the granted path.
-
-        For directory shortcuts (``@home``, ``@desktop``, etc.): expands
-        to the corresponding path and grants it.
+        For files: preserve the path and tell the model to call ``read_file``.
+        For directories / shortcuts: grant sandbox access and mention the path.
+        Never reads file contents or loads images.
         """
 
         if tag == self.PREFIX_REINDEX:
@@ -183,15 +178,7 @@ class FileTag(TagPlugin):
             if tag_lower == shortcut:
                 expanded_path = os.path.expanduser(shortcut_path)
                 conversation.grant_directory(expanded_path)
-                context_name = conversation.add_context(
-                    shortcut[1:],
-                    expanded_path,
-                    "directory",
-                    f"Directory access granted: {expanded_path}",
-                    icon="📂",
-                )
-                request.add_context_block(context_name, "Directory access granted.", f"directory: {expanded_path}")
-                return f"context:{context_name}"
+                return f"Directory {expanded_path} (access granted)"
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -204,48 +191,16 @@ class FileTag(TagPlugin):
 
         path_spec = os.path.expanduser(path_spec)
 
-        # If path is a directory, grant sandbox access instead of reading
         if os.path.isdir(path_spec):
             conversation.grant_directory(path_spec)
-            context_name = conversation.add_context(
-                Path(path_spec).name,
-                path_spec,
-                "directory",
-                f"Directory access granted: {path_spec}",
-                icon="📂",
-            )
-            request.add_context_block(context_name, "Directory access granted.", f"directory: {path_spec}")
-            return f"context:{context_name}"
+            return f"Directory {path_spec} (access granted)"
 
-        if Path(path_spec).suffix.lower() in self.IMAGE_EXTENSIONS:
-            from PIL import Image
-            try:
-                img = Image.open(path_spec)
-                img.load()
-            except Exception as exc:
-                FileTag._macllm.debug_exception(exc)
-                return tag
-            request.images.append(img)
-            context_name = conversation.add_context(
-                Path(path_spec).name, path_spec, "image", "[image]", icon="🖼️",
-            )
-            return f"\n\n[Attached image: {Path(path_spec).name}]"
+        # Grant the parent directory so read_file / shell can access the file.
+        parent = os.path.dirname(os.path.abspath(path_spec))
+        if parent:
+            conversation.grant_directory(parent)
 
-        try:
-            content = self._read_file(path_spec)
-        except Exception as exc:
-            FileTag._macllm.debug_exception(exc)
-            return tag
-
-        context_name = conversation.add_context(
-            Path(path_spec).name,
-            path_spec,
-            "path",
-            content,
-            icon="📁"
-        )
-        request.add_context_block(context_name, content, f"path: {path_spec}")
-        return f"context:{context_name}"
+        return f'{path_spec} (use read_file("{path_spec}") to read)'
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks

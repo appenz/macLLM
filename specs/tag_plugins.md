@@ -56,8 +56,6 @@ Data access tags are input affordances only:
 
 - `@clipboard` rewrites to `Clipboard (use read_clipboard())`
 - file path pills rewrite to text that preserves the path and points at `read_file(path)`
-- `@selection` rewrites to text that points at `capture_selection()`
-- `@window` rewrites to text that points at `capture_window()`
 
 These tags never read their targets. The agent must call the tool to receive an observation.
 

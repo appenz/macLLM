@@ -96,17 +96,16 @@ def test_display_string_for_directory(tmp_path):
 
 
 # ------------------------------------------------------------------
-# Image file tests
+# Path rewrite tests (no payload injection)
 # ------------------------------------------------------------------
 
 def _make_conversation_stub():
     conv = Mock()
-    conv.context_history = []
-    conv.add_context = Mock(return_value="img-ctx")
+    conv.grant_directory = Mock()
     return conv
 
 
-def test_expand_image_file(tmp_path):
+def test_expand_image_file_rewrites_to_read_file(tmp_path):
     img_path = tmp_path / "photo.png"
     Image.new("RGB", (4, 4), color="blue").save(str(img_path))
 
@@ -116,14 +115,12 @@ def test_expand_image_file(tmp_path):
 
     result = tag.expand(f"@{img_path}", conv, request)
 
-    assert len(request.images) == 1
-    assert isinstance(request.images[0], Image.Image)
-    assert "[Attached image: photo.png]" in result
-    conv.add_context.assert_called_once()
-    assert conv.add_context.call_args[1].get("icon") == "🖼️"
+    assert f'read_file("{img_path}")' in result
+    assert str(img_path) in result
+    conv.grant_directory.assert_called()
 
 
-def test_expand_image_file_jpeg(tmp_path):
+def test_expand_image_file_jpeg_rewrites_to_read_file(tmp_path):
     img_path = tmp_path / "pic.jpg"
     Image.new("RGB", (4, 4), color="red").save(str(img_path))
 
@@ -133,11 +130,10 @@ def test_expand_image_file_jpeg(tmp_path):
 
     result = tag.expand(f"@{img_path}", conv, request)
 
-    assert len(request.images) == 1
-    assert "[Attached image: pic.jpg]" in result
+    assert f'read_file("{img_path}")' in result
 
 
-def test_expand_text_file_not_treated_as_image(tmp_path):
+def test_expand_text_file_rewrites_to_read_file(tmp_path):
     txt_path = tmp_path / "notes.txt"
     txt_path.write_text("hello world")
 
@@ -147,9 +143,9 @@ def test_expand_text_file_not_treated_as_image(tmp_path):
 
     result = tag.expand(f"@{txt_path}", conv, request)
 
-    assert len(request.images) == 0
-    assert result == "context:img-ctx"
-    assert "hello world" in request.context
+    assert f'read_file("{txt_path}")' in result
+    assert "hello world" not in result
+    assert not hasattr(request, "context") or not getattr(request, "context", "")
 
 
 # ------------------------------------------------------------------
@@ -158,7 +154,7 @@ def test_expand_text_file_not_treated_as_image(tmp_path):
 
 @pytest.mark.external
 def test_file_image_real(app_real, tmp_path):
-    """Send a solid-red image to the real LLM and verify it identifies the color."""
+    """Send a solid-red image path; agent should call read_file and identify color."""
     import time
 
     img_path = tmp_path / "red_square.png"

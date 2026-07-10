@@ -86,7 +86,7 @@ def test_missing_api_key():
         ws_module.get_runtime_config = original_get_runtime_config
 
 
-def test_web_search_registers_refs(monkeypatch):
+def test_web_search_returns_real_urls(monkeypatch):
     reset_search_counter()
     conversation = Conversation()
     set_current_conversation(conversation)
@@ -122,15 +122,15 @@ def test_web_search_registers_refs(monkeypatch):
     finally:
         set_current_conversation(None)
 
-    assert "web://example.com/1" in result
+    assert "https://example.com/long/path?a=1" in result
     assert "Example Page" in result
     assert "Useful snippet" in result
-    assert conversation.web_pages["web://example.com/1"]["url"] == "https://example.com/long/path?a=1"
+    assert conversation.sources == []
 
 
 def test_web_fetch_returns_chunks(monkeypatch):
     conversation = Conversation()
-    ref = conversation.register_web_page("https://example.com/page")
+    url = "https://example.com/page"
     set_current_conversation(conversation)
 
     ws_module = importlib.import_module("macllm.tools.web_search")
@@ -145,8 +145,8 @@ def test_web_fetch_returns_chunks(monkeypatch):
     monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
 
     try:
-        first = web_fetch(ref)
-        second = web_fetch(ref, start=10000)
+        first = web_fetch(url)
+        second = web_fetch(url, start=10000)
     finally:
         set_current_conversation(None)
 
@@ -157,7 +157,7 @@ def test_web_fetch_returns_chunks(monkeypatch):
 
 def test_web_fetch_caps_page_text(monkeypatch):
     conversation = Conversation()
-    ref = conversation.register_web_page("https://example.com/large")
+    url = "https://example.com/large"
     set_current_conversation(conversation)
 
     ws_module = importlib.import_module("macllm.tools.web_search")
@@ -172,13 +172,12 @@ def test_web_fetch_caps_page_text(monkeypatch):
     monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
 
     try:
-        result = web_fetch(ref, start=90000)
+        result = web_fetch(url, start=90000)
     finally:
         set_current_conversation(None)
 
     assert result.startswith("[page truncated, chars 90000-100000 of 100000]\n\n")
-    assert len(conversation.web_pages[ref]["content"]) == 100000
-    assert conversation.web_pages[ref]["content_truncated"] is True
+    assert conversation.sources == [{"kind": "web", "ref": url}]
 
 
 @pytest.mark.external

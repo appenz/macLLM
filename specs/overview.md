@@ -91,7 +91,7 @@ the device situation helper — not via a tool.
 Agent tools live under `macllm/tools/` and are re-exported from `macllm/tools/__init__.py`.
 
 Tools are called by agents, not directly by the UI. They are grouped by domain, for example
-general utilities, web lookup, file operations, clipboard/screenshot operations, calendar operations, and skill access.
+general utilities, web lookup, file operations, clipboard reads, calendar operations, and skill access.
 Tools are the only way external data reaches the agent after a user request starts.
 See `specs/tools.md`, `specs/file_plugin.md`, and `specs/calendar.md`.
 

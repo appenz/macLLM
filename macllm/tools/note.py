@@ -5,6 +5,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from macllm.core.chat_history import add_source
 from macllm.tags.file_tag import FileTag
 from macllm.tools._debug import macllm_tool, set_tool_message
 
@@ -277,6 +278,7 @@ def read_note(path: str) -> str:
         with open(expanded, "r", encoding="utf-8") as f:
             content = f.read(FileTag.MAX_FULL_FILE_LEN)
         filename = Path(expanded).name
+        add_source("note", expanded)
         return f"Note: {filename}\n\n{content}"
     except Exception as e:
         _debug_log(f"read_note: failed – {e}", 2)

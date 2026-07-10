@@ -15,20 +15,16 @@ class DummyApp:
         pass
 
 
-def test_url_tag_registers_web_ref():
+def test_url_tag_rewrites_to_web_fetch_instruction():
     tag = URLTag(DummyApp())
     conversation = Conversation()
+    url = "https://example.com/some/long/path?a=1"
 
-    result = tag.expand("@https://example.com/some/long/path?a=1", conversation, None)
+    result = tag.expand(f"@{url}", conversation, None)
 
-    assert "web://example.com/1" in result
-    assert 'web_fetch("web://example.com/1")' in result
-    assert "some/long/path" not in result
-    assert conversation.web_pages["web://example.com/1"]["url"] == "https://example.com/some/long/path?a=1"
-    assert conversation.context_history[0]["context"] == (
-        "Web page reference: web://example.com/1\n"
-        'Use web_fetch("web://example.com/1") to retrieve the page text if needed.'
-    )
+    assert url in result
+    assert f'web_fetch("{url}")' in result
+    assert conversation.sources == []
 
 
 @pytest.mark.external

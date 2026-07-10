@@ -30,7 +30,7 @@ AAA
         ("@~/My Home/foo", "@~/My"),
         ("@/path/to/file.txt content", "@/path/to/file.txt"),
         ("@clipboard some text", "@clipboard"),
-        ("@window analyze this", "@window"),
+        ("@foo analyze this", "@foo"),
         
         # Rule 2: Backslash-escaped spaces are included
         (r"@~/My\ Home/foo", r"@~/My Home/foo"),

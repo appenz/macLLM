@@ -1,4 +1,6 @@
 from macllm.tools.web_search import web_search, web_fetch, reset_search_counter
+from macllm.tools.clipboard import read_clipboard
+from macllm.tools.file import read_file
 from macllm.tools.note import (
     search_notes,
     read_note,
@@ -58,6 +60,8 @@ from macllm.tools.user_input import ask_user
 __all__ = [
     "web_search",
     "web_fetch",
+    "read_clipboard",
+    "read_file",
     "search_notes",
     "read_note",
     "note_resolve_path",

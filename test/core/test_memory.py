@@ -28,7 +28,7 @@ def make_mock_conversation(agent=None):
     conv = Mock()
     conv.agent = agent if agent is not None else MockAgent()
     conv.conversation_log = []
-    conv.context_history = []
+    conv.sources = []
     conv.speed_level = "normal"
     return conv
 

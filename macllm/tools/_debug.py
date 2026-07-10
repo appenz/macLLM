@@ -10,6 +10,7 @@ import warnings
 # which we don't use. Suppress globally before any tool is registered.
 warnings.filterwarnings("ignore", message=".*has decorators other than @tool")
 
+from PIL import Image as PILImage
 from smolagents import tool as _smolagents_tool
 
 _tool_conv_id = threading.local()
@@ -54,7 +55,16 @@ def macllm_tool(fn):
 
         failed = False
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            # PIL returns are image observations: queue pixels for the step
+            # callback and give smolagents a short text observation.
+            if isinstance(result, PILImage.Image):
+                if conv is not None:
+                    conv.queue_observation_images([result])
+                return "Image observation."
+            if result is None:
+                return ""
+            return str(result)
         except Exception:
             failed = True
             if conv is not None:

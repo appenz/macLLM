@@ -5,11 +5,11 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import requests
 
+from macllm.core.chat_history import add_source
 from macllm.core.config import get_runtime_config
-from macllm.core.context import get_current_conversation
 from macllm.tools._debug import macllm_tool, set_tool_message
 
-_state = {"search_count": 0, "tool_call_counter": 0}
+_state = {"search_count": 0}
 MAX_SEARCHES_PER_RUN = 50
 MAX_PARALLEL_SEARCHES = 5
 WEB_FETCH_CHARS = 10_000
@@ -64,14 +64,9 @@ def _retrieve_url_text(url: str) -> tuple[str, bool]:
     return text[:WEB_PAGE_MAX_CHARS], truncated
 
 
-def _get_conversation():
-    return get_current_conversation()
-
-
 def _format_results(search_results: list[dict]) -> str:
-    """Format search results and register result URLs with the conversation."""
+    """Format search results with their real URLs."""
     output = []
-    conversation = _get_conversation()
     
     for item in search_results:
         query = item["query"]
@@ -89,9 +84,8 @@ def _format_results(search_results: list[dict]) -> str:
             title = result.get("title", "")
             description = result.get("description", "")
             label_parts = []
-            if url and conversation is not None:
-                ref = conversation.register_web_page(url, title=title, snippet=description)
-                label_parts.append(ref)
+            if url:
+                label_parts.append(url)
             elif title:
                 label_parts.append(title)
 
@@ -164,25 +158,22 @@ def web_search(queries: list[str]) -> str:
 
 
 @macllm_tool
-def web_fetch(ref: str, start: int = 0) -> str:
+def web_fetch(url: str, start: int = 0) -> str:
     """
-    Fetch readable text for a registered web page reference.
+    Fetch readable text for a URL.
 
     Args:
-        ref: A web page reference returned by web_search or @url expansion, e.g. "web://example.com/1".
+        url: A real http(s) URL.
         start: Zero-based character offset for fetching the next chunk.
 
     Returns:
         Up to 10,000 characters of cleaned page text. If more text is available,
         the result begins with a compact truncation line showing the returned range.
     """
-    conversation = _get_conversation()
-    if conversation is None:
-        return "Error: No active conversation for web page lookup."
-
-    entry = conversation.get_web_page(ref)
-    if entry is None:
-        return f"Error: Unknown web page reference: {ref}"
+    url = (url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return f"Error: Invalid URL: {url}"
 
     try:
         start = int(start)
@@ -191,24 +182,23 @@ def web_fetch(ref: str, start: int = 0) -> str:
     if start < 0:
         return "Error: start must be >= 0."
 
-    set_tool_message(f"Fetching {entry['ref']}")
+    set_tool_message(f"Fetching {url}")
+    try:
+        content, truncated = _retrieve_url_text(url)
+    except Exception as exc:
+        return f"Error fetching {url}: {exc}"
 
-    if entry.get("content") is None:
-        try:
-            content, truncated = _retrieve_url_text(entry["url"])
-        except Exception as exc:
-            return f"Error fetching {entry['ref']}: {exc}"
-        entry["content"] = content
-        entry["content_truncated"] = truncated
-
-    content = entry["content"] or ""
     total = len(content)
     if start >= total:
         return f"Error: start {start} is beyond available content length {total}."
 
     end = min(start + WEB_FETCH_CHARS, total)
     chunk = content[start:end]
-    has_more = end < total or bool(entry.get("content_truncated"))
+    has_more = end < total or truncated
+
+    # Direct fetch adds a Source (search results alone do not).
+    add_source("web", url)
+
     if has_more:
         return f"[page truncated, chars {start}-{end} of {total}]\n\n{chunk}"
     return chunk

@@ -8,6 +8,9 @@ class MacLLMSmolAgent(MacLLMAgent):
     macllm_description = "Alternate top-level assistant (lighter tool set than default)"
     macllm_tools = [
         "web_search",
+        "web_fetch",
+        "read_clipboard",
+        "read_file",
         "read_skill",
         "ask_user",
     ]

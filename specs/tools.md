@@ -15,7 +15,7 @@ The main design choice is that tools are the operational boundary of the agent s
 - tool names are the stable contract between agent configuration and implementation
 - tools are the only way external data reaches an agent after a user request starts
 
-Tools return observations. A plain string is a text observation. Tools may also return image-bearing observations through the macLLM tool-result path when the model needs to see an image. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
+Tools return observations. A plain string is a text observation. A tool may also return a PIL image; `@macllm_tool` turns that into a short text observation and queues the image for `ActionStep.observations_images` so a vision model can see it. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
 
 ## Tool Families
 
@@ -23,7 +23,7 @@ The current tool set is organized by domain:
 
 - general utilities such as web search and web page fetch
 - note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
-- direct local-source tools such as `read_clipboard`, `read_file`, `capture_selection`, and `capture_window`
+- direct local-source tools such as `read_clipboard` and `read_file`
 - calendar tools for scheduling and event lookup
 - Things tools for task management
 - skill tools such as `read_skill`
@@ -44,7 +44,7 @@ Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapp
 
 - General — e.g. web search and web page fetch.
 - Files — general local file reads via `read_file`, plus mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
-- Local device — clipboard and screenshot tools such as `read_clipboard`, `capture_selection`, and `capture_window`.
+- Local device — clipboard via `read_clipboard` (text or image).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
 - Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
@@ -69,19 +69,19 @@ Current export surface: see macllm/tools/__all__ for the authoritative name list
 Every tool call returns one observation.
 
 - A text-only observation may be a plain string.
-- An image-bearing observation contains human-readable text plus one or more images for the next model step.
+- An image observation is a PIL image return from the tool; `@macllm_tool` queues it for the next model step via `observations_images`.
 - The agent receives observations only through the tool-call loop. Initial user requests do not carry attached files, attached images, or preloaded text payloads.
 - Existing string-returning tools remain valid and are treated as text-only observations.
 
 ## Sources
 
-Tools that directly read an external item may add a Source for UI display. Only direct reads count: search, listing, discovery, folder traversal, and result enumeration do not add Sources. Sources are display metadata only; they do not affect tool execution or model input.
+Tools that directly read an external item may call `conversation.add_source(kind, ref)`. Only direct reads count: search, listing, discovery, folder traversal, and result enumeration do not add Sources. Sources are identity metadata only (`kind` + `ref`); they do not affect tool execution or model input, and the UI derives presentation from them.
 
 ## Web Search And Fetch
 
-`web_search(queries)` searches Brave and returns compact results with titles, snippets, and URLs or short fetchable references.
+`web_search(queries)` searches Brave and returns compact results with titles, snippets, and real URLs.
 
-`web_fetch(url_or_ref, start=0)` fetches the requested page, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Fetching a page is a direct read and adds a web Source. Merely seeing a URL in search results does not add a Source.
+`web_fetch(url, start=0)` fetches the requested page, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Fetching a page is a direct read and adds a web Source. Merely seeing a URL in search results does not add a Source.
 
 If a fetch result is not complete, it begins with a compact range marker:
 
@@ -89,4 +89,4 @@ If a fetch result is not complete, it begins with a compact range marker:
 [page truncated, chars 0-10000 of 84321]
 ```
 
-The next chunk starts at the end of the displayed range, for example `web_fetch("web://example.com/1", start=10000)`.
+The next chunk starts at the end of the displayed range, for example `web_fetch("https://example.com/page", start=10000)`.

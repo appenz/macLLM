@@ -6,10 +6,9 @@ import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from typing import Union
-from urllib.parse import urlparse
 
 from macllm.core.user_interaction import PendingApproval, PendingUserInput
+from macllm.core.context import get_current_conversation
 from macllm.core.conversation_log import (
     ConversationLog,
     append_plan,
@@ -175,7 +174,7 @@ class Conversation:
         """Spawn the background agent thread for this conversation."""
         from macllm.core.context import set_current_conversation
         from macllm.core.persistence import save_all_conversations
-        from macllm.core.llm_service import get_model_for_speed, model_supports_vision
+        from macllm.core.llm_service import get_model_for_speed
 
         conversation = self
 
@@ -206,14 +205,8 @@ class Conversation:
                     "speed": conversation.speed_level,
                     "model": get_model_for_speed(conversation.speed_level),
                     "max_steps": max_steps,
-                    "has_images": bool(request.images),
                     "no_tools": bool(request.no_tools),
                 })
-                if request.images:
-                    if model_supports_vision(conversation.speed_level):
-                        run_kwargs["images"] = request.images
-                    else:
-                        app.debug_log("Current model does not support images; ignoring attached images", 1)
 
                 result = conversation.agent.run(request.expanded_prompt, **run_kwargs)
 
@@ -396,67 +389,42 @@ class Conversation:
         """Add or update system message (typically only at conversation start)."""
         self.conversation_log.append(message("system", content))
 
-    def add_context(self, suggested_name: str, source: str, context_type: str, context: Union[str, bytes], icon=None) -> str:
-        """Add context entry, returns the actual name used. Avoids duplicates based on source."""
-        for ctx in self.context_history:
-            if ctx['source'] == source:
-                return ctx['name']
+    def add_source(self, kind: str, ref: str) -> None:
+        """Record that a tool directly read an external item on this conversation.
 
-        actual_name = suggested_name
-        counter = 1
-        while any(ctx['name'] == actual_name for ctx in self.context_history):
-            actual_name = f"{suggested_name}-{counter}"
-            counter += 1
+        Dedupes by ``(kind, ref)`` and moves a repeat read to the end (newest).
+        Callers pass canonical refs; this method does not normalize.
+        Prefer the module-level ``add_source`` from tools so conversation
+        lookup stays in one place.
+        """
+        self.sources = [
+            s for s in self.sources
+            if not (s.get("kind") == kind and s.get("ref") == ref)
+        ]
+        self.sources.append({"kind": kind, "ref": ref})
+        self._notify_ui()
 
-        if icon is None:
-            icon = ""
+    def queue_observation_images(self, images: list) -> None:
+        """Stash images from a tool result for the next ActionStep callback."""
+        if not images:
+            return
+        self._pending_observation_images.extend(images)
 
-        entry = {
-            'name': actual_name,
-            'source': source,
-            'type': context_type,
-            'context': context,
-            'icon': icon
-        }
-        self.context_history.append(entry)
-        return actual_name
-
-    def register_web_page(self, url: str, title: str = "", snippet: str = "") -> str:
-        """Register a real URL behind a short per-conversation web:// reference."""
-        existing = self.web_page_sources.get(url)
-        if existing is not None:
-            entry = self.web_pages[existing]
-            if title and not entry.get("title"):
-                entry["title"] = title
-            if snippet and not entry.get("snippet"):
-                entry["snippet"] = snippet
-            return existing
-
-        parsed = urlparse(url)
-        domain = (parsed.hostname or parsed.netloc or "unknown").lower()
-        self.web_page_counter += 1
-        ref = f"web://{domain}/{self.web_page_counter}"
-        entry = {
-            "ref": ref,
-            "url": url,
-            "domain": domain,
-            "title": title,
-            "snippet": snippet,
-            "content": None,
-            "content_truncated": False,
-        }
-        self.web_pages[ref] = entry
-        self.web_page_sources[url] = ref
-        return ref
-
-    def get_web_page(self, ref: str) -> dict | None:
-        """Return the registered web page entry for *ref*, if present."""
-        return self.web_pages.get(ref.strip())
+    def take_observation_images(self) -> list:
+        """Return and clear pending observation images."""
+        images = list(self._pending_observation_images)
+        self._pending_observation_images = []
+        return images
 
     def has_path_in_context(self, path: str) -> bool:
-        """Check if a file path was explicitly referenced in this conversation's context."""
-        for ctx in self.context_history:
-            if ctx.get("type") == "path" and ctx.get("source") == path:
+        """Check if a file path appears in Sources or granted directories."""
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        for src in self.sources:
+            if src.get("kind") in ("file", "note") and src.get("ref") == abs_path:
+                return True
+        for granted in self.get_granted_dirs():
+            root = os.path.abspath(granted)
+            if abs_path == root or abs_path.startswith(root + os.sep):
                 return True
         return False
 
@@ -485,10 +453,8 @@ class Conversation:
     def reset(self, clear_persisted: bool = False) -> None:
         """Clears messages and metadata, restores default welcome message."""
         self.conversation_log = ConversationLog()
-        self.context_history = []
-        self.web_pages: dict[str, dict] = {}
-        self.web_page_sources: dict[str, str] = {}
-        self.web_page_counter = 0
+        self.sources: list[dict] = []
+        self._pending_observation_images: list = []
         self.granted_dirs: list[str] = []
         self.speed_level = "normal"
         self.title = "New Agent"
@@ -582,3 +548,10 @@ class ConversationHistory:
         elif index == self.active_index:
             self.active_index = min(self.active_index, len(self.conversations) - 1)
         return True
+
+
+def add_source(kind: str, ref: str) -> None:
+    """Record a direct tool read on the current conversation, if any."""
+    conv = get_current_conversation()
+    if conv is not None:
+        conv.add_source(kind, ref)

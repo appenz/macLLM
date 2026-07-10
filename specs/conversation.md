@@ -18,7 +18,7 @@ rewritten prompt, and the internal agent trace are related, but they are not the
 It stores:
 
 - `messages` for user-visible conversation history
-- `sources` for the UI Sources strip
+- `sources` for identity records of items tools directly read
 - `speed_level`
 - `agent_cls`
 - `agent`
@@ -44,12 +44,15 @@ The UI calls `conversation.submit(query)` directly. The conversation handles the
 
 ## Sources
 
-Sources are UI metadata for external items that tools actually read.
+Sources are identity records for external items that tools actually read. They are not prompt
+state and not display state.
 
-- `Conversation.sources` stores short source records for the top-bar Sources strip
-- `Conversation.add_source(...)` records kind, label, optional URL, optional path, and display icon
-- tools call `add_source(...)` only after a successful direct read
+- `Conversation.sources` is an ordered list of `{"kind", "ref"}` dicts (newest at the end)
+- `kind` is `file` / `note` / `web` / `clipboard`; `ref` is an absolute path, URL, or `"clipboard"`
+- `add_source(kind, ref)` records a successful direct read on the current conversation (no-op if none); `Conversation.add_source` is the same operation when the conversation is already known
+- tools call `add_source(...)` only after a successful direct read and pass canonical refs
 - plugins never add Sources because they do not read external data
+- icons, truncated labels, click behavior, and the display cap of 12 live in the UI layer
 
 Only direct reads count. Search results, folder listings, autocomplete suggestions, and directory traversal do not add Sources.
 

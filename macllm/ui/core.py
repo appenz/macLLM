@@ -198,11 +198,6 @@ class MacLLMUI:
 
     # Font
     font_size = 13.0
-    # Context item UI
-    context_font_size = 10.0
-    context_pill_spacing = 6
-    context_pill_vertical_margin = 3
-    context_pill_corner_radius = 6.0
 
     # Layout of the window - updated to match specification
     padding = 4
@@ -234,10 +229,6 @@ class MacLLMUI:
     darker_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.6, 1.0)
     text_grey  = NSColor.colorWithCalibratedWhite_alpha_(0.5, 1.0)
     text_grey_subtle  = NSColor.colorWithCalibratedWhite_alpha_(0.65, 1.0)
-
-    # Context pill on top bar
-    context_bg_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.85, 0.85, 0.9, 1.0)
-
 
     def __init__(self):
         self.app = None
