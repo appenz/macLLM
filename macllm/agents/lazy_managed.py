@@ -8,7 +8,7 @@ convention smolagents expects, but only builds the real agent on first ``__call_
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 
 class LazyManagedMacLLMAgent:
@@ -73,4 +73,23 @@ class LazyManagedMacLLMAgent:
         return self._impl
 
     def __call__(self, task: str, **kwargs):
+        if self._conversation is not None:
+            try:
+                from macllm.core.conversation_log import append_step
+
+                append_step(
+                    self._conversation.conversation_log,
+                    {
+                        "agent_name": self.name,
+                        "agent_role": "subagent",
+                        "step_type": "task",
+                        "step_number": None,
+                        "task": task,
+                        "observations": None,
+                        "error": None,
+                    },
+                )
+                self._conversation._notify_ui()
+            except Exception:
+                pass
         return self._materialize().__call__(task, **kwargs)

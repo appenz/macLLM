@@ -507,22 +507,13 @@ def folder_delete(path: str) -> str:
 
 
 def _render_subtree(lines: list[str], current_dir: str, tree: dict[str, list[str]], indent: int):
-    """Recursively render folders and notes as indented lines."""
+    """Recursively render folders as indented lines."""
     prefix = "  " * indent
 
-    subdirs = sorted(
-        d for d in tree if d != current_dir and d.startswith(current_dir + os.sep)
-        and os.sep not in d[len(current_dir) + 1:]
-    )
-
-    for subdir in subdirs:
+    for subdir in sorted(tree.get(current_dir, [])):
         dir_name = Path(subdir).name
         lines.append(f"{prefix}{dir_name}/")
         _render_subtree(lines, subdir, tree, indent + 1)
-
-    if current_dir in tree:
-        for filename in sorted(tree[current_dir]):
-            lines.append(f"{prefix}{filename}")
 
 
 @macllm_tool
@@ -602,20 +593,20 @@ def find_folder(query: str) -> str:
                     if mount_path:
                         matches.append(mount_path)
 
+    matches.sort()
     if not matches:
         return "No matching folders found"
 
-    matches.sort()
     return "\n".join(matches)
 
 
 @macllm_tool
 def view_folder_structure() -> str:
     """
-    Show the folder tree of all indexed folders and their notes.
+    Show the folder tree of all indexed mount points, including folders only.
 
     Returns:
-        A tree-style listing of all indexed folders and notes.
+        A tree-style listing of indexed mount points and their subfolders. Note files are not included.
     """
     set_tool_message("Loading folder structure")
     if not FileTag._mount_points:
@@ -623,11 +614,18 @@ def view_folder_structure() -> str:
 
     tree: dict[str, list[str]] = {}
 
-    for _basename, filepath in FileTag._index:
-        parent = str(Path(filepath).parent)
-        if parent not in tree:
-            tree[parent] = []
-        tree[parent].append(Path(filepath).name)
+    for root_dir in FileTag._mount_points.values():
+        for dirpath, dirnames, _ in os.walk(root_dir):
+            visible_dirnames = [
+                d for d in dirnames
+                if not d.startswith(".")
+            ]
+            dirnames[:] = visible_dirnames
+            subdirs = [
+                os.path.join(dirpath, d)
+                for d in visible_dirnames
+            ]
+            tree[dirpath] = subdirs
 
     lines = []
     for mount_name, root_dir in FileTag._mount_points.items():
