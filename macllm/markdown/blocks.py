@@ -47,11 +47,21 @@ def render_paragraph(tokens, start_idx, color):
     return result, i + 1
 
 
-def _make_list_item_style(indent, is_first):
+def _has_following_list_item(tokens, start_idx, close_type):
+    """Return True when another list item appears before *close_type*."""
+    idx = start_idx
+    while idx < len(tokens) and tokens[idx].type != close_type:
+        if tokens[idx].type == 'list_item_open':
+            return True
+        idx += 1
+    return False
+
+
+def _make_list_item_style(indent, is_first, is_last=False):
     """Build an NSMutableParagraphStyle for one list item.
 
     Uses a tab stop so bullet/number text always starts at a fixed column,
-    and adds vertical breathing room before the first item.
+    and adds vertical breathing room before the first item and after the last.
     """
     content_col = indent + BULLET_TEXT_OFFSET
     style = NSMutableParagraphStyle.alloc().init()
@@ -65,7 +75,8 @@ def _make_list_item_style(indent, is_first):
     style.setDefaultTabInterval_(BULLET_TEXT_OFFSET)
     if is_first:
         style.setParagraphSpacingBefore_(LIST_SPACING_BEFORE)
-    style.setParagraphSpacing_(LIST_ITEM_SPACING)
+    spacing_after = LIST_SPACING_BEFORE if is_last else LIST_ITEM_SPACING
+    style.setParagraphSpacing_(spacing_after)
     return style
 
 
@@ -95,7 +106,8 @@ def render_list(tokens, start_idx, color, depth=0):
                 nl = NSAttributedString.alloc().initWithString_("\n")
                 result.appendAttributedString_(nl)
 
-            style = _make_list_item_style(indent, first_item)
+            has_following = _has_following_list_item(tokens, i + 1, close_type)
+            style = _make_list_item_style(indent, first_item, is_last=not has_following)
             first_item = False
 
             item_line = NSMutableAttributedString.alloc().init()

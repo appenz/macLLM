@@ -208,6 +208,7 @@ class MacLLMUI:
     input_field_width = text_area_width
     window_corner_radius = 12.0
     text_corner_radius = 8.0
+    text_right_inset = 4.0
     fudge = 1 # no idea why this is needed, but it is
 
     # Everything below is calculated based on the above
@@ -286,6 +287,41 @@ class MacLLMUI:
             
             # Use the scaled version
             self.logo_image = scaled_image
+
+    def _fit_conversation_text_to_scroll_view(
+        self,
+        scroll_view,
+        text_view,
+        main_area_height,
+        text_corner_radius,
+        textbox_x_fudge,
+        textbox_y_fudge,
+    ):
+        """Size the conversation text view to the scroll view's clip width."""
+        if hasattr(scroll_view, "tile"):
+            scroll_view.tile()
+
+        clip_size = scroll_view.contentView().bounds().size
+        clip_width = clip_size.width
+        clip_height = clip_size.height
+        text_width = max(
+            0.0,
+            clip_width - textbox_x_fudge - MacLLMUI.text_right_inset,
+        )
+        text_height = max(
+            clip_height,
+            main_area_height - 2 * text_corner_radius - textbox_y_fudge,
+        )
+        text_view.setFrame_(((textbox_x_fudge, textbox_y_fudge), (text_width, text_height)))
+        text_view.setHorizontallyResizable_(False)
+        text_view.setVerticallyResizable_(True)
+
+        text_container = text_view.textContainer()
+        if text_container is not None:
+            text_container.setWidthTracksTextView_(True)
+            text_container.setLineFragmentPadding_(0.0)
+
+        return clip_width
 
     @staticmethod
     def handle_interrupt(signal, frame):
@@ -554,11 +590,22 @@ class MacLLMUI:
                 text_container.addSubview_(scroll_view)
 
         # Render content and show scrollbar when content significantly exceeds visible area
+        scroll_threshold = 20  # Buffer to avoid scrollbar for minor overflows
         rendered_height = MainTextHandler.set_text_content(self.macllm, text_view)
         visible_height = scroll_view.contentView().bounds().size.height
-        scroll_threshold = 20  # Buffer to avoid scrollbar for minor overflows
         need_scroll = rendered_height > (visible_height + scroll_threshold)
         scroll_view.setHasVerticalScroller_(need_scroll)
+        self._fit_conversation_text_to_scroll_view(
+            scroll_view,
+            text_view,
+            main_area_height,
+            text_corner_radius,
+            textbox_x_fudge,
+            textbox_y_fudge,
+        )
+        if need_scroll:
+            # Text reflows once the scrollbar consumes clip width.
+            MainTextHandler.set_text_content(self.macllm, text_view)
 
         self.render_conversation_viewport()
 
