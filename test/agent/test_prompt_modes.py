@@ -73,6 +73,17 @@ def test_plan_update_keeps_latest_checklist(monkeypatch):
     assert latest.summary_modes == [False]
 
 
+def test_parent_plans_require_compact_activity_updates(monkeypatch):
+    _patch_agent_environment(monkeypatch)
+    agent = MacLLMDefaultAgent(speed="normal")
+    planning = agent.prompt_templates["planning"]
+
+    assert "one `<update>…</update>`, then `<end_plan>`" in planning["initial_plan"]
+    assert "<update>Checking search results for Guido's personal domain</update>" in planning["initial_plan"]
+    assert "one fresh `<update>…</update>`" in planning["update_plan_post_messages"]
+    assert "<update>" not in agent.prompt_templates["subagent_system_prompt"]
+
+
 def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     _patch_agent_environment(monkeypatch)
     from macllm.core import config

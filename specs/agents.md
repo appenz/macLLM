@@ -88,13 +88,16 @@ Its architectural contract is:
 
 Top-level agents plan before every action. During a planning update, MacLLM keeps the latest
 checklist in the otherwise summarized history so the model can preserve its items and update
-their completion markers. Managed agents may disable planning.
+their completion markers. Each parent planning response also emits one `<update>` describing
+the immediate next activity; it is independent of checklist completion criteria. Managed agents
+do not emit semantic updates and may disable planning.
 
 Prompt behavior is split between prompt templates and custom instructions. Token accounting is reported
 through `create_step_callback()`, which updates per-run `conversation.usage` and appends durable step
 facts to `conversation.conversation_log`. The top bar derives its cumulative conversation total from
-those persisted step facts. Tool execution progress is recorded by smolagents in `agent.memory.steps`
-and projected into the conversation log for rendering.
+those persisted step facts. Agents also append minimal transient `planning_started` and
+`action_started` markers before work begins. Core does not interpret them; the passive UI combines
+the raw markers, steps, delegation facts, and live tool calls for rendering.
 
 Each conversation captures **The user's current time & location** once as `user_situation`: local
 date/time with IANA time zone and approximate GPS plus reverse-geocoded place text when available.

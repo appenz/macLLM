@@ -175,7 +175,8 @@ planning:
     However, do specify subagents that you plan to delegate to.
     The items are binding: execution must work on the first unchecked item without shortcutting to a later outcome.
 
-    Output only `### Plan:`, one `[ ]` line per item, and `<end_plan>`. Do not include final_answer.
+    Output only `### Plan:`, one `[ ]` line per item, one `<update>…</update>`, then `<end_plan>`.
+    The update names the immediate next activity, not completed work or a completion criterion.
 
     ---
     Task: "Find Guido Appenzeller's homepage and determine from it what plane he flies."
@@ -183,6 +184,7 @@ planning:
     ### Plan:
     [ ] Find Guido Appenzeller's personal homepage
     [ ] Read the homepage and identify the plane he flies
+    <update>Checking search results for Guido's personal domain</update>
     <end_plan>
     ---
     Task: "Read the latest email from John Doe and if the time works, add it to my calendar."
@@ -191,6 +193,7 @@ planning:
     [ ] Read the latest email from John Doe (email subagent)
     [ ] Read the calendar for the proposed meeting time (calendar subagent)
     [ ] If the time works, add it to my calendar (calendar subagent)
+    <update>Asking the email subagent for John Doe's latest message</update>
     <end_plan>
     ---
 
@@ -237,7 +240,8 @@ planning:
     If no checklist is present, create a fresh one using the initial-plan rules.
 
     The first unchecked item is binding for the next action; do not skip it or shortcut to a later outcome.
-    Output only `### Plan:`, the full checklist, and `<end_plan>`.
+    Output only `### Plan:`, the full checklist, one fresh `<update>…</update>`, then `<end_plan>`.
+    The update names the immediate next activity and may be narrower than the first unchecked item.
 
     Beware that you have {remaining_steps} steps remaining.
 

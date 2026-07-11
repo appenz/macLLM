@@ -37,12 +37,14 @@ Multiple conversations may have agents running simultaneously. Each agent thread
 
 ## Conversation Rendering
 
-The main conversation view is a text-based rendering pipeline. `ConversationLog` is the sole chronological data source.
+The main conversation view is a text-based rendering pipeline. The UI passively reads
+`ConversationLog` and may also inspect `agent.memory.steps`; core never prepares UI rows.
 
 - regular mode renders user messages as pill-aware text and assistant messages through markdown
 - the separate debug window renders the same conversation facts with raw payload detail such as agent steps, approvals, errors, token metadata, and timing
-- live state such as pending approvals and pending user input may still be read from current conversation fields until appended to the log
-- UI code interprets log entry kinds and payloads; agent/core code does not create UI-specific rows
+- live state such as pending approvals and pending user input may still be read from current conversation fields
+- UI code parses planning `<update>` tags and reduces raw lifecycle, delegation, and tool facts into persistent semantic updates plus one ephemeral operation
+- agent/core code records raw facts and generic repaint notifications, not UI-specific rows or labels
 
 The UI reads recorded conversation facts rather than reconstructing requests from rewritten prompts or calling agent/tool code.
 

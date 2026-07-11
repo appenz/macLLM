@@ -3,11 +3,8 @@ from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
 from macllm.markdown.blocks import FONT_SIZE
 from macllm.core.skills import SkillsRegistry
-from macllm.core.conversation_log import (
-    latest_plan,
-    messages_from_log,
-    tool_calls as log_tool_calls,
-)
+from macllm.core.conversation_log import messages_from_log
+from macllm.ui.agent_activity import active_plan, project_activity, without_update
 
 class MainTextHandler:
     """Handles the main text display functionality for the macLLM UI."""
@@ -49,14 +46,6 @@ class MainTextHandler:
         for block_id, rel_start, length in get_last_render_block_infos():
             add_code_block_range(block_id, base + rel_start, length)
 
-    _TOOL_DISPLAY = {
-        "web_search": lambda args: (
-            'Searching the web for "'
-            + '", "'.join(str(q) for q in args.get("queries", [])[:3])
-            + '"'
-        ),
-    }
-
     @staticmethod
     def displayable_messages(conversation):
         return [
@@ -66,9 +55,9 @@ class MainTextHandler:
 
     @staticmethod
     def _render_plan(ts, conversation, muted, light, green, font_sm, font_sm_bold):
-        """Render parsed planning checklist and status summary."""
-        plan = latest_plan(conversation.conversation_log)
-        plan_text = plan.get("text") if plan else None
+        """Render the active run's parsed planning checklist."""
+        plan = active_plan(conversation.conversation_log)
+        plan_text = without_update(plan.get("text", "")) if plan else None
         if not plan_text:
             return False
 
@@ -90,120 +79,58 @@ class MainTextHandler:
                 color = light
             _append(f"  {line}\n", color)
 
-        status = plan.get("status") if plan else None
-        if status:
-            _append("\n", muted)
-            _append("Status: ", muted, font_sm_bold)
-            status_lines = status.splitlines()
-            if status_lines:
-                _append(f"{status_lines[0]}\n", light)
-                for extra in status_lines[1:]:
-                    _append(f"        {extra}\n", light)
         _append("\n", muted)
         return True
 
     @staticmethod
-    def _render_agent_steps(text_view, conversation):
-        """Render live agent progress from agent.memory.steps and pending approval."""
+    def _render_agent_activity(text_view, conversation):
+        """Render the active run as a passive projection of conversation facts."""
         from macllm.ui.approval import ApprovalRenderer
-        from smolagents import ActionStep, TaskStep
 
         ts = text_view.textStorage()
 
         muted = NSColor.colorWithCalibratedWhite_alpha_(0.50, 1.0)
         light = NSColor.colorWithCalibratedWhite_alpha_(0.62, 1.0)
         green = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.30, 0.69, 0.31, 1.0)
-        red   = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.84, 0.24, 0.24, 1.0)
 
         font_sm      = NSFont.systemFontOfSize_(11.0)
         font_sm_bold = NSFont.boldSystemFontOfSize_(11.0)
         font_mono    = NSFont.monospacedSystemFontOfSize_weight_(10.0, 0.0)
+        update_style = NSMutableParagraphStyle.alloc().init()
+        update_style.setParagraphSpacing_(3.3)
 
-        def _append(text, color, font=font_sm):
-            a = NSAttributedString.alloc().initWithString_attributes_(
-                text, {NSForegroundColorAttributeName: color, NSFontAttributeName: font})
+        def _append(text, color, font=font_sm, style=None):
+            attrs = {NSForegroundColorAttributeName: color, NSFontAttributeName: font}
+            if style:
+                attrs[NSParagraphStyleAttributeName] = style
+            a = NSAttributedString.alloc().initWithString_attributes_(text, attrs)
             ts.appendAttributedString_(a)
 
         agent = conversation.agent
         if agent is None:
             return
 
-        run_offset = getattr(conversation, '_run_step_offset', 0)
-        steps = agent.memory.steps[run_offset:]
-
-        has_tool_calls = any(
-            getattr(s, 'tool_calls', None)
-            for s in steps if isinstance(s, ActionStep)
-        )
-        has_task_steps = any(isinstance(s, TaskStep) for s in steps)
-        live_tool_calls = log_tool_calls(conversation.conversation_log)
-        has_live_tool_calls = bool(live_tool_calls)
-        has_plan = bool(latest_plan(conversation.conversation_log))
-        show_steps = has_tool_calls or has_task_steps or has_live_tool_calls
-
         _append("\n\n", muted)
+        MainTextHandler._render_plan(
+            ts, conversation, muted, light, green, font_sm, font_sm_bold
+        )
 
-        if has_plan:
-            MainTextHandler._render_plan(
-                ts, conversation, muted, light, green, font_sm, font_sm_bold
-            )
+        parent_name = getattr(agent, "macllm_name", None) or getattr(agent, "name", "")
+        updates, current = project_activity(conversation.conversation_log, parent_name)
+        for update in updates:
+            _append(f"{update}\n", light, style=update_style)
 
-        if show_steps:
-            _append("Steps\n", muted, font_sm_bold)
-        elif not conversation.pending_approval and not has_plan:
-            _append("Thinking...\n", muted, font_sm_bold)
-
-        for step in steps:
-            if isinstance(step, ActionStep):
-                tool_calls = getattr(step, 'tool_calls', None) or []
-                observations = getattr(step, 'observations', None)
-                error = getattr(step, 'error', None)
-
-                for tc in tool_calls:
-                    name = tc.get('name', 'tool') if isinstance(tc, dict) else getattr(tc, 'name', 'tool')
-                    args = tc.get('arguments', {}) if isinstance(tc, dict) else getattr(tc, 'arguments', {})
-
-                    if error:
-                        _append("  ✗ ", red, font_sm_bold)
-                    elif observations is not None:
-                        _append("  ✓ ", green, font_sm_bold)
-                    else:
-                        _append("  ⟳ ", muted, font_sm_bold)
-
-                    display_fn = MainTextHandler._TOOL_DISPLAY.get(name)
-                    if display_fn:
-                        _append(f"{display_fn(args)}", light)
-                    elif name == "run_command":
-                        cmd = args.get('command', '') if isinstance(args, dict) else ''
-                        display_cmd = cmd if len(cmd) <= 60 else cmd[:57] + "..."
-                        _append(f"{name}", muted)
-                        if cmd:
-                            _append(f"({display_cmd})", light, font_mono)
-                    else:
-                        _append(f"{name}", muted)
-                        summary = ""
-                        if isinstance(args, dict):
-                            for k, v in list(args.items())[:2]:
-                                sv = str(v)[:40]
-                                summary += f"{k}={sv}, "
-                            summary = summary.rstrip(", ")
-                        if summary:
-                            _append(f"({summary})", light)
-
-                    if error:
-                        err_str = str(error)[:80]
-                        _append(f" — {err_str}", red)
-                    _append("\n", muted)
-
-            elif isinstance(step, TaskStep):
-                task = str(getattr(step, "task", "") or "managed agent task")
-                display_task = task if len(task) <= 80 else task[:77] + "..."
-                _append("  ⟳ ", muted, font_sm_bold)
-                _append(f"Thinking: {display_task}\n", light)
-
-        for tc in live_tool_calls:
-            _append("  ⟳ ", muted, font_sm_bold)
-            _append(f"{tc['message']}\n", light)
+        if current:
+            kind, value = current
+            if kind == "planning":
+                _append("Planning...\n", muted, font_sm_bold)
+            elif kind == "update":
+                _append(f"{value}\n", light, style=update_style)
+            elif kind == "subagent":
+                _append(f"Invoking {value} subagent...\n", muted, font_sm_bold)
+            elif kind == "tool":
+                font = font_mono if value.get("tool") == "run_command" else font_sm
+                _append(f"{value.get('message') or value.get('tool', 'Using tool')}\n", light, font)
 
         if conversation.pending_approval:
             ApprovalRenderer.render_pending(ts, conversation.pending_approval)
@@ -296,8 +223,9 @@ class MainTextHandler:
                 separator_attributed_text = NSAttributedString.alloc().initWithString_attributes_(separator_text, MainTextHandler._separator_attributes)
                 text_view.textStorage().appendAttributedString_(separator_attributed_text)
 
-        if conv.is_agent_running() or conv.pending_approval:
-            MainTextHandler._render_agent_steps(text_view, conv)
+        if ((conv.is_agent_running() and not conv.abort_event.is_set())
+                or conv.pending_approval):
+            MainTextHandler._render_agent_activity(text_view, conv)
 
         if conv.pending_input:
             MainTextHandler._render_pending_input(text_view, conv.pending_input)

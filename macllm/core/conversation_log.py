@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 RUNTIME_FACT_KINDS = {"run_start", "run_end", "step"}
+ACTIVITY_MARKER_KINDS = {"planning_started", "action_started"}
 
 
 @dataclass
@@ -44,6 +45,18 @@ def append_run_end(log: list[ConversationLogEntry], payload: dict) -> None:
 
 def append_step(log: list[ConversationLogEntry], payload: dict, *, tokens: int | None = None) -> None:
     log.append(entry("step", _stable_payload(payload), tokens=tokens))
+
+
+def append_activity_marker(
+    log: list[ConversationLogEntry], kind: str, agent_name: str
+) -> None:
+    if kind not in ACTIVITY_MARKER_KINDS:
+        raise ValueError(f"Unknown activity marker: {kind}")
+    log.append(entry(kind, agent_name))
+
+
+def clear_activity_markers(log: list[ConversationLogEntry]) -> None:
+    log[:] = [item for item in log if item.kind not in ACTIVITY_MARKER_KINDS]
 
 
 def append_agent_step(

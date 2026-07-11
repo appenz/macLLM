@@ -36,7 +36,7 @@ At a high level, the flow is as follows:
 4. A `UserRequest` applies input sugar such as `@...` and plugin-owned `/...` tokens. These rewrites are purely UI sugar to make the user's instruction more explicit or set run options; they do not perform actual tasks.
 5. The rewritten prompt is passed to the supervising agent of the conversation.
 6. The agent calls tools and managed subagents as needed. All external data access happens through tools, and tools return observations.
-7. Tool progress is shown from `agent.memory.steps` (smolagents steps) and, for `@macllm_tool` wrappers, from transient `conversation_log` tool-call entries while tools execute.
+7. Core records raw planning/action boundaries, steps, delegation, and live tool calls. The passive UI projects those facts into the current plan, semantic updates, and one ephemeral operation.
 8. Tools that directly read a source record that source on the conversation for the UI Sources strip.
 9. The final assistant response is appended to the conversation and persisted.
 

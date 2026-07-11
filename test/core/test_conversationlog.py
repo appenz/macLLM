@@ -3,9 +3,11 @@ from macllm.core.conversation_log import (
     ConversationLog,
     ConversationLogEntry,
     add_tool_call,
+    append_activity_marker,
     append_run_end,
     append_run_start,
     append_step,
+    clear_activity_markers,
     log_from_messages,
     message,
     messages_from_log,
@@ -72,6 +74,21 @@ def test_tool_call_entries_store_simple_log_payloads():
         "tool": "search_notes",
         "message": 'Searching notes for "budget"',
     }
+
+
+def test_activity_markers_are_minimal_transient_entries():
+    log = ConversationLog()
+    append_activity_marker(log, "planning_started", "default")
+    append_activity_marker(log, "action_started", "notes")
+
+    assert [(item.kind, item.payload) for item in log] == [
+        ("planning_started", "default"),
+        ("action_started", "notes"),
+    ]
+    assert persistable_log(log) == []
+
+    clear_activity_markers(log)
+    assert log == []
 
 
 def test_runtime_fact_entries_are_persistable():

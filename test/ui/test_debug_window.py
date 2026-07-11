@@ -1,5 +1,11 @@
 from macllm.core.chat_history import Conversation
-from macllm.core.conversation_log import append_plan, append_run_start, append_step, message
+from macllm.core.conversation_log import (
+    append_activity_marker,
+    append_plan,
+    append_run_start,
+    append_step,
+    message,
+)
 from macllm.ui.debug_window import extract_cards
 
 
@@ -44,6 +50,14 @@ def test_step_card_body_hides_runtime_metadata():
     assert "step_type" not in card.body
     assert "token_usage" not in card.body
     assert "start_time" not in card.body
+
+
+def test_activity_markers_are_not_debug_cards():
+    conv = Conversation()
+    append_activity_marker(conv.conversation_log, "planning_started", "default")
+    append_activity_marker(conv.conversation_log, "action_started", "default")
+
+    assert extract_cards(conv) == []
 
 
 def _append_turn(conv: Conversation, raw: str, expanded: str, plan: str, answer: str):

@@ -15,7 +15,7 @@ The main design choice is that tools are the operational boundary of the agent s
 - tool names are the stable contract between agent configuration and implementation
 - tools are the only way external data reaches an agent after a user request starts
 
-Tools return observations. A plain string is a text observation. A tool may also return a PIL image; `@macllm_tool` turns that into a short text observation and queues the image for `ActionStep.observations_images` so a vision model can see it. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries), which the UI renders as **Steps**. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` tool-call entries while a tool body runs; `set_tool_message` updates the latest line. Those entries are cleared when a new agent run starts on the conversation.
+Tools return observations. A plain string is a text observation. A tool may also return a PIL image; `@macllm_tool` turns that into a short text observation and queues the image for `ActionStep.observations_images` so a vision model can see it. smolagents records each model-planned tool call in `agent.memory.steps` (`ActionStep` entries) for runtime/debug history. Separately, tools wrapped with `@macllm_tool` (see `macllm/tools/_debug.py`) append transient human-readable lines to `conversation_log` before a tool body runs; `set_tool_message` updates the latest line. The regular UI passively renders the latest such line as its ephemeral operation instead of showing historical Steps. These entries are cleared at run boundaries.
 
 ## Tool Families
 
@@ -79,7 +79,7 @@ Tools that directly read an external item may call `conversation.add_source(kind
 
 ## Web Search And Fetch
 
-`web_search(queries)` searches Brave and returns compact results with titles, snippets, and real URLs.
+`web_search(query)` sends one search string to Brave and returns up to five compact results with titles, snippets, and real URLs. Each call counts as one of the 50 searches allowed per agent run.
 
 `web_fetch(url, start=0)` fetches the requested page, extracts readable HTML text, and returns at most 10,000 characters from the zero-based `start` offset. Fetching a page is a direct read and adds a web Source. Merely seeing a URL in search results does not add a Source.
 

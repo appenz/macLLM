@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import AppKit
+from macllm.core.conversation_log import ACTIVITY_MARKER_KINDS
 from Cocoa import (
     NSAttributedString,
     NSButton,
@@ -237,6 +238,8 @@ def extract_cards(conversation) -> list[DebugCard]:
             ))
         elif kind == "plan" and isinstance(payload, dict):
             # Parsed plan entries are merged into the preceding Planning Step.
+            continue
+        elif kind in ACTIVITY_MARKER_KINDS:
             continue
         elif kind == "tool_call" and isinstance(payload, dict):
             cards.append(DebugCard(

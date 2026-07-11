@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from smolagents import ToolCallingAgent
 
 from macllm.agents.default import MacLLMDefaultAgent
 from macllm.core import device_context, llm_service
@@ -35,3 +36,27 @@ def test_no_tools_gate_allows_final_answer(monkeypatch):
     result = agent.execute_tool_call("final_answer", {"answer": "done"})
 
     assert "done" in str(result)
+
+
+def test_action_marker_precedes_dispatch(monkeypatch):
+    agent = _agent(monkeypatch)
+
+    def execute(_self, _name, _arguments):
+        marker = agent._conversation.conversation_log[-1]
+        assert (marker.kind, marker.payload) == ("action_started", "default")
+        return "done"
+
+    monkeypatch.setattr(ToolCallingAgent, "execute_tool_call", execute)
+    assert agent.execute_tool_call("anything", {}) == "done"
+
+
+def test_planning_marker_precedes_model_call(monkeypatch):
+    agent = _agent(monkeypatch)
+
+    def generate(_self, _task, _is_first_step, _step):
+        marker = agent._conversation.conversation_log[-1]
+        assert (marker.kind, marker.payload) == ("planning_started", "default")
+        yield "done"
+
+    monkeypatch.setattr(ToolCallingAgent, "_generate_planning_step", generate)
+    assert list(agent._generate_planning_step("task", True, object())) == ["done"]

@@ -1,5 +1,4 @@
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -11,7 +10,6 @@ from macllm.tools._debug import macllm_tool, set_tool_message
 
 _state = {"search_count": 0}
 MAX_SEARCHES_PER_RUN = 50
-MAX_PARALLEL_SEARCHES = 5
 WEB_FETCH_CHARS = 10_000
 WEB_PAGE_MAX_CHARS = 100_000
 
@@ -35,7 +33,7 @@ def _search_single_query(query: str, api_key: str) -> dict:
     
     response = requests.get(BRAVE_API_URL, headers=headers, params=params)
     response.raise_for_status()
-    return {"query": query, "results": response.json()}
+    return response.json()
 
 
 def _extract_page_text(html: str) -> str:
@@ -64,97 +62,51 @@ def _retrieve_url_text(url: str) -> tuple[str, bool]:
     return text[:WEB_PAGE_MAX_CHARS], truncated
 
 
-def _format_results(search_results: list[dict]) -> str:
+def _format_results(results: dict) -> str:
     """Format search results with their real URLs."""
     output = []
-    
-    for item in search_results:
-        query = item["query"]
-        results = item["results"]
-        
-        output.append(f"## {query}\n")
-        
-        web_results = results.get("web", {}).get("results", [])
-        if not web_results:
-            output.append("No results found.\n")
-            continue
-        
-        for result in web_results[:5]:
-            url = result.get("url", "")
-            title = result.get("title", "")
-            description = result.get("description", "")
-            label_parts = []
-            if url:
-                label_parts.append(url)
-            elif title:
-                label_parts.append(title)
-
-            if title and (not label_parts or label_parts[-1] != title):
-                label_parts.append(title)
-            if description:
-                label_parts.append(description)
-            if label_parts:
-                output.append("- " + " — ".join(label_parts))
-        
-        output.append("")
-    
+    for result in results.get("web", {}).get("results", [])[:5]:
+        url = result.get("url", "")
+        title = result.get("title", "")
+        description = result.get("description", "")
+        parts = [part for part in (url or title, title if url else "", description) if part]
+        if parts:
+            output.append("- " + " — ".join(parts))
     return "\n".join(output)
 
 
 @macllm_tool
-def web_search(queries: list[str]) -> str:
+def web_search(query: str) -> str:
     """
-    Search the web using Brave Search API.
+    Search the web for one query using Brave Search API.
     
     Args:
-        queries: List of search queries to execute. Maximum 50 searches per agent run.
+        query: One search query. Maximum 50 searches per agent run.
     
     Returns:
         Search results with relevant content snippets from each result.
     """
-    cfg = get_runtime_config()
-    api_key = cfg.api_keys.brave
+    if not isinstance(query, str):
+        raise ValueError("query must be a single string")
+    query = query.strip()
+    if not query:
+        return "No query provided."
+    if _state["search_count"] >= MAX_SEARCHES_PER_RUN:
+        raise ValueError(
+            f"Search limit exceeded: maximum is {MAX_SEARCHES_PER_RUN} per agent run"
+        )
+
+    api_key = get_runtime_config().api_keys.brave
     if not api_key:
-        raise ValueError(
-            "brave API key is not configured in config.toml"
-        )
-    
-    if not queries:
-        return "No queries provided."
+        raise ValueError("brave API key is not configured in config.toml")
 
-    shown = [f'"{q}"' for q in queries[:3]]
-    if len(queries) > 3:
-        shown.append("…")
-    set_tool_message("Searching the web for " + ", ".join(shown))
-
-    current_count = _state["search_count"]
-    if current_count + len(queries) > MAX_SEARCHES_PER_RUN:
-        raise ValueError(
-            f"Search limit exceeded: already performed {current_count} searches, "
-            f"requesting {len(queries)} more, but maximum is {MAX_SEARCHES_PER_RUN} per agent run"
-        )
-    
-    results = []
-    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SEARCHES) as executor:
-        future_to_query = {
-            executor.submit(_search_single_query, query, api_key): query
-            for query in queries
-        }
-        
-        for future in as_completed(future_to_query):
-            query = future_to_query[future]
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                results.append({"query": query, "results": {"error": str(e)}})
-    
-    _state["search_count"] += len(queries)
-    
-    query_order = {q: i for i, q in enumerate(queries)}
-    results.sort(key=lambda x: query_order.get(x["query"], len(queries)))
-    
-    return _format_results(results)
+    set_tool_message(f'Searching the web for "{query}"')
+    try:
+        results = _search_single_query(query, api_key)
+    except Exception:
+        results = {}
+    _state["search_count"] += 1
+    return _format_results(results) or "No results found."
 
 
 @macllm_tool

@@ -11,10 +11,12 @@ from macllm.core.user_interaction import PendingApproval, PendingUserInput
 from macllm.core.context import get_current_conversation
 from macllm.core.conversation_log import (
     ConversationLog,
+    append_activity_marker,
     append_plan,
     append_run_end,
     append_run_start,
     add_tool_call as log_add_tool_call,
+    clear_activity_markers,
     clear_tool_calls as log_clear_tool_calls,
     complete_last_tool_call as log_complete_last_tool_call,
     message,
@@ -59,8 +61,16 @@ class Conversation:
         self.reset()
 
     # ------------------------------------------------------------------
-    # Live tool-call tracking (transient, not persisted)
+    # Live run activity (transient, not persisted)
     # ------------------------------------------------------------------
+
+    def add_activity_marker(self, kind: str, agent_name: str) -> None:
+        append_activity_marker(self.conversation_log, kind, agent_name)
+        self._notify_ui()
+
+    def clear_run_activity(self) -> None:
+        clear_activity_markers(self.conversation_log)
+        log_clear_tool_calls(self.conversation_log)
 
     def add_tool_call(self, tool_name: str, message: str) -> None:
         """Append a live tool-call entry and repaint the UI."""
@@ -186,7 +196,7 @@ class Conversation:
             run_error = None
             try:
                 conversation.abort_event.clear()
-                conversation.clear_tool_calls()
+                conversation.clear_run_activity()
                 from macllm.tools.web_search import reset_search_counter
                 from smolagents import PlanningStep
 
@@ -250,6 +260,7 @@ class Conversation:
                         + conversation.usage.output_tokens
                     ),
                 })
+                conversation.clear_run_activity()
                 conversation._active_run_started_monotonic = None
                 if not app.ephemeral:
                     save_all_conversations(app.conversation_history)
@@ -290,6 +301,8 @@ class Conversation:
             self.agent.interrupt_switch = True
             for agent in getattr(self.agent, 'managed_agents', {}).values():
                 agent.interrupt_switch = True
+        self.clear_run_activity()
+        self._notify_ui()
 
     def resolve_approval(self, decision: str) -> None:
         """Resolve the current pending approval with the user's decision."""
@@ -377,7 +390,7 @@ class Conversation:
     def _reset_run_state(self) -> None:
         """Reset transient per-run UI state before starting an agent run."""
         self.usage.reset()
-        self.clear_tool_calls()
+        self.clear_run_activity()
 
     # ------------------------------------------------------------------
     # Message management

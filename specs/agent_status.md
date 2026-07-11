@@ -2,71 +2,69 @@
 
 ## Overview
 
-During agent execution, macLLM shows live progress in the conversation view.
-
-The display has three goals:
-
-- show supervising-agent planning progress as a checklist and status summary
-- show the progress of tool calls and managed-agent delegation
-- show pending shell approval requests that need user action
+During a run, macLLM shows the supervising agent's plan, semantic activity updates,
+the current operation, and pending shell approvals. Core records raw runtime facts;
+the passive UI interprets and renders them.
 
 ## Data Sources
 
-Progress data comes from two conversation-owned sources:
+The UI may read both `agent.memory.steps` and `Conversation.conversation_log`.
+Core does not build a UI status model.
 
-- `agent.memory.steps` on the conversation's agent instance
-- transient `tool_call` entries in `Conversation.conversation_log` while `@macllm_tool` wrappers are actively executing
+Durable `step` facts contain raw projections of smolagents `PlanningStep`,
+`ActionStep`, and `TaskStep` objects for debug/runtime history. A planning fact's
+`model_output` includes the model's complete response; only the UI parses its
+`<update>…</update>` tag. Existing `plan` entries provide the checklist.
 
-smolagents records each step as a dataclass in the step list:
+Two payload-minimal, transient markers expose boundaries before work starts:
 
-- `PlanningStep`: the agent produced or updated a plan
-- `ActionStep`: the agent called a tool. Contains `tool_calls` (name, arguments, id), `observations` (tool output), `error` (if failed), and `is_final_answer`
-- `TaskStep`: the agent delegated to a managed subagent
+- `planning_started`, whose payload is the emitting agent's stable name
+- `action_started`, whose payload is the emitting agent's stable name
 
-`PlanningStep` output is parsed from `step.model_output_message.content` and appended to `Conversation.conversation_log` as a `plan` entry:
+Transient `tool_call` entries expose live tool use. The pre-invocation task fact
+written by `LazyManagedMacLLMAgent` exposes delegation before the managed agent
+runs. ConversationLog insertion order is authoritative.
 
-- `text`: extracted text between `### Plan:` and `### Status:` (or `<end_plan>`)
-- `status`: extracted text after `### Status:` until `<end_plan>` or end of output (optional)
-
-The UI reads the latest plan through `latest_plan()` in `macllm/core/conversation_log.py`, completed/planned tool and delegation data from `agent.memory.steps`, and live in-tool status text from `conversation_log` `tool_call` entries. There is no intermediate status manager or activity-tree object.
-
-### Determining tool state from ActionStep
-
-- `tool_calls` populated, `observations` is None, `error` is None → tool is currently running
-- `observations` is not None → tool completed successfully
-- `error` is not None → tool failed
-
-### Pending approval
-
-Shell approval state lives on `Conversation.pending_approval` (a transient `PendingApproval` dataclass from `macllm/core/user_interaction.py`, not persisted). When a tool sets this field and requests a repaint, the UI renders the approval widget as the last item in the conversation view. Once the user decides, the field is cleared.
+Markers and tool-call entries are excluded from persistence and cleared at run
+reset, completion, or interruption. Durable step, plan, token, and run logging is
+unchanged.
 
 ## Rendering
 
-`MainTextHandler` in `macllm/ui/main_text.py` reads the conversation's step list, latest conversation-log plan, transient live tool-call entries, and pending approval to render:
+`MainTextHandler` renders the active block in this order:
 
-- a **"Plan"** section when the latest conversation-log plan has text (checkbox-style lines from planning output)
-- a **"Status"** summary under the plan when the latest conversation-log plan has status text
-- a **"Steps"** section with status markers (running, success, error) once tool calls or managed-agent task steps exist
-- **"Thinking..."** when the agent is running and neither plan text nor tool calls are available yet
-- managed-agent delegation rows from `TaskStep` entries
-- an inline approval prompt when `conversation.pending_approval` is set
+1. the active run's plan
+2. persistent supervising-agent updates, in action order
+3. one ephemeral current operation
+4. pending approval UI
 
-### Per-tool display formatting
+The UI applies these transitions:
 
-`MainTextHandler._TOOL_DISPLAY` is a UI-local dict mapping tool names to display
-formatter lambdas `(args_dict) -> str`. When a tool name has an entry in this dict,
-the renderer uses its formatter instead of the generic `name(key=value, ...)` display.
-`run_command` is handled separately (monospaced font for the command text).
+- supervising planning starts → `Planning...`
+- planning completes → the parsed `<update>` replaces `Planning...`
+- the next supervising action starts → that update becomes persistent
+- a supervising tool starts or reports progress → its message becomes ephemeral
+- a managed agent starts → `Invoking <name> subagent...` becomes ephemeral
+- a managed agent uses a tool → its tool message becomes ephemeral
 
-The detailed debug window is a separate passive renderer. It reads compact chronological runtime facts from `Conversation.conversation_log`, including run start/end facts and accessible step projections recorded by the same step callback for supervisor and managed subagents. The live status view remains intentionally compact.
+Each newer ephemeral operation replaces the previous one. Persistent updates remain,
+and subsequent promoted updates are added below them. Managed agents never emit or
+promote `<update>` text. Missing or malformed tags produce no fallback update.
 
-This keeps the renderer passive — it only reads step data from the conversation and
-applies its own presentation rules. No imports from `macllm.tools`.
+The regular UI has no Status section or historical Steps list. The complete activity
+block is hidden when the run ends or is interrupted.
 
-## Previous Architecture
+## Responsibilities
 
-The previous `AgentStatusManager` class has been removed. It used to track plan text, tool call entries, and pending approvals as a separate object owned by `MacLLM`. Tools reported their own progress by calling `start_tool_call()`, `complete_tool_call()`, and `fail_tool_call()`.
+Core appends raw facts and sends the existing generic repaint notification. It does
+not parse `<update>`, classify parent versus managed events, promote updates, choose
+the visible operation, or generate display wording.
 
-This was replaced by rendering directly from `agent.memory.steps` and `conversation_log`, which smolagents and the conversation runtime already maintain as part of execution. This eliminates redundant layers and makes the conversation the sole data source for the UI. Transient `@macllm_tool` status lines also read from `conversation_log` tool-call entries (see `specs/tools.md`).
+The UI identifies supervising events by comparing the marker's agent name with the
+conversation agent's name. It owns tag parsing, event reduction, labels, colors, and
+tool formatting. The separate debug window continues to render durable chronological
+runtime facts.
 
-The later `ActivityTrace` activity tree was also removed for the same reason: it duplicated step/log state as a transient object inside the conversation log. Live status should remain a direct projection of the conversation log plus smolagents memory.
+`Conversation.pending_approval` remains transient conversation state. A shell tool
+sets it and requests a repaint; the UI renders it after agent activity until the user
+decides.

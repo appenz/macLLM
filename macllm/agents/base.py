@@ -60,6 +60,7 @@ class MacLLMAgent(ToolCallingAgent):
         from macllm.core.skills import SkillsRegistry
         from macllm.core.config import get_runtime_config
 
+        self._conversation = conversation
         self._task_mode = task_mode
         self._managed_mode = managed_mode
         self._tools_disabled = False
@@ -186,6 +187,7 @@ class MacLLMAgent(ToolCallingAgent):
         )
 
     def _generate_planning_step(self, task, is_first_step, step):
+        self._mark_activity("planning_started")
         self._updating_plan = not is_first_step
         try:
             yield from super()._generate_planning_step(task, is_first_step, step)
@@ -239,7 +241,12 @@ class MacLLMAgent(ToolCallingAgent):
             raise AgentToolExecutionError(
                 f"Tool '{tool_name}' is disabled for this request.", self.logger
             )
+        self._mark_activity("action_started")
         return super().execute_tool_call(tool_name, arguments)
+
+    def _mark_activity(self, kind: str) -> None:
+        if self._conversation is not None:
+            self._conversation.add_activity_marker(kind, self.macllm_name or self.name)
 
     @staticmethod
     def _debug(msg: str):

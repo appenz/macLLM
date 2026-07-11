@@ -34,41 +34,34 @@ def test_reset_search_counter():
 def test_search_limit_exceeded():
     """Test that exceeding the search limit raises an error."""
     reset_search_counter()
-    
-    # Set counter close to limit
-    _state["search_count"] = 48
-    
-    # Requesting 3 more should exceed the limit of 50
+    _state["search_count"] = 50
+
     with pytest.raises(ValueError, match="Search limit exceeded"):
-        web_search(["query1", "query2", "query3"])
+        web_search("query")
 
 
-def test_search_limit_exactly_at_max():
+def test_search_limit_exactly_at_max(monkeypatch):
     """Test that exactly hitting the limit (50) passes the limit check."""
     reset_search_counter()
-    
-    # Set counter so that adding 2 queries hits exactly 50
-    _state["search_count"] = 48
-    
+    _state["search_count"] = 49
     ws_module = importlib.import_module("macllm.tools.web_search")
-    original_get_runtime_config = ws_module.get_runtime_config
-    ws_module.get_runtime_config = lambda: MacLLMConfig(api_keys=ApiKeys(brave=""))
+    monkeypatch.setattr(
+        ws_module,
+        "get_runtime_config",
+        lambda: MacLLMConfig(api_keys=ApiKeys(brave="test-key")),
+    )
+    monkeypatch.setattr(ws_module, "_search_single_query", lambda *_: {})
 
-    try:
-        # 48 + 2 = 50, which is not > 50, so limit check passes
-        # but it should fail due to missing API key
-        with pytest.raises(ValueError, match="brave API key"):
-            web_search(["query1", "query2"])
-    finally:
-        ws_module.get_runtime_config = original_get_runtime_config
+    web_search("query")
+    assert _state["search_count"] == 50
 
 
-def test_empty_queries():
-    """Test that empty queries list returns appropriate message."""
+def test_empty_query():
     reset_search_counter()
-    
-    result = web_search([])
-    assert result == "No queries provided."
+
+    assert web_search("  ") == "No query provided."
+    with pytest.raises(ValueError, match="single string"):
+        web_search(["query"])
 
 
 def test_missing_api_key():
@@ -81,7 +74,7 @@ def test_missing_api_key():
 
     try:
         with pytest.raises(ValueError, match="brave API key"):
-            web_search(["test query"])
+            web_search("test query")
     finally:
         ws_module.get_runtime_config = original_get_runtime_config
 
@@ -118,7 +111,7 @@ def test_web_search_returns_real_urls(monkeypatch):
     monkeypatch.setattr(ws_module.requests, "get", lambda *args, **kwargs: Response())
 
     try:
-        result = web_search(["example query"])
+        result = web_search("example query")
     finally:
         set_current_conversation(None)
 
@@ -188,6 +181,6 @@ def test_web_search_guido_plane():
         pytest.skip("brave API key not configured")
     
     reset_search_counter()
-    result = web_search(["What model of plane did Guido Appenzeller fly to the Caribbean"])
+    result = web_search("What model of plane did Guido Appenzeller fly to the Caribbean")
     
     assert "SR22T" in result, f"Expected 'SR22T' in results, got: {result[:500]}..."
