@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING
 
 import litellm
@@ -44,7 +45,7 @@ class MacLLMAgent(ToolCallingAgent):
                  managed_agents: list | None = None,
                  custom_instructions: str | None = None,
                  prompt_templates: dict | None = None,
-                 planning_interval: int = 3,
+                 planning_interval: int = 1,
                  no_tools: bool = False,
                  task_mode: bool = False,
                  managed_mode: bool = False,
@@ -107,15 +108,6 @@ class MacLLMAgent(ToolCallingAgent):
             tools.append(getattr(tools_module, "read_skill"))
             has_read_skill = True
 
-        if custom_instructions and has_read_skill:
-            skills_catalog = SkillsRegistry.model_catalog_text(names=skill_names)
-            custom_instructions = (
-                f"{custom_instructions.rstrip()}\n\n"
-                "Skill discovery:\n"
-                f"{skills_catalog}\n"
-                "To retrieve a skill definition, call read_skill with the skill name.\n"
-            )
-
         if managed_agents is None and self.macllm_managed_agents:
             from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
 
@@ -133,17 +125,39 @@ class MacLLMAgent(ToolCallingAgent):
             managed_agents = []
             planning_interval = None
             no_tools_notice = (
-                "Answer this WITHOUT using tools or subagents, they have been disabed. "
+                "Answer this WITHOUT using tools or subagents; they have been disabled. "
                 "Answer using only your own knowledge and the conversation so far. "
             )
             custom_instructions = (
                 f"{(custom_instructions or '').rstrip()}\n\n{no_tools_notice}".strip()
             )
 
+        skills_catalog = (
+            SkillsRegistry.model_catalog_text(names=skill_names)
+            if has_read_skill and not no_tools else ""
+        )
+        self._skills_catalog = skills_catalog
+
         if prompt_templates is None:
             from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES
 
             prompt_templates = MACLLM_AGENT_PROMPT_TEMPLATES
+        prompt_templates = copy.deepcopy(prompt_templates)
+
+        from smolagents.agents import populate_template
+
+        planning = prompt_templates["planning"]
+        planning_context = planning.pop("context", "")
+        if planning_context:
+            context = populate_template(
+                planning_context,
+                variables={
+                    "custom_instructions": custom_instructions,
+                    "skills_catalog": skills_catalog,
+                },
+            )
+            for key in ("initial_plan", "update_plan_pre_messages"):
+                planning[key] = planning[key].replace("{{planning_context}}", context)
 
         if conversation is not None:
             from macllm.core.abortable_model import AbortableModel
@@ -167,6 +181,27 @@ class MacLLMAgent(ToolCallingAgent):
             **kwargs,
         )
 
+    def _generate_planning_step(self, task, is_first_step, step):
+        self._updating_plan = not is_first_step
+        try:
+            yield from super()._generate_planning_step(task, is_first_step, step)
+        finally:
+            self._updating_plan = False
+
+    def write_memory_to_messages(self, summary_mode=False):
+        if not (summary_mode and getattr(self, "_updating_plan", False)):
+            return super().write_memory_to_messages(summary_mode)
+
+        latest = next(
+            (item for item in reversed(self.memory.steps)
+             if isinstance(item, PlanningStep)),
+            None,
+        )
+        messages = self.memory.system_prompt.to_messages(summary_mode=True)
+        for item in self.memory.steps:
+            messages.extend(item.to_messages(summary_mode=item is not latest))
+        return messages
+
     def initialize_system_prompt(self) -> str:
         from smolagents.agents import populate_template
 
@@ -185,6 +220,7 @@ class MacLLMAgent(ToolCallingAgent):
                 "tools": self.tools,
                 "managed_agents": self.managed_agents,
                 "custom_instructions": self.instructions,
+                "skills_catalog": self._skills_catalog,
                 "user_situation": get_device_context(),
                 "task_mode": self._task_mode,
                 "managed_mode": self._managed_mode,

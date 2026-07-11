@@ -54,11 +54,13 @@ skills = ["organize-notes", "format-markdown"]
 
 - `instructions` -- custom instructions injected into the agent's system prompt. Overrides any
   code-level fallback. The project `config/config.toml` ships default instructions for all built-in
-  agents. Users can override per-agent in `~/.config/macllm/config.toml`.
+  agents. Users can override per-agent in `~/.config/macllm/config.toml`. Top-level agents also
+  receive these instructions in every planning prompt.
 - `skills` -- list of skill names the agent can access via `read_skill`. When present, the agent
-  receives a filtered skill catalog in its system prompt and `read_skill` is auto-added to its
-  tool set. The skill bodies are not baked into the prompt; the agent reads them on demand by
-  calling `read_skill`. An empty or absent list means no skill access (unless the agent already
+  receives a filtered skill catalog through the explicit `skills_catalog` prompt block and
+  `read_skill` is auto-added to its tool set. Top-level agents receive the same catalog in every
+  planning prompt. The skill bodies are not baked into the prompt; the agent reads them on demand
+  by calling `read_skill`. An empty or absent list means no skill access (unless the agent already
   has `read_skill` in its `macllm_tools`, in which case it sees all model-invocable skills).
 - `preload_skill` -- name of a skill whose body is appended to the agent's instructions when
   that agent is constructed. For top-level agents this is at conversation agent creation; for **managed**
@@ -83,6 +85,10 @@ Its architectural contract is:
 - instructions and skill access are configured via `[agents.<name>]` in config.toml
 - planning and token accounting are reported through shared callbacks
 - managed-agent composition is declared by name, not by direct object wiring
+
+Top-level agents plan before every action. During a planning update, MacLLM keeps the latest
+checklist in the otherwise summarized history so the model can preserve its items and update
+their completion markers. Managed agents may disable planning.
 
 Prompt behavior is split between prompt templates and custom instructions. Token accounting is reported
 through `create_step_callback()`, which updates `conversation.llm_metadata`. Tool execution progress

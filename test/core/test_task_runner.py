@@ -248,6 +248,7 @@ class TestTaskModePrompt:
                 "tools": {},
                 "managed_agents": {},
                 "custom_instructions": "",
+                "skills_catalog": "",
                 "user_situation": "Test",
             },
         )

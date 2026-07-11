@@ -1,8 +1,11 @@
+from types import SimpleNamespace
+
+from macllm.agents import base
 from macllm.agents.calendar_agent import CalendarAgent
 from macllm.agents.default import MacLLMDefaultAgent
 from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
 from macllm.agents.note_agent import NoteAgent
-from macllm.core.config import MacLLMConfig
+from macllm.core.config import AgentConfig, MacLLMConfig
 from macllm.core.chat_history import Conversation
 
 
@@ -28,9 +31,73 @@ def test_interactive_supervising_prompt_has_ask_user(monkeypatch):
 
     agent = MacLLMDefaultAgent(speed="normal")
 
+    assert agent.planning_interval == 1
     assert "You are an interactive assistant" in agent.system_prompt
     assert "use the ask_user tool to ask the user" in agent.system_prompt
     assert "ask_user:" in agent.system_prompt
+    assert "first unchecked item" in agent.system_prompt
+
+
+def test_plan_update_keeps_latest_checklist(monkeypatch):
+    _patch_agent_environment(monkeypatch)
+    agent = MacLLMDefaultAgent(speed="normal")
+
+    class Step:
+        def __init__(self, name):
+            self.name = name
+            self.summary_modes = []
+
+        def to_messages(self, summary_mode=False):
+            self.summary_modes.append(summary_mode)
+            return [self.name]
+
+    class Plan(Step):
+        def to_messages(self, summary_mode=False):
+            self.summary_modes.append(summary_mode)
+            return [] if summary_mode else [self.name]
+
+    monkeypatch.setattr(base, "PlanningStep", Plan)
+    system, old, action, latest = (
+        Step("system"), Plan("old"), Step("action"), Plan("latest")
+    )
+    agent.memory = SimpleNamespace(
+        system_prompt=system,
+        steps=[old, action, latest],
+    )
+    agent._updating_plan = True
+
+    assert agent.write_memory_to_messages(summary_mode=True) == [
+        "system", "action", "latest"
+    ]
+    assert old.summary_modes == [True]
+    assert latest.summary_modes == [False]
+
+
+def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
+    _patch_agent_environment(monkeypatch)
+    from macllm.core import config
+    from macllm.core.skills import SkillsRegistry
+
+    config._RUNTIME_CONFIG.agents["default"] = AgentConfig(
+        instructions="Use the configured workflow."
+    )
+    monkeypatch.setattr(
+        SkillsRegistry,
+        "model_catalog_text",
+        classmethod(lambda cls, names=None: "- workflow: Follow the workflow."),
+    )
+
+    agent = MacLLMDefaultAgent(speed="normal")
+    initial = agent.prompt_templates["planning"]["initial_plan"]
+    update = agent.prompt_templates["planning"]["update_plan_pre_messages"]
+
+    assert "# Custom Instructions\nUse the configured workflow." in agent.system_prompt
+    assert "# Skills\n- workflow: Follow the workflow." in agent.system_prompt
+    assert "Use the configured workflow." in initial
+    assert "Follow the workflow." in initial
+    assert "Use the configured workflow." in update
+    assert "Follow the workflow." in update
+    assert agent.instructions == "Use the configured workflow."
 
 
 def test_task_runner_prompt_has_no_ask_user(monkeypatch):
@@ -39,6 +106,7 @@ def test_task_runner_prompt_has_no_ask_user(monkeypatch):
     agent = MacLLMDefaultAgent(speed="normal", task_mode=True)
 
     assert "You are an autonomous task runner" in agent.system_prompt
+    assert "Never combine two items from the plan" in agent.system_prompt
     assert "ask_user" not in agent.system_prompt
     assert "ask_user" not in agent.tools
 
@@ -51,7 +119,7 @@ def test_subagent_prompt_is_specialist_prompt(monkeypatch):
     assert "You are a specialist agent working for a supervising agent" in agent.system_prompt
     assert "Use final_answer to report back to the supervising agent" in agent.system_prompt
     assert "You are an interactive assistant" not in agent.system_prompt
-    assert "You can also give tasks to team members" not in agent.system_prompt
+    assert "You can also give tasks to subagents" not in agent.system_prompt
     assert "ask_user tool" not in agent.system_prompt
     assert "ask_user" not in agent.tools
 

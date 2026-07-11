@@ -42,7 +42,9 @@ Skills have three distinct runtime paths:
 - **Agent tool use**: `read_skill(name, file="")` returns the skill body or a specific auxiliary file within that skill directory. Agents call this on demand during their tool loop.
 - **Agent preload**: `[agents.<name>].preload_skill` appends one configured skill body to that agent's instructions when the agent is constructed. Only preload skills are baked into the system prompt automatically.
 
-Configuring `[agents.<name>].skills` does not bake those skill bodies into the prompt. It filters the skill catalog visible to that agent and gives the agent access to `read_skill`.
+Configuring `[agents.<name>].skills` does not bake those skill bodies into the prompt. It filters
+the `skills_catalog` rendered explicitly in the agent's system prompt and planning prompts, and
+gives the agent access to `read_skill`.
 
 ## Boundary To Tag Plugins
 
