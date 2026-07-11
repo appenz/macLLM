@@ -114,7 +114,9 @@ class MacLLM:
         # Initialize conversation history (multiple conversations)
         self.conversation_history = ConversationHistory()
         self.ephemeral = bool(getattr(self.args, 'query', None))
-        if not self.ephemeral:
+        if getattr(self.args, 'test', False):
+            self.conversation_history.add_conversation()
+        elif not self.ephemeral:
             loaded = load_all_conversations(self.conversation_history)
             if not loaded:
                 self.conversation_history.add_conversation()
@@ -273,7 +275,7 @@ if __name__ == "__main__":
 # Helper for tests
 
 def create_macllm(debug: bool = False, start_ui: bool = False):
-    args = argparse.Namespace(debug=debug, show_window_on_start=False)
+    args = argparse.Namespace(debug=debug, show_window_on_start=False, test=True)
     mac = MacLLM(args=args)
     mac.plugins = TagPlugin.load_plugins(mac)
     mac._apply_index_dirs_from_config()

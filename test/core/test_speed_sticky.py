@@ -29,37 +29,22 @@ class TestStickySpeedPreference:
 
         assert mac.chat_history.speed_level == "normal"
 
-        # Mock agent.run at the module level so it persists through agent recreation
+        # The first request selects the speed and creates the conversation's agent.
         with patch('macllm.core.agent_service.create_agent') as mock_create_agent:
             mock_agent = _mock_agent_for_thread()
             mock_create_agent.return_value = mock_agent
 
             mac.chat_history.submit("Hello /fast")
-            assert mac.chat_history.speed_level == "fast"
             _wait_for_idle(mac.chat_history)
-            assert mock_agent.run.called
-
-        # Verify speed persisted
-        assert mac.chat_history.speed_level == "fast"
-
-        # Test that speed persists without tag
-        with patch('macllm.core.agent_service.create_agent') as mock_create_agent:
-            mock_agent = _mock_agent_for_thread()
-            mock_create_agent.return_value = mock_agent
-
             mac.chat_history.submit("Second message with no tag")
-            assert mac.chat_history.speed_level == "fast"
             _wait_for_idle(mac.chat_history)
-
-        # Test slow speed
-        with patch('macllm.core.agent_service.create_agent') as mock_create_agent:
-            mock_agent = _mock_agent_for_thread()
-            mock_agent.model.model_id = "gpt-5.4"
-            mock_create_agent.return_value = mock_agent
-
             mac.chat_history.submit("Please reason carefully /think")
-            assert mac.chat_history.speed_level == "slow"
             _wait_for_idle(mac.chat_history)
+
+        assert mac.chat_history.speed_level == "fast"
+        assert mac.chat_history.agent is mock_agent
+        mock_create_agent.assert_called_once()
+        assert mock_agent.run.call_count == 3
 
         # Test new conversation resets speed
         new_conv = mac.conversation_history.add_conversation()

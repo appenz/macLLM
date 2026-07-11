@@ -39,6 +39,10 @@ class MacLLMAgent(ToolCallingAgent):
     macllm_description: str = ""
     macllm_tools: list[str] = []
     macllm_managed_agents: list[str] = []
+    no_tools_notice = (
+        "Answer this WITHOUT using tools or subagents; they are disabled for this request. "
+        "Answer using only your own knowledge and the conversation so far."
+    )
 
     def __init__(self, speed: str = "normal",
                  conversation: Conversation | None = None,
@@ -53,13 +57,17 @@ class MacLLMAgent(ToolCallingAgent):
         from macllm.core.llm_service import MODELS
         from macllm import tools as tools_module
         from macllm.core.agent_service import create_step_callback
-        from macllm.tools.web_search import reset_search_counter
         from macllm.core.skills import SkillsRegistry
         from macllm.core.config import get_runtime_config
 
-        reset_search_counter()
         self._task_mode = task_mode
         self._managed_mode = managed_mode
+        self._tools_disabled = False
+        if conversation is not None:
+            self._user_situation = conversation.get_user_situation()
+        else:
+            from macllm.core.device_context import get_device_context
+            self._user_situation = get_device_context()
 
         model = MODELS.get(speed.lower(), MODELS['normal'])
         if model is None:
@@ -124,12 +132,8 @@ class MacLLMAgent(ToolCallingAgent):
             tools = []
             managed_agents = []
             planning_interval = None
-            no_tools_notice = (
-                "Answer this WITHOUT using tools or subagents; they have been disabled. "
-                "Answer using only your own knowledge and the conversation so far. "
-            )
             custom_instructions = (
-                f"{(custom_instructions or '').rstrip()}\n\n{no_tools_notice}".strip()
+                f"{(custom_instructions or '').rstrip()}\n\n{self.no_tools_notice}".strip()
             )
 
         skills_catalog = (
@@ -205,8 +209,6 @@ class MacLLMAgent(ToolCallingAgent):
     def initialize_system_prompt(self) -> str:
         from smolagents.agents import populate_template
 
-        from macllm.core.device_context import get_device_context
-
         if self._managed_mode:
             template_name = "subagent_system_prompt"
         elif self._interactive_mode:
@@ -214,19 +216,30 @@ class MacLLMAgent(ToolCallingAgent):
         else:
             template_name = "task_runner_system_prompt"
 
-        return populate_template(
+        prompt = populate_template(
             self.prompt_templates[template_name],
             variables={
                 "tools": self.tools,
                 "managed_agents": self.managed_agents,
                 "custom_instructions": self.instructions,
                 "skills_catalog": self._skills_catalog,
-                "user_situation": get_device_context(),
+                "user_situation": self._user_situation,
                 "task_mode": self._task_mode,
                 "managed_mode": self._managed_mode,
                 "interactive_mode": self._interactive_mode,
             },
         )
+        if self._tools_disabled:
+            prompt = f"{prompt.rstrip()}\n\n{self.no_tools_notice}"
+        return prompt
+
+    def execute_tool_call(self, tool_name, arguments):
+        if self._tools_disabled and tool_name != "final_answer":
+            from smolagents.agents import AgentToolExecutionError
+            raise AgentToolExecutionError(
+                f"Tool '{tool_name}' is disabled for this request.", self.logger
+            )
+        return super().execute_tool_call(tool_name, arguments)
 
     @staticmethod
     def _debug(msg: str):

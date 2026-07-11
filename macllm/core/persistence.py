@@ -41,6 +41,7 @@ def save_conversation(conversation) -> bool:
             'steps': conversation.agent.memory.steps,
             'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
+            'speed_level': getattr(conversation, 'speed_level', 'normal'),
         }
         with open(get_latest_path(), 'wb') as f:
             pickle.dump(data, f)
@@ -60,6 +61,7 @@ def load_conversation(conversation) -> bool:
             data = pickle.load(f)
         if isinstance(data, dict):
             agent_name = data.get('agent_name', 'default')
+            conversation.speed_level = data.get('speed_level', 'normal')
             try:
                 from macllm.agents import get_agent_class
                 conversation.agent_cls = get_agent_class(agent_name)
@@ -103,6 +105,7 @@ def _serialize_conversation(conversation) -> dict | None:
             'steps': conversation.agent.memory.steps,
             'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
+            'speed_level': getattr(conversation, 'speed_level', 'normal'),
             'title': getattr(conversation, 'title', 'New'),
         }
     except Exception:
@@ -169,6 +172,7 @@ def load_all_conversations(conversation_history) -> bool:
         for entry in entries:
             conv = Conversation()
             agent_name = entry.get('agent_name', 'default')
+            conv.speed_level = entry.get('speed_level', 'normal')
             try:
                 from macllm.agents import get_agent_class
                 conv.agent_cls = get_agent_class(agent_name)

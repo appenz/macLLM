@@ -74,7 +74,8 @@ It shows:
 
 - branding and window identity
 - recent Sources
-- model and token metadata (read from `conversation.usage`)
+- model metadata and cumulative conversation token totals (summed from
+  persisted step facts in `conversation.conversation_log`)
 
 The menu bar shows a static "LLM" label. Per-tab running state is conveyed by indicators on the tab bar, not the menu bar.
 

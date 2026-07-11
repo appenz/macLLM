@@ -54,6 +54,7 @@ class Conversation:
         self._run_step_offset: int = 0
         self._active_query_text: str | None = None
         self._active_run_started_monotonic: float | None = None
+        self._user_situation: str | None = None
 
         self.reset()
 
@@ -150,10 +151,10 @@ class Conversation:
 
             self.add_user_message(user_input)
 
-            if request.agent_name is not None:
+            if self.agent is None and request.agent_name is not None:
                 from macllm.agents import get_agent_class
                 self.agent_cls = get_agent_class(request.agent_name)
-            if request.speed_level is not None:
+            if self.agent is None and request.speed_level is not None:
                 self.speed_level = request.speed_level
 
             if not request.expanded_prompt.strip():
@@ -163,7 +164,8 @@ class Conversation:
             self._reset_run_state()
             self._active_query_text = user_input
 
-            self._create_agent(conversation=self, no_tools=request.no_tools)
+            if self.agent is None:
+                self._create_agent()
 
             self._start_agent_thread(request, app)
 
@@ -185,8 +187,10 @@ class Conversation:
             try:
                 conversation.abort_event.clear()
                 conversation.clear_tool_calls()
+                from macllm.tools.web_search import reset_search_counter
                 from smolagents import PlanningStep
 
+                reset_search_counter()
                 conversation.agent.memory.steps = [
                     s
                     for s in conversation.agent.memory.steps
@@ -208,6 +212,7 @@ class Conversation:
                     "no_tools": bool(request.no_tools),
                 })
 
+                conversation.agent._tools_disabled = bool(request.no_tools)
                 result = conversation.agent.run(request.expanded_prompt, **run_kwargs)
 
                 if isinstance(result, str):
@@ -229,6 +234,7 @@ class Conversation:
                     app.debug_exception(e)
                     conversation.add_assistant_message(f"Error: {str(e)}")
             finally:
+                conversation.agent._tools_disabled = False
                 started = conversation._active_run_started_monotonic
                 append_run_end(conversation.conversation_log, {
                     "status": run_status,
@@ -434,6 +440,12 @@ class Conversation:
             self.agent_cls = get_default_agent_class()
         return self.agent_cls
 
+    def get_user_situation(self) -> str:
+        if self._user_situation is None:
+            from macllm.core.device_context import get_device_context
+            self._user_situation = get_device_context()
+        return self._user_situation
+
     def grant_directory(self, path: str) -> None:
         """Add a directory to the sandbox grant list for this conversation."""
         abs_path = os.path.abspath(os.path.expanduser(path))
@@ -460,6 +472,7 @@ class Conversation:
         self.title = "New Agent"
         self.pending_user_input = None
         self._active_query_text = None
+        self._user_situation = None
 
         self._get_agent_cls()
 
@@ -471,26 +484,15 @@ class Conversation:
             from macllm.core.persistence import clear_conversation
             clear_conversation()
 
-    def _create_agent(self, conversation=None, no_tools=False):
+    def _create_agent(self):
         """Create agent instance using the current agent class."""
         from macllm.core.agent_service import create_agent
-        from smolagents import PlanningStep
-
-        old_steps = None
-        if self.agent is not None:
-            old_steps = self.agent.memory.steps
 
         self.agent = create_agent(
             agent_cls=self._get_agent_cls(),
             speed=self.speed_level,
-            conversation=conversation,
-            no_tools=no_tools,
+            conversation=self,
         )
-
-        if old_steps is not None:
-            self.agent.memory.steps = [
-                s for s in old_steps if not isinstance(s, PlanningStep)
-            ]
 
 
 class ConversationHistory:

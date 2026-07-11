@@ -1,4 +1,4 @@
-"""Verify the full token-display pipeline: step callback → conversation.usage → top bar text."""
+"""Verify token accounting and cumulative top-bar display data."""
 
 import time
 from unittest.mock import Mock, patch, MagicMock
@@ -8,7 +8,7 @@ from smolagents.memory import TokenUsage, Timing
 
 from macllm.core.agent_service import create_step_callback, extract_plan, extract_status
 from macllm.core.chat_history import Conversation, Usage
-from macllm.core.conversation_log import latest_plan
+from macllm.core.conversation_log import append_step, latest_plan, token_usage_totals
 from macllm.core.llm_service import get_model_for_speed
 from macllm.macllm import create_macllm
 
@@ -250,13 +250,54 @@ class TestConversationUsage:
 
         assert captured.get("conversation") is conv
 
+    def test_no_tools_is_request_scoped_on_persistent_agent(self):
+        mac = create_macllm(debug=False, start_ui=False)
+        conv = mac.chat_history
+        conv.title = "Existing"
+        disabled_during_run = []
+
+        with patch("macllm.core.agent_service.create_agent") as mock_create:
+            mock_agent = Mock()
+            mock_agent.memory = Mock(steps=[])
+            mock_agent.run.side_effect = lambda *args, **kwargs: (
+                disabled_during_run.append(mock_agent._tools_disabled) or "done"
+            )
+            mock_create.return_value = mock_agent
+
+            conv.submit("first")
+            time.sleep(0.3)
+            conv.submit("2+2 /notool")
+            time.sleep(0.3)
+
+        assert disabled_during_run == [False, True]
+        assert mock_agent._tools_disabled is False
+        mock_create.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Top-bar display text verification
 # ---------------------------------------------------------------------------
 
 class TestTopBarDisplayValues:
-    """Verify the data that update_top_bar_text reads from the conversation."""
+    """Verify the cumulative data that the top bar displays."""
+
+    def test_total_tokens_cover_all_conversation_runs(self):
+        conv = Conversation()
+        for input_tokens, output_tokens in ((100, 20), (250, 40)):
+            append_step(conv.conversation_log, {
+                "step_type": "action",
+                "token_usage": {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens,
+                },
+            })
+
+        # Per-run usage may have been reset; the displayed total comes from
+        # the durable conversation log and therefore survives that reset.
+        conv.usage.reset()
+
+        assert token_usage_totals(conv.conversation_log) == (350, 60)
 
     def test_model_matches_speed(self):
         """get_model_for_speed returns correct model for each tier."""

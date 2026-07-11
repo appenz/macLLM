@@ -671,12 +671,12 @@ class MacLLMUI:
         if not hasattr(self, "top_bar_text_view"):
             return
 
+        from macllm.core.conversation_log import token_usage_totals
         from macllm.core.llm_service import get_model_for_speed
         conv = self.macllm.chat_history
         speed = getattr(conv, 'speed_level', 'normal') or 'normal'
         model = get_model_for_speed(speed)
-        input_tokens = conv.usage.input_tokens
-        output_tokens = conv.usage.output_tokens
+        input_tokens, output_tokens = token_usage_totals(conv.conversation_log)
 
         # Determine agent and speed for display
         agent_cls = getattr(self.macllm.chat_history, "agent_cls", None)

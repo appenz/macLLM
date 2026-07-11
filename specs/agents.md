@@ -91,13 +91,16 @@ checklist in the otherwise summarized history so the model can preserve its item
 their completion markers. Managed agents may disable planning.
 
 Prompt behavior is split between prompt templates and custom instructions. Token accounting is reported
-through `create_step_callback()`, which updates `conversation.llm_metadata`. Tool execution progress
-is recorded by smolagents in `agent.memory.steps` and rendered by the UI from there.
+through `create_step_callback()`, which updates per-run `conversation.usage` and appends durable step
+facts to `conversation.conversation_log`. The top bar derives its cumulative conversation total from
+those persisted step facts. Tool execution progress is recorded by smolagents in `agent.memory.steps`
+and projected into the conversation log for rendering.
 
-Each agent’s system prompt includes **The user's current time & location** (`user_situation` in
-`macllm/agents/prompts/default.yaml`): local date/time with IANA time zone and approximate GPS plus
-reverse-geocoded place text when available. This is assembled by the device situation helper and
-injected by `MacLLMAgent.initialize_system_prompt()` (not via a tool).
+Each conversation captures **The user's current time & location** once as `user_situation`: local
+date/time with IANA time zone and approximate GPS plus reverse-geocoded place text when available.
+Parent and managed agents use that same immutable string in `macllm/agents/prompts/default.yaml`.
+`MacLLMAgent.initialize_system_prompt()` may run repeatedly, but the situation text remains stable
+for the conversation. It is refreshed on conversation reset or app restart and is not persisted.
 
 ## Threading Model
 

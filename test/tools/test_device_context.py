@@ -46,6 +46,20 @@ def test_get_device_context_uses_cached_location(monkeypatch):
     assert t1 == t2
 
 
+def test_conversation_keeps_one_user_situation(monkeypatch):
+    from macllm.core.chat_history import Conversation
+
+    values = iter(("first situation", "second situation"))
+    monkeypatch.setattr(dc, "get_device_context", lambda: next(values))
+
+    conversation = Conversation()
+    assert conversation.get_user_situation() == "first situation"
+    assert conversation.get_user_situation() == "first situation"
+
+    conversation.reset()
+    assert conversation.get_user_situation() == "second situation"
+
+
 class _FakePlacemark:
     """Synthetic CLPlacemark; missing attrs return None like Apple does."""
 
@@ -114,3 +128,26 @@ def test_default_agent_system_prompt_includes_user_situation(monkeypatch):
         assert "GPS:" in prompt
     finally:
         MacLLM._instance = None
+
+
+def test_agent_reuses_conversation_situation_in_regenerated_prompt(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from macllm.agents.default import MacLLMDefaultAgent
+    from macllm.core import llm_service
+    from macllm.core.agent_service import create_agent
+    from macllm.core.chat_history import Conversation
+
+    dummy = MagicMock()
+    monkeypatch.setitem(llm_service.MODELS, "normal", dummy)
+    monkeypatch.setattr(dc, "get_device_context", lambda: "Stable situation")
+
+    conversation = Conversation()
+    agent = create_agent(
+        agent_cls=MacLLMDefaultAgent,
+        speed="normal",
+        conversation=conversation,
+    )
+
+    assert agent.initialize_system_prompt() == agent.initialize_system_prompt()
+    assert "Stable situation" in agent.initialize_system_prompt()

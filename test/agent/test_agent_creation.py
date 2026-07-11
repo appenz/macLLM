@@ -28,6 +28,7 @@ class TestAgentSelection:
 
     def test_agent_persists_without_tag(self):
         mac = create_macllm(debug=False, start_ui=False)
+        mac.chat_history.title = "Existing"
 
         with patch('macllm.core.agent_service.create_agent') as mock_create:
             mock_agent = Mock()
@@ -38,20 +39,13 @@ class TestAgentSelection:
 
             mac.chat_history.submit("@agent:smolagent first message")
             time.sleep(0.3)
-
-        assert mac.chat_history.agent_cls is MacLLMSmolAgent
-
-        with patch('macllm.core.agent_service.create_agent') as mock_create:
-            mock_agent = Mock()
-            mock_agent.run = Mock(return_value="MOCK_RESPONSE")
-            mock_agent.macllm_name = "smolagent"
-            mock_agent.memory = Mock(steps=[])
-            mock_create.return_value = mock_agent
-
             mac.chat_history.submit("second message without tag")
             time.sleep(0.3)
 
         assert mac.chat_history.agent_cls is MacLLMSmolAgent
+        assert mac.chat_history.agent is mock_agent
+        mock_create.assert_called_once()
+        assert mock_agent.run.call_count == 2
 
     def test_new_conversation_resets_to_default(self):
         mac = create_macllm(debug=False, start_ui=False)
@@ -83,6 +77,7 @@ class TestMemoryAgentPersistence:
         conv.agent.memory = Mock(steps=[])
         conv.agent.macllm_name = "smolagent"
         conv.conversation_log = []
+        conv.speed_level = "normal"
 
         save_conversation(conv)
 

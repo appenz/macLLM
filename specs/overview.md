@@ -82,9 +82,9 @@ MacLLM agents are built on top of smolagents `ToolCallingAgent`.
 The agent layer provides registry/autodiscovery, a thin factory, prompt template selection,
 custom instructions, symbolic tool registration, and managed-agent delegation. See `specs/agents.md`.
 
-Each agent’s system prompt includes the user’s current local time (with IANA time zone) and
-approximate location (coordinates plus reverse-geocoded text when available), assembled by
-the device situation helper — not via a tool.
+Each conversation snapshots the user’s local time (with IANA time zone) and approximate location
+(coordinates plus reverse-geocoded text when available) once for use by its parent and managed-agent
+system prompts. The snapshot comes from `macllm/core/device_context.py`, not a tool.
 
 ### Tools
 

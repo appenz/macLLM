@@ -172,20 +172,23 @@ class TestResetBehavior:
 
 
 class TestStepsPersistence:
-    def test_steps_preserved_across_agent_recreation(self, monkeypatch):
+    def test_create_agent_binds_owning_conversation(self, monkeypatch):
         from macllm.core.chat_history import Conversation
         from macllm.core import agent_service
-        
-        monkeypatch.setattr(agent_service, 'create_agent', lambda **kwargs: MockAgent())
-        
+
+        captured = {}
+
+        def create_agent(**kwargs):
+            captured.update(kwargs)
+            return MockAgent()
+
+        monkeypatch.setattr(agent_service, 'create_agent', create_agent)
+
         conv = Conversation()
         conv._create_agent()
-        conv.agent.memory.steps = [{'task': 'first'}, {'task': 'second'}]
-        
-        conv._create_agent()
-        
-        assert conv.agent.memory.steps == [{'task': 'first'}, {'task': 'second'}]
-    
+
+        assert captured["conversation"] is conv
+
     def test_persistence_roundtrip(self, temp_storage, monkeypatch):
         from macllm.core import agent_service
         

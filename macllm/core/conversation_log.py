@@ -65,6 +65,22 @@ def append_agent_step(
     log.append(entry("step", payload, tokens=tokens.get("total_tokens")))
 
 
+def token_usage_totals(log: list[ConversationLogEntry]) -> tuple[int, int]:
+    """Return cumulative input/output tokens recorded in step facts."""
+    input_tokens = 0
+    output_tokens = 0
+    for item in log:
+        payload = getattr(item, "payload", None)
+        if not isinstance(payload, dict):
+            continue
+        usage = payload.get("token_usage")
+        if not isinstance(usage, dict):
+            continue
+        input_tokens += int(usage.get("input_tokens", 0) or 0)
+        output_tokens += int(usage.get("output_tokens", 0) or 0)
+    return input_tokens, output_tokens
+
+
 def add_tool_call(log: list[ConversationLogEntry], tool_name: str, message_text: str) -> None:
     log.append(ConversationLogEntry(
         kind="tool_call",
