@@ -8,8 +8,11 @@ from Foundation import NSMutableAttributedString, NSMutableParagraphStyle
 
 from macllm.markdown.inline import render_inline
 
-FONT_SIZE = 13.0
-CODE_BLOCK_FONT_SIZE = 11.5
+FONT_SIZE = 14.0
+LINE_HEIGHT = FONT_SIZE * 1.2
+PARAGRAPH_SPACING = FONT_SIZE * 0.75
+LIST_ITEM_SPACING = FONT_SIZE * 0.25
+CODE_BLOCK_FONT_SIZE = 12.0
 CODE_BLOCK_LEFT_INDENT = 8.0
 COLLAPSE_PREVIEW_LINES = 5
 COLLAPSE_THRESHOLD_LINES = 20
@@ -17,13 +20,91 @@ COLLAPSE_THRESHOLD_LINES = 20
 LIST_BASE_INDENT = 14.0
 INDENT_PER_LEVEL = 16.0
 BULLET_TEXT_OFFSET = 14.0
-LIST_SPACING_BEFORE = 6.0
-LIST_ITEM_SPACING = 2.0
+
+HEADING_FONT_SIZES = {
+    1: 16.0,
+    2: 15.0,
+}
+DEFAULT_HEADING_FONT_SIZE = FONT_SIZE
+
+
+def _heading_font_size(level):
+    return HEADING_FONT_SIZES.get(level, DEFAULT_HEADING_FONT_SIZE)
+
+
+def _heading_level(token):
+    tag = getattr(token, "tag", None) or ""
+    if tag.startswith("h") and len(tag) == 2 and tag[1].isdigit():
+        return int(tag[1])
+    return 1
+
+
+def _make_prose_style(*, line_height=LINE_HEIGHT):
+    """Paragraph style for body/heading prose blocks (line metrics only)."""
+    style = NSMutableParagraphStyle.alloc().init()
+    style.setMinimumLineHeight_(line_height)
+    style.setMaximumLineHeight_(line_height)
+    return style
+
+
+def apply_block_margins(attr_str, spacing_before=0.0, spacing_after=0.0):
+    """Apply outer spacing to the first/last paragraph of a rendered block."""
+    from Foundation import NSString
+
+    if attr_str.length() == 0:
+        return attr_str
+    if not spacing_before and not spacing_after:
+        return attr_str
+
+    text = str(attr_str.string())
+    ns_text = NSString.stringWithString_(text)
+    ranges = []
+    pos = 0
+    while pos < attr_str.length():
+        para_range = ns_text.paragraphRangeForRange_((pos, 0))
+        if para_range.length == 0:
+            break
+        ranges.append((para_range.location, para_range.length))
+        next_pos = para_range.location + para_range.length
+        if next_pos <= pos:
+            break
+        pos = next_pos
+
+    if not ranges:
+        return attr_str
+
+    for idx, (loc, length) in enumerate(ranges):
+        style, _ = attr_str.attribute_atIndex_effectiveRange_(
+            NSParagraphStyleAttributeName, loc, None,
+        )
+        if style is None:
+            style = NSMutableParagraphStyle.alloc().init()
+        else:
+            style = style.mutableCopy()
+        if idx == 0 and spacing_before:
+            style.setParagraphSpacingBefore_(spacing_before)
+        if idx == len(ranges) - 1 and spacing_after:
+            style.setParagraphSpacing_(spacing_after)
+        attr_str.addAttribute_value_range_(
+            NSParagraphStyleAttributeName, style, (loc, length),
+        )
+    return attr_str
+
+
+def _apply_paragraph_style(attr_str, style):
+    if attr_str.length() > 0:
+        attr_str.addAttribute_value_range_(
+            NSParagraphStyleAttributeName, style,
+            (0, attr_str.length()),
+        )
+    return attr_str
 
 
 def render_heading(tokens, start_idx, color):
     """Render a heading block.  Returns (NSAttributedString, next_index)."""
-    bold_font = NSFont.boldSystemFontOfSize_(FONT_SIZE)
+    level = _heading_level(tokens[start_idx])
+    font_size = _heading_font_size(level)
+    bold_font = NSFont.boldSystemFontOfSize_(font_size)
     result = NSMutableAttributedString.alloc().init()
 
     i = start_idx + 1
@@ -31,6 +112,9 @@ def render_heading(tokens, start_idx, color):
         if tokens[i].type == 'inline':
             result.appendAttributedString_(render_inline(tokens[i], color, bold_font))
         i += 1
+
+    style = _make_prose_style(line_height=font_size * 1.2)
+    _apply_paragraph_style(result, style)
     return result, i + 1
 
 
@@ -44,6 +128,7 @@ def render_paragraph(tokens, start_idx, color):
         if tokens[i].type == 'inline':
             result.appendAttributedString_(render_inline(tokens[i], color, font))
         i += 1
+    _apply_paragraph_style(result, _make_prose_style())
     return result, i + 1
 
 
@@ -57,12 +142,8 @@ def _has_following_list_item(tokens, start_idx, close_type):
     return False
 
 
-def _make_list_item_style(indent, is_first, is_last=False):
-    """Build an NSMutableParagraphStyle for one list item.
-
-    Uses a tab stop so bullet/number text always starts at a fixed column,
-    and adds vertical breathing room before the first item and after the last.
-    """
+def _make_list_item_style(indent, is_last=False):
+    """Build paragraph style for one list item (internal spacing only)."""
     content_col = indent + BULLET_TEXT_OFFSET
     style = NSMutableParagraphStyle.alloc().init()
     style.setFirstLineHeadIndent_(indent)
@@ -73,10 +154,10 @@ def _make_list_item_style(indent, is_first, is_last=False):
     )
     style.setTabStops_([tab])
     style.setDefaultTabInterval_(BULLET_TEXT_OFFSET)
-    if is_first:
-        style.setParagraphSpacingBefore_(LIST_SPACING_BEFORE)
-    spacing_after = LIST_SPACING_BEFORE if is_last else LIST_ITEM_SPACING
-    style.setParagraphSpacing_(spacing_after)
+    style.setMinimumLineHeight_(LINE_HEIGHT)
+    style.setMaximumLineHeight_(LINE_HEIGHT)
+    if not is_last:
+        style.setParagraphSpacing_(LIST_ITEM_SPACING)
     return style
 
 
@@ -107,7 +188,7 @@ def render_list(tokens, start_idx, color, depth=0):
                 result.appendAttributedString_(nl)
 
             has_following = _has_following_list_item(tokens, i + 1, close_type)
-            style = _make_list_item_style(indent, first_item, is_last=not has_following)
+            style = _make_list_item_style(indent, is_last=not has_following)
             first_item = False
 
             item_line = NSMutableAttributedString.alloc().init()

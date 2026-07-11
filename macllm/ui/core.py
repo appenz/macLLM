@@ -26,6 +26,8 @@ from macllm.ui.tab_bar import TabBarHandler
 from macllm.ui.history_browse import HistoryBrowseDelegate
 from macllm.ui.input_field import InputFieldHandler
 
+from macllm.markdown.blocks import FONT_SIZE
+
 import os
 import sys
 import objc
@@ -197,7 +199,7 @@ class AppDelegate(NSObject):
 class MacLLMUI:
 
     # Font
-    font_size = 13.0
+    font_size = FONT_SIZE
 
     # Layout of the window - updated to match specification
     padding = 4

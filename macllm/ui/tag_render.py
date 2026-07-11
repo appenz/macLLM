@@ -8,6 +8,7 @@ visuals and token rules remain consistent across the app.
 
 from typing import Iterable, Tuple
 
+from macllm.markdown.blocks import FONT_SIZE
 from Cocoa import (
     NSAttributedString,
     NSMutableAttributedString,
@@ -48,7 +49,7 @@ class _InlineTextAttachment(objc.lookUpClass("NSTextAttachment")):
 
 def make_pill_attachment(label_text: str) -> NSAttributedString:
     """Create a rounded blue pill image attachment for display only."""
-    font = NSFont.systemFontOfSize_(13.0)
+    font = NSFont.systemFontOfSize_(FONT_SIZE)
     attrs = {NSFontAttributeName: font, NSForegroundColorAttributeName: NSColor.blackColor()}
     text_ns = objc.lookUpClass("NSString").stringWithString_(label_text)
     txt_size = text_ns.sizeWithAttributes_(attrs)
@@ -258,7 +259,7 @@ def build_input_attributed_with_caret(
             return
         # Ensure plain text uses basic readable attributes when typing_attrs is None
         if base_attrs is None:
-            plain_font = NSFont.systemFontOfSize_(13.0)
+            plain_font = NSFont.systemFontOfSize_(FONT_SIZE)
             attr = NSAttributedString.alloc().initWithString_attributes_(
                 s, {NSFontAttributeName: plain_font, NSForegroundColorAttributeName: NSColor.blackColor()}
             )

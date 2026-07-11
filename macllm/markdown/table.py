@@ -8,7 +8,9 @@ from Cocoa import (
 from AppKit import NSLineBreakByTruncatingTail
 from Foundation import NSMutableAttributedString, NSMutableParagraphStyle
 
-TABLE_FONT_SIZE = 11.5
+from macllm.markdown.blocks import CODE_BLOCK_FONT_SIZE
+
+TABLE_FONT_SIZE = CODE_BLOCK_FONT_SIZE
 TABLE_LEFT_INDENT = 8.0
 COL_GAP = "  "
 

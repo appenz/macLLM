@@ -1,4 +1,5 @@
 from macllm.markdown.renderer import MarkdownRenderer
+from macllm.markdown.blocks import FONT_SIZE
 
 _renderer = MarkdownRenderer()
 

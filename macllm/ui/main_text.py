@@ -1,6 +1,7 @@
 from Cocoa import NSTextView, NSFont, NSColor, NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName, NSBackgroundColorAttributeName, NSParagraphStyle, NSMutableParagraphStyle, NSParagraphStyleAttributeName
 from AppKit import NSTextAlignmentCenter
 from macllm.ui.tag_render import render_text_with_pills
+from macllm.markdown.blocks import FONT_SIZE
 from macllm.core.skills import SkillsRegistry
 from macllm.core.conversation_log import (
     latest_plan,
@@ -24,14 +25,14 @@ class MainTextHandler:
             
             cls._separator_attributes = {
                 NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(0.9, 1.0),
-                NSFontAttributeName: NSFont.systemFontOfSize_(13.0),
+                NSFontAttributeName: NSFont.systemFontOfSize_(FONT_SIZE),
                 NSParagraphStyleAttributeName: cls._separator_paragraph_style
             }
     
     @staticmethod
     def append_colored_text(text_view, text, color):
         text_storage = text_view.textStorage()
-        font = NSFont.systemFontOfSize_(13.0)
+        font = NSFont.systemFontOfSize_(FONT_SIZE)
         attributes = {
             NSForegroundColorAttributeName: color,
             NSFontAttributeName: font
@@ -212,7 +213,7 @@ class MainTextHandler:
         """Render queued user input as a dimmed block below agent activity."""
         ts = text_view.textStorage()
         muted = NSColor.colorWithCalibratedWhite_alpha_(0.45, 1.0)
-        font = NSFont.systemFontOfSize_(13.0)
+        font = NSFont.systemFontOfSize_(FONT_SIZE)
 
         def _append(s, color, f=font):
             a = NSAttributedString.alloc().initWithString_attributes_(
@@ -233,7 +234,7 @@ class MainTextHandler:
             text_view = NSTextView.alloc().initWithFrame_(((0, 0), (text_area_width - 2*text_corner_radius, 1000)))
             text_view.setEditable_(False)
             text_view.setDrawsBackground_(False)
-            text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+            text_view.setFont_(NSFont.systemFontOfSize_(FONT_SIZE))
         
         return MainTextHandler.set_text_content(macllm, text_view)
 
@@ -247,7 +248,7 @@ class MainTextHandler:
         MainTextHandler._init_separator_attributes()
         
         text_view.setString_("")
-        text_view.setFont_(NSFont.systemFontOfSize_(13.0))
+        text_view.setFont_(NSFont.systemFontOfSize_(FONT_SIZE))
         text_view.setLinkTextAttributes_({})
         
         conv = macllm.chat_history
@@ -272,7 +273,7 @@ class MainTextHandler:
                 MainTextHandler.append_colored_text(text_view, prefix, color)
             
             if role == 'user':
-                font = NSFont.systemFontOfSize_(13.0)
+                font = NSFont.systemFontOfSize_(FONT_SIZE)
                 shortcuts_list = SkillsRegistry.list_manual_commands()
                 plugins = getattr(macllm, 'plugins', [])
                 attr = render_text_with_pills(text, color, font, shortcuts_list, plugins)

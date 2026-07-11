@@ -14,6 +14,7 @@ from Cocoa import (
     NSRange,
 )
 from macllm.ui.autocomplete import AutocompleteController
+from macllm.markdown.blocks import FONT_SIZE
 from macllm.ui.tag_render import (
     TAG_ATTR_NAME,
     build_tag_attributed,
@@ -471,7 +472,7 @@ class InputFieldHandler:
 
         input_field = InputTextView.alloc().initWithFrame_(((0, 0), scroll_view.frame().size))
         input_field.macllm_ui = macllm_ui
-        input_field.setFont_(NSFont.systemFontOfSize_(13.0))
+        input_field.setFont_(NSFont.systemFontOfSize_(FONT_SIZE))
         input_field.setDrawsBackground_(False)
         input_field.setAutomaticQuoteSubstitutionEnabled_(False)
         input_field.setAutomaticDashSubstitutionEnabled_(False)

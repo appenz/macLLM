@@ -4,9 +4,10 @@ from Foundation import NSMutableAttributedString
 
 from macllm.markdown.blocks import (
     render_heading, render_paragraph, render_list,
-    render_fence, render_blockquote,
+    render_fence, render_blockquote, apply_block_margins,
 )
 from macllm.markdown.table import render_table
+from macllm.markdown.spacing import gap_before, gap_after
 
 BLOCK_DISPATCH = {
     'heading_open': render_heading,
@@ -15,8 +16,6 @@ BLOCK_DISPATCH = {
     'ordered_list_open': render_list,
     'table_open': render_table,
 }
-
-EXTRA_SPACING_TYPES = {'table_open', 'fence', 'code_block', 'blockquote_open'}
 
 
 class MarkdownRenderer:
@@ -27,12 +26,10 @@ class MarkdownRenderer:
     def render(self, text, color):
         text = text.rstrip('\n')
         tokens = self.md.parse(text)
-        result = NSMutableAttributedString.alloc().init()
         self.last_block_infos = []
 
+        blocks = []
         i = 0
-        first_block = True
-        prev_type = None
         while i < len(tokens):
             token = tokens[i]
             block_id = None
@@ -48,21 +45,25 @@ class MarkdownRenderer:
                 continue
 
             if attr_str and attr_str.length() > 0:
-                if not first_block:
-                    extra = (token.type in EXTRA_SPACING_TYPES
-                             or prev_type in EXTRA_SPACING_TYPES)
-                    spacing = "\n\n" if extra else "\n"
-                    nl = NSAttributedString.alloc().initWithString_(spacing)
-                    result.appendAttributedString_(nl)
+                blocks.append((token.type, attr_str, block_id))
 
-                start_pos = result.length()
-                result.appendAttributedString_(attr_str)
+        result = NSMutableAttributedString.alloc().init()
+        for idx, (token_type, attr_str, block_id) in enumerate(blocks):
+            prev_type = blocks[idx - 1][0] if idx > 0 else None
+            next_type = blocks[idx + 1][0] if idx + 1 < len(blocks) else None
+            before = gap_before(prev_type, token_type)
+            after = gap_after(token_type, next_type)
+            attr_str = apply_block_margins(attr_str, before, after)
 
-                if block_id is not None:
-                    self.last_block_infos.append(
-                        (block_id, start_pos, attr_str.length()))
+            if idx > 0:
+                nl = NSAttributedString.alloc().initWithString_("\n")
+                result.appendAttributedString_(nl)
 
-                prev_type = token.type
-                first_block = False
+            start_pos = result.length()
+            result.appendAttributedString_(attr_str)
+
+            if block_id is not None:
+                self.last_block_infos.append(
+                    (block_id, start_pos, attr_str.length()))
 
         return result
