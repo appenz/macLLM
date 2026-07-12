@@ -114,19 +114,6 @@ class MacLLMAgent(ToolCallingAgent):
 
         skill_names = agent_cfg.skills if agent_cfg and agent_cfg.skills else None
         has_filesystem = "read_file" in tool_names
-        if has_filesystem:
-            filesystem_instructions = (
-                "Filesystem: use absolute virtual paths. Read shared inputs from /notes, "
-                "/memory, and /skills; write all outputs and intermediate artifacts to /home. "
-                "/host is unavailable."
-                if self.read_only_no_hostfs else
-                "Filesystem: use absolute virtual paths under /notes, /memory, /skills, /home, "
-                "or permission-gated /host. /skills is read-only. When delegating, subagents "
-                "can read shared mounts but can write only to /home."
-            )
-            custom_instructions = (
-                f"{(custom_instructions or '').rstrip()}\n\n{filesystem_instructions}"
-            ).strip()
         if managed_agents is None and self.macllm_managed_agents:
             from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
 

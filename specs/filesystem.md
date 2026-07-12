@@ -12,9 +12,9 @@ available through one consistent interface.
 
 ```text
 /
-├── notes/       ← configured shared mounts, typically indexed.
+├── notes/       ← configured files, typically indexed.
 ├── memory/      ← configured shared mount; replaces old memory.
-├── skills/      ← configured shared mounts for skill files.
+├── skills/      ← configured files for skill files.
 ├── home/        ← private durable workspace for generated artifacts.
 └── host/        ← host filesystem; requires user permission.
 ```

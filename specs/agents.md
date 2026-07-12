@@ -90,12 +90,17 @@ their completion markers. Each parent planning response also emits one `<update>
 the immediate next activity; it is independent of checklist completion criteria. Managed agents
 do not emit semantic updates and may disable planning.
 
-Prompt behavior is split between prompt templates and custom instructions. Token accounting is reported
-through `create_step_callback()`, which updates per-run `conversation.usage` and appends durable step
-facts to `conversation.conversation_log`. The top bar derives its cumulative conversation total from
-those persisted step facts. Agents also append minimal transient `planning_started` and
-`action_started` markers before work begins. Core does not interpret them; the passive UI combines
-the raw markers, steps, delegation facts, and live tool calls for rendering.
+Prompt behavior is split between prompt templates and custom instructions. The prompt templates
+include filesystem guidance directly: supervising and task-runner prompts describe the full virtual
+namespace, while subagent prompts describe their restricted access. Parent planning prompts repeat
+the supervising filesystem guidance.
+
+Token accounting is reported through `create_step_callback()`, which updates per-run
+`conversation.usage` and appends durable step facts to `conversation.conversation_log`. The top bar
+derives its cumulative conversation total from those persisted step facts. Agents also append minimal
+transient `planning_started` and `action_started` markers before work begins. Core does not interpret
+them; the passive UI combines the raw markers, steps, delegation facts, and live tool calls for
+rendering.
 
 Each conversation captures **The user's current time & location** once as `user_situation`: local
 date/time with IANA time zone and approximate GPS plus reverse-geocoded place text when available.

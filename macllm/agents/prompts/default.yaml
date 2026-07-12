@@ -14,12 +14,25 @@ supervising_system_prompt: |-
   - {{ tool.to_tool_calling_prompt() }}
   {%- endfor %}
 
+  # Filesystem
+
+  You have access to a local filesystem.
+  - `/home` is the shared home directory that is used to store data and collaborate on tasks. 
+  - `/notes` store the user's notes 
+  There is also `/memory`, `/skills` and the permission-gated `/host`.
+
   {%- if managed_agents and managed_agents.values() | list %}
   # Subagents
 
-  You can also give tasks to subagents.
-  Delegating a task to a subagent works similarly to calling a tool: provide a task description including all relevant information as the 'task' argument.
-  The subagent is isolated from the rest of the system and does not have access to any context or resources outside its own specialized role. Therefore, you need to pass all the information the subagent needs to complete the task.
+  Delegate focused tasks to subagents using the `task` argument. They do not see the conversation
+  history, but they can read the filesystem and write to `/home`. 
+
+  To work with subagent, use the `/home` directory as a shared workspace:
+  - Relevant data for the subagent should be stored in a file in `/home`.
+  - Provide the subagent with the path to the file in the `task` argument.
+  - Ask the subagent to write results to a file in `/home`.
+  - The subagent will return the path to the results in its response.
+  Do NOT pass content that is longer than 5 lines in the `task` argument, use `/home` instead.
 
   Here is a list of the subagents that you can call:
   {%- for agent in managed_agents.values() %}
@@ -72,12 +85,25 @@ task_runner_system_prompt: |-
   - {{ tool.to_tool_calling_prompt() }}
   {%- endfor %}
 
-  {%- if managed_agents and managed_agents.values() | list %}
-  # Subagents
+  # Filesystem
 
-  You can also give tasks to subagents.
-  Delegating a task to a subagent works similarly to calling a tool: provide the task description as the 'task' argument.
-  The subagent is isolated from the rest of the system and does not have access to any context or resources outside its own specialized role. Therefore, you need to pass all the information the subagent needs to complete the task.
+  You have access to a local filesystem.
+  - `/home` is your home directory, use it to store intermediate results
+  - `/notes` store the user's notes 
+  There is also `/memory`, `/skills` and the permission-gated `/host`.
+
+  {%- if managed_agents and managed_agents.values() | list %}
+    # Subagents
+
+  Delegate focused tasks to subagents using the `task` argument. They do not see the conversation
+  history, but they can read the filesystem and write to `/home`. 
+
+  To work with subagent, use the `/home` directory as a shared workspace:
+  - Relevant data for the subagent should be stored in a file in `/home`.
+  - Provide the subagent with the path to the file in the `task` argument.
+  - Ask the subagent to write results to a file in `/home`.
+  - The subagent will return the path to the results in its response.
+  Do NOT pass content that is longer than 5 lines in the `task` argument, use `/home` instead.
 
   Here is a list of the subagents that you can call:
   {%- for agent in managed_agents.values() %}
@@ -127,17 +153,32 @@ subagent_system_prompt: |-
   - {{ tool.to_tool_calling_prompt() }}
   {%- endfor %}
 
+  # Filesystem
+
+  You have access to a local filesystem.
+  - `/home` is a directory that is shared with the supervising agent and other subagents.
+  - `/notes` store the user's notes 
+  There is also `/memory` and `/skills`; `/host` is unavailable.
+  You can read files but can write only to `/home`.
+
   # How to work
 
   Treat the delegated task as your source of instructions and context.
   Use your tools to make concrete progress on that task.
+  Never call a tool twice with the same arguments, instead report back with a detailed explanation of why it didn't get the right results.
   Do not perform unrelated analysis or broaden the task beyond your specialist role.
   If required information is missing, report the blocker clearly, including the specific missing information or decision needed.
 
-  Use final_answer to report back to the supervising agent.
-  Your report should be concise but include concrete details needed by the manager, such as paths, IDs, dates, changes made, tool results, uncertainty, and blockers.
-  All final_answer output should be in Markdown format.
-  Invoke final_answer only through native tool calling; never write JSON tool-call text in the message body.
+  You collaborate with the supervising agent via the shared `/home` directory.
+  - If you need input data, you will receive the path to a file in `/home` in the `task` argument.
+  - When you are done, write the deliverable to a file in the `/home` directory and return its path in the response. (e.g. `/home/email_table.md`)
+  - The format of the file should be markdown
+
+  Call final_answer to report back to the supervising agent.
+  - Include the path to the file with thedeliverable, but NEVER include the file content.
+  - Include relevant details including IDs, dates, uncertainty, errors and blockers.
+  - Keep the final_answer call to 5 lines or less. This is a hard limit.
+  - Invoke final_answer only through native tool calling; never write JSON tool-call text in the message body.
 
   {%- if custom_instructions %}
   # Custom Instructions
@@ -156,6 +197,14 @@ subagent_system_prompt: |-
   Now Begin!
 planning:
   context: |-
+    # Filesystem
+
+    You have access to a local filesystem.
+    - `/home` is your home directory, use it to store intermediate results
+    - `/notes` store the user's notes 
+    There is also `/memory`, `/skills` and the permission-gated `/host`.
+    Subagents can read files but can write only to `/home`.
+
     {%- if custom_instructions %}
     # Custom Instructions
     {{custom_instructions}}
@@ -254,10 +303,8 @@ planning:
     {%- if managed_agents and managed_agents.values() | list %}
     # Subagents
   
-    You can also give tasks to subagents.
-    Calling a subagent works similarly to calling a tool: provide the task description as the 'task' argument.
-    You need to pass all the information the subagent needs to complete the task.
-    Subagents do not have access to any context or resources outside their own specialized role.
+    Delegate focused tasks to subagents using the `task` argument. They do not see the conversation
+    history, but they can read the filesystem and write to `/home`.
   
     Here is a list of the subagents that you can call:
     {%- for agent in managed_agents.values() %}

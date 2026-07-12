@@ -35,6 +35,7 @@ def test_interactive_supervising_prompt_has_ask_user(monkeypatch):
     assert "use the ask_user tool to ask the user" in agent.system_prompt
     assert "ask_user:" in agent.system_prompt
     assert "first unchecked item" in agent.system_prompt
+    assert "permission-gated `/host`" in agent.system_prompt
 
 
 def test_plan_update_keeps_latest_checklist(monkeypatch):
@@ -107,8 +108,10 @@ def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     assert "Follow the workflow." in initial
     assert "Use the configured workflow." in update
     assert "Follow the workflow." in update
-    assert agent.instructions.startswith("Use the configured workflow.")
-    assert "Filesystem: use absolute virtual paths" in agent.instructions
+    assert agent.instructions == "Use the configured workflow."
+    assert "# Filesystem" in agent.system_prompt
+    assert "permission-gated `/host`" in initial
+    assert "permission-gated `/host`" in update
 
 
 def test_task_runner_prompt_has_no_ask_user(monkeypatch):
@@ -120,6 +123,7 @@ def test_task_runner_prompt_has_no_ask_user(monkeypatch):
     assert "Never combine two items from the plan" in agent.system_prompt
     assert "ask_user" not in agent.system_prompt
     assert "ask_user" not in agent.tools
+    assert "permission-gated `/host`" in agent.system_prompt
 
 
 def test_subagent_prompt_is_specialist_prompt(monkeypatch):
@@ -133,6 +137,8 @@ def test_subagent_prompt_is_specialist_prompt(monkeypatch):
     assert "You can also give tasks to subagents" not in agent.system_prompt
     assert "ask_user tool" not in agent.system_prompt
     assert "ask_user" not in agent.tools
+    assert "`/host` is unavailable" in agent.system_prompt
+    assert "permission-gated `/host`" not in agent.system_prompt
 
 
 def test_lazy_managed_agent_materializes_managed_prompt(monkeypatch):
