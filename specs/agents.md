@@ -120,9 +120,8 @@ loop as before. Routing of tools to the correct tab uses the shared conversation
 
 ## Current Agent Topology
 
-- `default`: main top-level assistant; uses local prompt templates (`macllm/agents/prompts/default.yaml`); delegates to `notes`, `calendar`, `things`, and `email`
-- `smolagent`: alternate top-level assistant; uses the same macLLM prompt YAML as `default`; delegates to `notes`
-- `notes`: specialist for indexed files and notes (same prompt YAML as `default`, including `managed_agent` templates when invoked as a subagent)
+- `default`: main top-level assistant; uses local prompt templates (`macllm/agents/prompts/default.yaml`); handles notes directly with `search_notes` and filesystem tools; delegates to `calendar`, `things`, and `email`
+- `smolagent`: alternate top-level assistant; uses the same macLLM prompt YAML as `default`; handles notes directly with `search_notes` and filesystem tools and has no managed agents
 - `calendar`: specialist for calendar and scheduling work
 - `things`: specialist for Things task management
 - `email`: specialist for read-only email access via local Superhuman mailbox

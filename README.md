@@ -83,7 +83,8 @@ The agent has access to the following tools:
 | **search_notes**          | Semantic search across your indexed notes.                                           |
 | **read_file**             | Reads text or images from an absolute virtual filesystem path.                       |
 | **write_file**            | Creates or replaces a text file.                                                     |
-| **append_file**           | Appends text to a file.                                                              |
+| **append_file**           | Appends the contents of one text file to another.                                    |
+| **append_text**           | Appends short inline text to a file.                                                 |
 | **list_directory**        | Lists a virtual directory.                                                           |
 | **copy_file**             | Copies a file or directory.                                                          |
 | **delete_file**           | Deletes a file or an explicitly recursive directory.                                |

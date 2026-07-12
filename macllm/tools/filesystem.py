@@ -20,6 +20,7 @@ FILESYSTEM_TOOLS = [
     "read_file",
     "write_file",
     "append_file",
+    "append_text",
     "list_directory",
     "copy_file",
     "delete_file",
@@ -125,23 +126,55 @@ def write_file(path: str, content: str) -> str:
 
 
 @macllm_tool
-def append_file(path: str, content: str) -> str:
-    """Append text to a file, creating it if necessary.
+def append_file(source_path: str, destination_path: str) -> str:
+    """Append one text file to another, creating the destination if necessary.
+
+    Args:
+        source_path: Absolute virtual path of the text file to append.
+        destination_path: Absolute virtual path of the destination file.
+    """
+    set_tool_message(f"Appending {source_path} to {destination_path}")
+    try:
+        source = resolve_path(source_path)
+        target = resolve_path(destination_path, write=True)
+        if not source.canonical.exists():
+            return _error(FilesystemError(f"Source '{source.virtual}' does not exist."))
+        if source.canonical.is_dir():
+            return _error(FilesystemError(f"Source '{source.virtual}' is a directory."))
+        if source.canonical == target.canonical:
+            return _error(FilesystemError("Source and destination must be different files."))
+        if not target.path.parent.is_dir():
+            return _error(FilesystemError("Parent directory does not exist."))
+        content = source.canonical.read_text(encoding="utf-8")
+        if "\0" in content:
+            return _error(FilesystemError("Source file appears to be binary."))
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(target.path, flags, 0o644), "a", encoding="utf-8") as handle:
+            handle.write(content)
+        _refresh_index(target.mount)
+        return f"Appended {source.virtual} to {target.virtual}"
+    except Exception as exc:
+        return _error(exc)
+
+
+@macllm_tool
+def append_text(path: str, text: str) -> str:
+    """Append inline text to a file, creating it if necessary.
 
     Args:
         path: Absolute virtual path to append to.
-        content: Text to append.
+        text: Inline text to append.
     """
-    set_tool_message(f"Appending to {path}")
+    set_tool_message(f"Appending text to {path}")
     try:
         target = resolve_path(path, write=True)
         if not target.path.parent.is_dir():
             return _error(FilesystemError("Parent directory does not exist."))
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(target.path, flags, 0o644), "a", encoding="utf-8") as handle:
-            handle.write(content)
+            handle.write(text)
         _refresh_index(target.mount)
-        return f"Appended to {target.virtual}"
+        return f"Appended text to {target.virtual}"
     except Exception as exc:
         return _error(exc)
 

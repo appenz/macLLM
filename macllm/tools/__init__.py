@@ -2,6 +2,7 @@ from macllm.tools.web_search import web_search, web_fetch, reset_search_counter
 from macllm.tools.clipboard import read_clipboard
 from macllm.tools.filesystem import (
     append_file,
+    append_text,
     copy_file,
     create_directory,
     delete_file,
@@ -56,6 +57,7 @@ __all__ = [
     "read_file",
     "write_file",
     "append_file",
+    "append_text",
     "list_directory",
     "copy_file",
     "delete_file",

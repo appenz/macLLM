@@ -65,7 +65,8 @@ Shared mounted data is never garbage-collected with a conversation root.
 
 - `read_file(path)` reads a file.
 - `write_file(path, content)` creates or replaces a file.
-- `append_file(path, content)` appends to a file.
+- `append_file(source_path, destination_path)` appends the contents of one text file to another.
+- `append_text(path, text)` appends short inline text to a file.
 - `list_directory(path)` lists a directory.
 - `copy_file(source, destination)` copies a file or directory.
 - `delete_file(path, recursive=False)` deletes a file or directory.

@@ -49,8 +49,14 @@ class TestAgentDefinitions:
         assert "web_search" in MacLLMDefaultAgent.macllm_tools
         assert "web_fetch" in MacLLMDefaultAgent.macllm_tools
         for tool_name in [
-            "read_file", "write_file", "append_file", "list_directory",
-            "copy_file", "delete_file", "create_directory",
+            "read_file",
+            "write_file",
+            "append_file",
+            "append_text",
+            "list_directory",
+            "copy_file",
+            "delete_file",
+            "create_directory",
         ]:
             assert tool_name in MacLLMDefaultAgent.macllm_tools
 

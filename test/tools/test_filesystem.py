@@ -59,8 +59,8 @@ def test_home_file_lifecycle(filesystem_env):
     assert fs.write_file.forward("/home/output/result.md", "one") == (
         "Wrote /home/output/result.md"
     )
-    assert fs.append_file.forward("/home/output/result.md", " two") == (
-        "Appended to /home/output/result.md"
+    assert fs.append_text.forward("/home/output/result.md", " two") == (
+        "Appended text to /home/output/result.md"
     )
     assert fs.read_file.forward("/home/output/result.md") == "one two"
     assert "result.md" in fs.list_directory.forward("/home/output")
@@ -69,6 +69,31 @@ def test_home_file_lifecycle(filesystem_env):
     ) == "Copied /home/output/result.md to /home/output/copy.md"
     assert fs.delete_file.forward("/home/output/copy.md") == (
         "Deleted /home/output/copy.md"
+    )
+
+
+def test_append_file_uses_source_path(filesystem_env):
+    from macllm.tools import filesystem as fs
+
+    _, _, memory, _, _ = filesystem_env
+    assert fs.write_file.forward("/home/result.md", "generated") == "Wrote /home/result.md"
+    assert fs.write_file.forward("/memory/log.md", "before ") == "Wrote /memory/log.md"
+    assert fs.append_file.forward("/home/result.md", "/memory/log.md") == (
+        "Appended /home/result.md to /memory/log.md"
+    )
+    assert memory.joinpath("log.md").read_text() == "before generated"
+
+
+def test_append_file_rejects_invalid_sources(filesystem_env):
+    from macllm.tools import filesystem as fs
+
+    fs.write_file.forward("/home/file.md", "content")
+    assert "different files" in fs.append_file.forward("/home/file.md", "/home/file.md")
+    assert "does not exist" in fs.append_file.forward("/home/missing.md", "/home/out.md")
+    assert "is a directory" in fs.append_file.forward("/home", "/home/out.md")
+    fs.write_file.forward("/home/binary.dat", "before\0after")
+    assert "appears to be binary" in fs.append_file.forward(
+        "/home/binary.dat", "/home/out.md"
     )
 
 
