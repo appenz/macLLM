@@ -1,4 +1,5 @@
 from macllm.agents.base import MacLLMAgent
+from macllm.tools.filesystem import FILESYSTEM_TOOLS
 
 
 class EmailAgent(MacLLMAgent):
@@ -10,12 +11,14 @@ class EmailAgent(MacLLMAgent):
     """
 
     macllm_name = "email"
+    read_only_no_hostfs = True
     macllm_description = (
         "Searches, reads, and browses the user's email. Can list inbox, "
         "sent, and starred threads, search by keyword, read full threads, "
         "browse split inboxes, and look up contacts."
     )
     macllm_tools = [
+        *FILESYSTEM_TOOLS,
         "email_inbox",
         "email_search",
         "email_read_thread",

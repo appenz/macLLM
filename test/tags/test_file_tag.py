@@ -4,6 +4,8 @@ from unittest.mock import Mock, patch
 import pytest
 from PIL import Image
 
+from macllm.core import config as config_mod
+from macllm.core.config import FilesystemConfig, FilesystemMountConfig, MacLLMConfig
 from macllm.core.user_request import UserRequest
 from macllm.tags.file_tag import FileTag
 
@@ -95,6 +97,32 @@ def test_display_string_for_directory(tmp_path):
     assert "mydir" in display
 
 
+def test_indexed_autocomplete_inserts_readable_virtual_path(tmp_path, monkeypatch):
+    (tmp_path / "alpha.md").write_text("alpha")
+    monkeypatch.setattr(
+        config_mod,
+        "_RUNTIME_CONFIG",
+        MacLLMConfig(
+            filesystem=FilesystemConfig({
+                "notes": FilesystemMountConfig(
+                    "/notes/test",
+                    str(tmp_path),
+                    "read-write",
+                    "read-only",
+                    True,
+                )
+            })
+        ),
+    )
+    tag = FileTag(DummyApp())
+    FileTag.build_index()
+    suggestion = tag.autocomplete("@alp")[0]
+
+    assert suggestion == '@"/notes/test/alpha.md"'
+    result = tag.expand(suggestion, _make_conversation_stub(), UserRequest("test"))
+    assert 'read_file("/notes/test/alpha.md")' in result
+
+
 # ------------------------------------------------------------------
 # Path rewrite tests (no payload injection)
 # ------------------------------------------------------------------
@@ -115,8 +143,7 @@ def test_expand_image_file_rewrites_to_read_file(tmp_path):
 
     result = tag.expand(f"@{img_path}", conv, request)
 
-    assert f'read_file("{img_path}")' in result
-    assert str(img_path) in result
+    assert f'read_file("/host{img_path}")' in result
     conv.grant_directory.assert_called()
 
 
@@ -130,7 +157,7 @@ def test_expand_image_file_jpeg_rewrites_to_read_file(tmp_path):
 
     result = tag.expand(f"@{img_path}", conv, request)
 
-    assert f'read_file("{img_path}")' in result
+    assert f'read_file("/host{img_path}")' in result
 
 
 def test_expand_text_file_rewrites_to_read_file(tmp_path):
@@ -143,7 +170,7 @@ def test_expand_text_file_rewrites_to_read_file(tmp_path):
 
     result = tag.expand(f"@{txt_path}", conv, request)
 
-    assert f'read_file("{txt_path}")' in result
+    assert f'read_file("/host{txt_path}")' in result
     assert "hello world" not in result
     assert not hasattr(request, "context") or not getattr(request, "context", "")
 

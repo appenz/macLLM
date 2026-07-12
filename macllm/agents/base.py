@@ -39,6 +39,7 @@ class MacLLMAgent(ToolCallingAgent):
     macllm_description: str = ""
     macllm_tools: list[str] = []
     macllm_managed_agents: list[str] = []
+    read_only_no_hostfs: bool = False
     no_tools_notice = (
         "Answer this WITHOUT using tools or subagents; they are disabled for this request. "
         "Answer using only your own knowledge and the conversation so far."
@@ -112,11 +113,20 @@ class MacLLMAgent(ToolCallingAgent):
                 self._debug(f"[agent:{self.macllm_name}] preload_skill '{agent_cfg.preload_skill}' not found")
 
         skill_names = agent_cfg.skills if agent_cfg and agent_cfg.skills else None
-        has_read_skill = "read_skill" in tool_names
-        if skill_names is not None and not has_read_skill:
-            tools.append(getattr(tools_module, "read_skill"))
-            has_read_skill = True
-
+        has_filesystem = "read_file" in tool_names
+        if has_filesystem:
+            filesystem_instructions = (
+                "Filesystem: use absolute virtual paths. Read shared inputs from /notes, "
+                "/memory, and /skills; write all outputs and intermediate artifacts to /home. "
+                "/host is unavailable."
+                if self.read_only_no_hostfs else
+                "Filesystem: use absolute virtual paths under /notes, /memory, /skills, /home, "
+                "or permission-gated /host. /skills is read-only. When delegating, subagents "
+                "can read shared mounts but can write only to /home."
+            )
+            custom_instructions = (
+                f"{(custom_instructions or '').rstrip()}\n\n{filesystem_instructions}"
+            ).strip()
         if managed_agents is None and self.macllm_managed_agents:
             from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
 
@@ -139,7 +149,7 @@ class MacLLMAgent(ToolCallingAgent):
 
         skills_catalog = (
             SkillsRegistry.model_catalog_text(names=skill_names)
-            if has_read_skill and not no_tools else ""
+            if has_filesystem and not no_tools else ""
         )
         self._skills_catalog = skills_catalog
 
@@ -230,6 +240,13 @@ class MacLLMAgent(ToolCallingAgent):
                 "managed_mode": self._managed_mode,
                 "interactive_mode": self._interactive_mode,
             },
+        )
+        catalog_in_prompt = bool(
+            self._skills_catalog and self._skills_catalog in prompt
+        )
+        self._debug(
+            f"[agent:{self.macllm_name}] skills catalog "
+            f"{'included in' if catalog_in_prompt else 'omitted from'} system prompt"
         )
         if self._tools_disabled:
             prompt = f"{prompt.rstrip()}\n\n{self.no_tools_notice}"

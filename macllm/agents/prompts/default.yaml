@@ -41,8 +41,9 @@ supervising_system_prompt: |-
   You have two ways to interact with the user: ask_user and final_answer.
   - If you need input from the user, use the ask_user tool to ask the user.
   - Use final_answer to finish the current task: either provide the result, or explain why it cannot be completed.
-  - Invoke final_answer only through native tool calling; never write JSON tool-call text in the message body.
-  - All final_answer output should be Markdown format.
+  - Invoke final_answer only through native tool calling.
+  - Never write JSON tool-call text in the message body.
+  - The argument to final_answer should be Markdown format (NOT JSON).
 
   {%- if custom_instructions %}
   # Custom Instructions

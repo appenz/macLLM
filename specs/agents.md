@@ -16,8 +16,8 @@ The agent layer adds:
 
 Managed agents are regular `MacLLMAgent` subclasses used as delegated specialists.
 
-This is the main architectural choice in the agent system. Top-level agents keep a small tool surface
-and delegate specialized work, such as file or calendar tasks, to subagents with narrower instructions
+This is the main architectural choice in the agent system. Top-level agents keep a focused tool surface
+and delegate specialized work, such as calendar tasks, to subagents with narrower instructions
 and tool sets.
 
 The parent lists subagents in `macllm_managed_agents`. The base class resolves those names from the registry
@@ -47,26 +47,24 @@ The factory lives in `macllm/core/agent_service.py`.
 Each agent can be configured via `[agents.<name>]` sections in `config.toml`:
 
 ```toml
-[agents.notes]
-instructions = "You are a notes management assistant..."
-skills = ["organize-notes", "format-markdown"]
+[agents.calendar]
+instructions = "You are a calendar management assistant..."
+skills = ["calendar-policy"]
 ```
 
 - `instructions` -- custom instructions injected into the agent's system prompt. Overrides any
   code-level fallback. The project `config/config.toml` ships default instructions for all built-in
   agents. Users can override per-agent in `~/.config/macllm/config.toml`. Top-level agents also
   receive these instructions in every planning prompt.
-- `skills` -- list of skill names the agent can access via `read_skill`. When present, the agent
-  receives a filtered skill catalog through the explicit `skills_catalog` prompt block and
-  `read_skill` is auto-added to its tool set. Top-level agents receive the same catalog in every
-  planning prompt. The skill bodies are not baked into the prompt; the agent reads them on demand
-  by calling `read_skill`. An empty or absent list means no skill access (unless the agent already
-  has `read_skill` in its `macllm_tools`, in which case it sees all model-invocable skills).
+- `skills` -- list of skill names shown in the agent's filtered `skills_catalog` prompt block.
+  Top-level agents receive the same catalog in every planning prompt. Skill bodies are not baked
+  into the prompt; filesystem-enabled agents read the catalog paths from `/skills` on demand.
+  An empty or absent list exposes all model-invocable skills to filesystem-enabled agents.
 - `preload_skill` -- name of a skill whose body is appended to the agent's instructions when
   that agent is constructed. For top-level agents this is at conversation agent creation; for **managed**
   subagents this happens when the subagent is **first materialized** (lazy), i.e. on first delegation.
   Only this preload skill is baked into the system prompt, so it is always available as instructions
-  without the agent needing to call `read_skill`. This is useful for user-specific preferences or
+  without the agent needing to call `read_file`. This is useful for user-specific preferences or
   conventions that should always apply (e.g. note formatting rules, calendar defaults). The skill
   is resolved via `SkillsRegistry.get()`, so even skills with `disable-model-invocation: true`
   can be preloaded.

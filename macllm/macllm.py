@@ -17,14 +17,15 @@ from macllm.core.llm_service import get_model_for_speed, enable_litellm_debug, r
 from macllm.core.persistence import save_all_conversations, load_all_conversations
 from macllm.core.config import load_runtime_config
 from macllm.core.skills import SkillsRegistry
+from macllm.core.virtual_filesystem import garbage_collect_filesystems
 from macllm.tags.base import TagPlugin
+from macllm.tags.file_tag import FileTag
 
 from quickmachotkey import quickHotKey, mask
 from quickmachotkey.constants import kVK_ANSI_A, kVK_Space, cmdKey, controlKey, optionKey
+from macllm.agents.default import MacLLMDefaultAgent  # noqa: F401
 
 macLLM = None
-
-from macllm.agents.default import MacLLMDefaultAgent  # noqa: F401
 
 class color:
    RED = '\033[91m'
@@ -84,18 +85,6 @@ class MacLLM:
     def show_instructions(self):
         print(f'Hotkey for quick entry window is ⌥-space (option-space)')
 
-    def _apply_index_dirs_from_config(self):
-        from macllm.tags.file_tag import FileTag
-        FileTag._mount_points = {}
-        FileTag._indexed_directories = []
-        for name, path in self.config.resolved_index_dirs().items():
-            if not os.path.isdir(path):
-                self.debug_log(f"@IndexFiles: Not a directory – {path}", 2)
-                continue
-            FileTag._mount_points[name] = path
-            if path not in FileTag._indexed_directories:
-                FileTag._indexed_directories.append(path)
-
     def _set_ui_callbacks(self):
         """Ensure every conversation has the UI update callback."""
         for conv in self.conversation_history.conversations:
@@ -112,6 +101,7 @@ class MacLLM:
         self.req = 0
 
         # Initialize conversation history (multiple conversations)
+        garbage_collect_filesystems()
         self.conversation_history = ConversationHistory()
         self.ephemeral = bool(getattr(self.args, 'query', None))
         if getattr(self.args, 'test', False):
@@ -171,7 +161,6 @@ class MacLLM:
     def _update_ui_from_callback(self):
         if self.ui:
             self.ui.request_update()
-        
 def _run_task_headless(args):
     """Run a task file headlessly and exit with the appropriate code."""
     import sys
@@ -246,11 +235,7 @@ def main():
     prefix_pairs.sort(key=lambda x: len(x[0]), reverse=True)
     macLLM._prefix_index = prefix_pairs
 
-    # Configure indexed directories from merged config.
-    macLLM._apply_index_dirs_from_config()
-
     # Start periodic file index + embedding rebuild
-    from macllm.tags.file_tag import FileTag
     FileTag.start_index_loop()
 
     # Warn about deprecated shortcut files during transition.
@@ -278,8 +263,6 @@ def create_macllm(debug: bool = False, start_ui: bool = False):
     args = argparse.Namespace(debug=debug, show_window_on_start=False, test=True)
     mac = MacLLM(args=args)
     mac.plugins = TagPlugin.load_plugins(mac)
-    mac._apply_index_dirs_from_config()
-    from macllm.tags.file_tag import FileTag
     FileTag.build_index()
     if start_ui:
         mac.ui.start(dont_run_app=True)

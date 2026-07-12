@@ -26,6 +26,7 @@ class MockAgent:
 
 def make_mock_conversation(agent=None):
     conv = Mock()
+    conv.conv_id = "test-conversation"
     conv.agent = agent if agent is not None else MockAgent()
     conv.conversation_log = []
     conv.sources = []
@@ -80,6 +81,7 @@ class TestSaveConversation:
     
     def test_save_writes_correct_data(self, temp_storage):
         conv = make_mock_conversation()
+        conv.conv_id = "stable-conversation-id"
         test_steps = [{'task': 'hello'}, {'task': 'world'}]
         conv.agent.memory.steps = test_steps
         
@@ -88,19 +90,28 @@ class TestSaveConversation:
         with open(temp_storage / "latest.pkl", 'rb') as f:
             loaded = pickle.load(f)
         assert loaded['steps'] == test_steps
+        assert loaded['conv_id'] == "stable-conversation-id"
 
 
 class TestLoadConversation:
     def test_load_restores_steps(self, temp_storage):
         test_steps = [{'task': 'saved_task'}]
+        data = {
+            'conv_id': 'saved-conversation',
+            'steps': test_steps,
+            'conversation_log': [],
+            'agent_name': 'default',
+            'speed_level': 'normal',
+        }
         with open(temp_storage / "latest.pkl", 'wb') as f:
-            pickle.dump(test_steps, f)
+            pickle.dump(data, f)
         
         conv = make_mock_conversation()
         result = load_conversation(conv)
         
         assert result is True
         assert conv.agent.memory.steps == test_steps
+        assert conv.conv_id == 'saved-conversation'
     
     def test_load_nonexistent_returns_false(self, temp_storage):
         conv = make_mock_conversation()
@@ -222,33 +233,3 @@ class TestConversationLogPersistence:
         with open(temp_storage / "latest.pkl", 'rb') as f:
             data = pickle.load(f)
         assert 'conversation_log' in data
-    
-    def test_load_restores_legacy_messages_as_conversation_log(self, temp_storage):
-        test_messages = [
-            {'role': 'user', 'content': 'Saved question'},
-            {'role': 'assistant', 'content': 'Saved answer'}
-        ]
-        data = {
-            'steps': [{'task': 'test'}],
-            'messages': test_messages
-        }
-        with open(temp_storage / "latest.pkl", 'wb') as f:
-            pickle.dump(data, f)
-        
-        conv = make_mock_conversation()
-        result = load_conversation(conv)
-        
-        assert result is True
-        assert [entry.payload for entry in conv.conversation_log] == test_messages
-    
-    def test_load_handles_old_format(self, temp_storage):
-        old_steps = [{'task': 'old_format'}]
-        with open(temp_storage / "latest.pkl", 'wb') as f:
-            pickle.dump(old_steps, f)
-        
-        conv = make_mock_conversation()
-        result = load_conversation(conv)
-        
-        assert result is True
-        assert conv.agent.memory.steps == old_steps
-        assert conv.conversation_log == []

@@ -1,6 +1,8 @@
 import time
 from unittest.mock import Mock, patch
 
+import pytest
+
 from macllm.macllm import create_macllm
 from macllm.agents.default import MacLLMDefaultAgent
 from macllm.agents.smolagent import MacLLMSmolAgent
@@ -73,6 +75,7 @@ class TestMemoryAgentPersistence:
         monkeypatch.setattr('macllm.core.persistence.get_storage_dir', lambda: tmp_path)
 
         conv = Mock()
+        conv.conv_id = "test-conversation"
         conv.agent = Mock()
         conv.agent.memory = Mock(steps=[])
         conv.agent.macllm_name = "smolagent"
@@ -85,7 +88,7 @@ class TestMemoryAgentPersistence:
             data = pickle.load(f)
         assert data['agent_name'] == 'smolagent'
 
-    def test_load_old_format_defaults_to_default(self, tmp_path, monkeypatch):
+    def test_load_missing_conversation_id_raises(self, tmp_path, monkeypatch):
         import pickle
         from macllm.core.persistence import load_conversation
 
@@ -100,6 +103,5 @@ class TestMemoryAgentPersistence:
         conv.agent.memory = Mock(steps=[])
         conv.agent_cls = None
 
-        load_conversation(conv)
-
-        assert conv.agent_cls is MacLLMDefaultAgent
+        with pytest.raises(KeyError, match="conv_id"):
+            load_conversation(conv)

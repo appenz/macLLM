@@ -1,4 +1,5 @@
 from macllm.agents.base import MacLLMAgent
+from macllm.tools.filesystem import FILESYSTEM_TOOLS
 
 
 class CalendarAgent(MacLLMAgent):
@@ -10,6 +11,7 @@ class CalendarAgent(MacLLMAgent):
     """
 
     macllm_name = "calendar"
+    read_only_no_hostfs = True
     macllm_description = (
         "Finds, creates, and edits calendar events and finds free time "
         "slots on the user's macOS calendars."
@@ -17,6 +19,7 @@ class CalendarAgent(MacLLMAgent):
     macllm_tools = [
         "web_search",
         "web_fetch",
+        *FILESYSTEM_TOOLS,
         "cal_list_calendars",
         "cal_get_events",
         "cal_find_events",

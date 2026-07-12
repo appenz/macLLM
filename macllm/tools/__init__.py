@@ -1,21 +1,15 @@
 from macllm.tools.web_search import web_search, web_fetch, reset_search_counter
 from macllm.tools.clipboard import read_clipboard
-from macllm.tools.file import read_file
-from macllm.tools.note import (
-    search_notes,
-    read_note,
-    note_resolve_path,
-    note_append,
-    note_create,
-    note_modify,
-    note_move,
-    note_delete,
-    list_folder,
-    find_folder,
-    view_folder_structure,
-    folder_create,
-    folder_delete,
+from macllm.tools.filesystem import (
+    append_file,
+    copy_file,
+    create_directory,
+    delete_file,
+    list_directory,
+    read_file,
+    write_file,
 )
+from macllm.tools.note import search_notes
 from macllm.tools.calendar import (
     cal_list_calendars,
     cal_get_events,
@@ -52,8 +46,6 @@ from macllm.tools.email import (
     email_profile,
 )
 from macllm.tools.shell import run_command
-from macllm.tools.skills import read_skill
-from macllm.tools.memory import remember
 from macllm.tools.user_input import ask_user
 # Note: reset_search_counter is NOT in __all__ because it's a utility function,
 # not a tool. Import it directly when needed.
@@ -62,19 +54,13 @@ __all__ = [
     "web_fetch",
     "read_clipboard",
     "read_file",
+    "write_file",
+    "append_file",
+    "list_directory",
+    "copy_file",
+    "delete_file",
+    "create_directory",
     "search_notes",
-    "read_note",
-    "note_resolve_path",
-    "note_append",
-    "note_create",
-    "note_modify",
-    "note_move",
-    "note_delete",
-    "list_folder",
-    "find_folder",
-    "view_folder_structure",
-    "folder_create",
-    "folder_delete",
     "cal_list_calendars",
     "cal_get_events",
     "cal_find_events",
@@ -105,7 +91,5 @@ __all__ = [
     "email_split_inbox_threads",
     "email_profile",
     "run_command",
-    "read_skill",
-    "remember",
     "ask_user",
 ]

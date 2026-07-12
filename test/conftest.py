@@ -2,6 +2,14 @@ import pytest
 from unittest.mock import Mock, patch
 
 from macllm.macllm import create_macllm
+from macllm.core import virtual_filesystem
+
+
+@pytest.fixture(autouse=True)
+def isolated_conversation_filesystems(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        virtual_filesystem, "get_storage_dir", lambda: tmp_path / "app"
+    )
 
 
 @pytest.fixture

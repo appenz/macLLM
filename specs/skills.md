@@ -2,7 +2,7 @@
 
 ## Overview
 
-Skills are predefined prompt assets stored as Markdown in configured skill directories.
+Skills are predefined prompt assets stored as Markdown in configured `/skills` mounts.
 They are content, not executable plugins. This is why the skills subsystem may read
 configured skill files before or during an agent run: those files are part of macLLM's
 prompt asset system, not dynamic user resources such as clipboard data, arbitrary files,
@@ -10,12 +10,13 @@ URLs, screenshots, or images.
 
 The skills subsystem is separate from tag plugins:
 
-- skills handle `/skill` manual invocation and `read_skill`
+- skills handle `/skill` manual invocation and the out-of-band agent catalog
 - tag plugins handle UI/input shorthand such as `@clipboard` and plugin-owned `/...` tokens
 
 ## Registry
 
-`SkillsRegistry` in `macllm/core/skills.py` loads skill definitions from `skills_dirs` in runtime config.
+`SkillsRegistry` in `macllm/core/skills.py` loads skill definitions from configured filesystem
+mounts under `/skills`.
 
 It reads only:
 
@@ -30,7 +31,7 @@ Skill files use frontmatter-like sections inside Markdown. Multiple skills can b
 Two flags control where a skill is available:
 
 - `user-invocable` (default `true`): when true, the user can invoke the skill with `/skillname`.
-- `disable-model-invocation` (default `false`): when false, agents can read the skill with `read_skill`.
+- `disable-model-invocation` (default `false`): when false, the skill appears in agent catalogs.
 
 This allows manual-only, model-only, fully available, and hidden skills.
 
@@ -39,12 +40,12 @@ This allows manual-only, model-only, fully available, and hidden skills.
 Skills have three distinct runtime paths:
 
 - **Manual invocation**: `SkillsRegistry.expand_manual_invocation()` rewrites a user-entered `/skill` into the skill body before tag plugins run. A leading `/skill` also appends trailing user text as an `ARGUMENTS:` section.
-- **Agent tool use**: `read_skill(name, file="")` returns the skill body or a specific auxiliary file within that skill directory. Agents call this on demand during their tool loop.
+- **Agent tool use**: the catalog supplies each skill's `/skills/...` path and agents load it with
+  `read_file`.
 - **Agent preload**: `[agents.<name>].preload_skill` appends one configured skill body to that agent's instructions when the agent is constructed. Only preload skills are baked into the system prompt automatically.
 
 Configuring `[agents.<name>].skills` does not bake those skill bodies into the prompt. It filters
-the `skills_catalog` rendered explicitly in the agent's system prompt and planning prompts, and
-gives the agent access to `read_skill`.
+the `skills_catalog` rendered explicitly in the agent's system prompt and planning prompts.
 
 ## Boundary To Tag Plugins
 

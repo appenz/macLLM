@@ -23,8 +23,8 @@ from macllm.agents.base import MacLLMAgent
 from macllm.core import llm_service
 
 
-AGENT_NAMES = ("default", "smolagent", "notes", "calendar", "things", "email")
-SUBAGENT_NAMES = ("notes", "calendar", "things", "email")
+AGENT_NAMES = ("default", "smolagent", "calendar", "things", "email")
+SUBAGENT_NAMES = ("calendar", "things", "email")
 DEFAULT_TASK = (
     "The user wants help filing a note but the destination folder is ambiguous."
 )

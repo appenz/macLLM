@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import macllm.macllm as macllm_app
+
 from macllm.core.chat_history import add_source
-from macllm.macllm import MacLLM
 from macllm.tools._debug import macllm_tool, set_tool_message
 
 
@@ -16,7 +17,7 @@ def read_clipboard() -> str:
     it contains an image. Call this when the user refers to the clipboard.
     """
     set_tool_message("Reading clipboard")
-    ui = getattr(MacLLM._instance, "ui", None)
+    ui = getattr(macllm_app.MacLLM._instance, "ui", None)
     if ui is None:
         return "Error: Clipboard is unavailable."
 

@@ -1,4 +1,5 @@
 from macllm.agents.base import MacLLMAgent
+from macllm.tools.filesystem import FILESYSTEM_TOOLS
 
 
 class ThingsAgent(MacLLMAgent):
@@ -8,11 +9,13 @@ class ThingsAgent(MacLLMAgent):
     """
 
     macllm_name = "things"
+    read_only_no_hostfs = True
     macllm_description = (
         "Finds, creates, updates, completes, and organizes the user's Things "
         "to-dos and projects."
     )
     macllm_tools = [
+        *FILESYSTEM_TOOLS,
         "things_list_areas",
         "things_list_projects",
         "things_list_tags",

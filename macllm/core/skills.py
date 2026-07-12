@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
-from macllm.core.config import get_runtime_config
+from macllm.core.virtual_filesystem import configured_mounts, skill_virtual_path
 
 # Cursor-style packs: only SKILL.md in an immediate subfolder of each skills root is loaded
 # from that folder; see SkillsRegistry.reload().
@@ -46,16 +46,17 @@ class SkillsRegistry:
 
     @classmethod
     def reload(cls) -> str:
-        cfg = get_runtime_config()
         cls._skills = {}
         cls._errors = []
 
         loaded_files = 0
-        for dir_path in cfg.resolved_skills_dirs():
-            root = Path(dir_path)
+        for mount in configured_mounts():
+            if not (mount.virtual == "/skills" or mount.virtual.startswith("/skills/")):
+                continue
+            root = mount.host
             if not root.exists() or not root.is_dir():
                 _skills_debug_log(
-                    f"[skills] skip (missing or not a directory): {dir_path}", 1
+                    f"[skills] skip (missing or not a directory): {root}", 1
                 )
                 continue
             try:
@@ -236,13 +237,18 @@ class SkillsRegistry:
         if names is not None:
             allowed = set(names)
             skills = [s for s in skills if s.name in allowed]
-        lines = [
-            f"- {s.name}: {s.description}"
-            for s in skills
-        ]
+        lines = []
+        for skill in skills:
+            virtual = skill_virtual_path(skill.source)
+            if virtual is None:
+                error = f"Skill source is outside configured /skills mounts: {skill.source}"
+                if error not in cls._errors:
+                    cls._errors.append(error)
+                continue
+            lines.append(f"- {skill.name}: {skill.description} ({virtual})")
         if not lines:
             return "No model-invocable skills are currently available."
-        out = "Available skills (use read_skill to fetch full instructions):\n" + "\n".join(lines)
+        out = "Available skills (use read_file on the listed path):\n" + "\n".join(lines)
         if len(out) <= max_chars:
             return out
         return out[: max_chars - 20] + "\n... [truncated]"
