@@ -166,13 +166,26 @@ class MountTable:
         return None
 
 
-def _host_to_virtual(source: str, mounts: list[Mount]) -> str | None:
-    source_path = Path(source).resolve(strict=False)
+def _host_to_virtual(
+    source: str,
+    mounts: list[Mount],
+    *,
+    resolve_symlinks: bool = True,
+) -> str | None:
+    source_path = (
+        Path(source).resolve(strict=False)
+        if resolve_symlinks
+        else Path(source).absolute()
+    )
     matches = []
     for mount in mounts:
         if mount.host is None:
             continue
-        root = mount.host.resolve(strict=False)
+        root = (
+            mount.host.resolve(strict=False)
+            if resolve_symlinks
+            else mount.host.absolute()
+        )
         if _contains(root, source_path):
             matches.append((len(str(root)), mount, root))
     if not matches:
@@ -188,7 +201,7 @@ def skill_virtual_path(source: str) -> str | None:
         for mount in configured_mounts()
         if mount.virtual == "/skills" or mount.virtual.startswith("/skills/")
     ]
-    return _host_to_virtual(source, mounts)
+    return _host_to_virtual(source, mounts, resolve_symlinks=False)
 
 
 def indexed_virtual_path(source: str) -> str | None:
@@ -249,11 +262,22 @@ def resolve_path(
     lexical = mount.host / relative
     root = mount.host.resolve(strict=False)
     parent = lexical.parent.resolve(strict=False)
-    if lexical != mount.host and not _contains(root, parent):
+    skill_symlink_read = (
+        not write
+        and (
+            mount.virtual == "/skills"
+            or mount.virtual.startswith("/skills/")
+        )
+    )
+    if lexical != mount.host and not skill_symlink_read and not _contains(root, parent):
         raise FilesystemError(f"Path '{virtual}' escapes its mount.")
 
     canonical = lexical.resolve(strict=False)
-    if not (deleting and lexical.is_symlink()) and not _contains(root, canonical):
+    if (
+        not skill_symlink_read
+        and not (deleting and lexical.is_symlink())
+        and not _contains(root, canonical)
+    ):
         raise FilesystemError(f"Path '{virtual}' escapes its mount through a symlink.")
     checked = parent / lexical.name if deleting and lexical.is_symlink() else canonical
     _check_denied_host_path(mount, checked)

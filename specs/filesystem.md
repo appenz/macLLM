@@ -42,6 +42,10 @@ Access is `read-write`, `read-only`, or `none`. Mounts with `index = true` feed 
 Resolution uses the longest matching virtual path and enforces the selected agent access before
 mapping it to `path`.
 
+Skill mounts may contain symlinked skill packages. Reads under `/skills` follow those package
+symlinks so shared agent-skill installations remain available, while writes and deletes remain
+subject to the mount access policy. Symlink escapes remain rejected for non-skill mounts.
+
 `/memory` has no default backing directory. Users who want persistent agent memory configure an
 explicit mount with `supervisor_access = "read-write"`, `subagent_access = "read-only"`, and
 `index = false`.

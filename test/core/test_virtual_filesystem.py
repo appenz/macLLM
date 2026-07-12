@@ -19,6 +19,7 @@ from macllm.core.virtual_filesystem import (
     garbage_collect_filesystems,
     indexed_virtual_path,
     resolve_path,
+    skill_virtual_path,
 )
 
 
@@ -73,6 +74,26 @@ def test_symlink_cannot_escape_mount(filesystem_env):
     (notes / "escape").symlink_to(host, target_is_directory=True)
     with pytest.raises(FilesystemError, match="escapes its mount"):
         resolve_path("/notes/Notes/escape/file.md")
+
+
+def test_read_only_skill_package_may_be_symlinked(filesystem_env):
+    _, _, _, skills, host, _ = filesystem_env
+    package = host / "shared-skill"
+    package.mkdir()
+    skill_file = package / "SKILL.md"
+    skill_file.write_text("Skill instructions.")
+    linked_package = skills / "shared-skill"
+    linked_package.symlink_to(package, target_is_directory=True)
+
+    lexical_source = linked_package / "SKILL.md"
+    assert skill_virtual_path(str(lexical_source)) == (
+        "/skills/skills/shared-skill/SKILL.md"
+    )
+    assert resolve_path("/skills/skills/shared-skill/SKILL.md").canonical == (
+        skill_file.resolve()
+    )
+    with pytest.raises(FilesystemError, match="may not write"):
+        resolve_path("/skills/skills/shared-skill/SKILL.md", write=True)
 
 
 def test_subagent_permissions(filesystem_env):
