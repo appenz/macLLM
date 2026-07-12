@@ -88,10 +88,6 @@ def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     from macllm.core import config
     from macllm.core.skills import SkillsRegistry
 
-    debug_messages = []
-    monkeypatch.setattr(
-        base.MacLLMAgent, "_debug", staticmethod(debug_messages.append)
-    )
     config._RUNTIME_CONFIG.agents["default"] = AgentConfig(
         instructions="Use the configured workflow."
     )
@@ -113,7 +109,6 @@ def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     assert "Follow the workflow." in update
     assert agent.instructions.startswith("Use the configured workflow.")
     assert "Filesystem: use absolute virtual paths" in agent.instructions
-    assert "[agent:default] skills catalog included in system prompt" in debug_messages
 
 
 def test_task_runner_prompt_has_no_ask_user(monkeypatch):

@@ -241,13 +241,6 @@ class MacLLMAgent(ToolCallingAgent):
                 "interactive_mode": self._interactive_mode,
             },
         )
-        catalog_in_prompt = bool(
-            self._skills_catalog and self._skills_catalog in prompt
-        )
-        self._debug(
-            f"[agent:{self.macllm_name}] skills catalog "
-            f"{'included in' if catalog_in_prompt else 'omitted from'} system prompt"
-        )
         if self._tools_disabled:
             prompt = f"{prompt.rstrip()}\n\n{self.no_tools_notice}"
         return prompt
