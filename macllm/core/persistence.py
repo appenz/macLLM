@@ -3,16 +3,13 @@ import pickle
 import threading
 from pathlib import Path
 
+from macllm.agents import get_agent_class
+from macllm.core.chat_history import Conversation
+from macllm.core.context import register_conversation
 from macllm.core.conversation_log import log_from_messages, persistable_log
+from macllm.core.storage import get_storage_dir
 
 _save_lock = threading.Lock()
-
-
-def get_storage_dir() -> Path:
-    path = Path.home() / "Library" / "Application Support" / "macLLM"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
 
 def get_latest_path() -> Path:
     return get_storage_dir() / "latest.pkl"
@@ -36,8 +33,10 @@ def _conversation_log(conversation):
 def save_conversation(conversation) -> bool:
     if conversation.agent is None:
         return False
+    conv_id = conversation.conv_id
     try:
         data = {
+            'conv_id': conv_id,
             'steps': conversation.agent.memory.steps,
             'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
@@ -59,25 +58,18 @@ def load_conversation(conversation) -> bool:
     try:
         with open(path, 'rb') as f:
             data = pickle.load(f)
-        if isinstance(data, dict):
-            agent_name = data.get('agent_name', 'default')
-            conversation.speed_level = data.get('speed_level', 'normal')
-            try:
-                from macllm.agents import get_agent_class
-                conversation.agent_cls = get_agent_class(agent_name)
-                conversation._create_agent()
-            except KeyError:
-                pass
-
-            conversation.agent.memory.steps = data.get('steps', [])
-            conversation.conversation_log = data.get(
-                'conversation_log',
-                log_from_messages(data.get('messages', [])),
-            )
-        else:
-            conversation.agent.memory.steps = data
-            conversation.conversation_log = log_from_messages([])
+        if not isinstance(data, dict):
+            raise TypeError("Saved conversation must be a dictionary.")
+        conversation.conv_id = data['conv_id']
+        agent_name = data['agent_name']
+        conversation.speed_level = data['speed_level']
+        conversation.agent_cls = get_agent_class(agent_name)
+        conversation._create_agent()
+        conversation.agent.memory.steps = data['steps']
+        conversation.conversation_log = data['conversation_log']
         return True
+    except KeyError:
+        raise
     except Exception:
         return False
 
@@ -100,8 +92,10 @@ def _serialize_conversation(conversation) -> dict | None:
     """Serialize a single Conversation to a plain dict."""
     if conversation.agent is None:
         return None
+    conv_id = conversation.conv_id
     try:
         return {
+            'conv_id': conv_id,
             'steps': conversation.agent.memory.steps,
             'conversation_log': _conversation_log(conversation),
             'agent_name': getattr(conversation.agent, 'macllm_name', 'default'),
@@ -141,8 +135,6 @@ def load_all_conversations(conversation_history) -> bool:
     Falls back to migrating the legacy single-conversation file if the
     multi-conversation file doesn't exist yet.
     """
-    from macllm.core.chat_history import Conversation
-
     path = get_conversations_path()
 
     # Migration path: legacy latest.pkl -> single conversation
@@ -162,7 +154,7 @@ def load_all_conversations(conversation_history) -> bool:
         with open(path, 'rb') as f:
             data = pickle.load(f)
 
-        entries = data.get('conversations', [])
+        entries = data['conversations']
         if not entries:
             return False
 
@@ -171,26 +163,21 @@ def load_all_conversations(conversation_history) -> bool:
 
         for entry in entries:
             conv = Conversation()
-            agent_name = entry.get('agent_name', 'default')
-            conv.speed_level = entry.get('speed_level', 'normal')
-            try:
-                from macllm.agents import get_agent_class
-                conv.agent_cls = get_agent_class(agent_name)
-                conv._create_agent()
-            except KeyError:
-                pass
-            conv.agent.memory.steps = entry.get('steps', [])
-            conv.conversation_log = entry.get(
-                'conversation_log',
-                log_from_messages(entry.get('messages', [])),
-            )
-            conv.title = entry.get('title', 'New')
-            from macllm.core.context import register_conversation
+            conv.conv_id = entry['conv_id']
+            agent_name = entry['agent_name']
+            conv.speed_level = entry['speed_level']
+            conv.agent_cls = get_agent_class(agent_name)
+            conv._create_agent()
+            conv.agent.memory.steps = entry['steps']
+            conv.conversation_log = entry['conversation_log']
+            conv.title = entry['title']
             register_conversation(conv)
             conversation_history.conversations.append(conv)
 
-        saved_index = data.get('active_index', len(entries) - 1)
+        saved_index = data['active_index']
         conversation_history.active_index = max(0, min(saved_index, len(entries) - 1))
         return True
+    except KeyError:
+        raise
     except Exception:
         return False

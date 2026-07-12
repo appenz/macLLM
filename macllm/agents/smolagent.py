@@ -1,4 +1,5 @@
 from macllm.agents.base import MacLLMAgent
+from macllm.tools.filesystem import FILESYSTEM_TOOLS
 
 
 class MacLLMSmolAgent(MacLLMAgent):
@@ -10,11 +11,11 @@ class MacLLMSmolAgent(MacLLMAgent):
         "web_search",
         "web_fetch",
         "read_clipboard",
-        "read_file",
-        "read_skill",
+        *FILESYSTEM_TOOLS,
+        "search_notes",
         "ask_user",
     ]
-    macllm_managed_agents = ["notes"]
+    macllm_managed_agents = []
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

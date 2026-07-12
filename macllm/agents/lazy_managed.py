@@ -92,4 +92,11 @@ class LazyManagedMacLLMAgent:
                 self._conversation._notify_ui()
             except Exception:
                 pass
-        return self._materialize().__call__(task, **kwargs)
+        agent = self._materialize()
+        if self._conversation is None:
+            return agent.__call__(task, **kwargs)
+        self._conversation.current_agent = agent
+        try:
+            return agent.__call__(task, **kwargs)
+        finally:
+            self._conversation.current_agent = self._conversation.agent

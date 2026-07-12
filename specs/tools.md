@@ -22,13 +22,15 @@ Tools return observations. A plain string is a text observation. A tool may also
 The current tool set is organized by domain:
 
 - general utilities such as web search and web page fetch
-- note/file tools for local notes under mount-point directories: search, read, create, append, modify, move, delete notes; create/delete subfolders; list and find folders; resolve mount-relative paths to absolute paths (see [file_plugin.md](file_plugin.md))
-- direct local-source tools such as `read_clipboard` and `read_file`
+- virtual filesystem tools for reading, writing, appending, listing, copying, deleting, and
+  creating directories, plus semantic note discovery through `search_notes` (see
+  [filesystem.md](filesystem.md))
+- direct local-source tools such as `read_clipboard`
 - calendar tools for scheduling and event lookup
 - Things tools for task management
-- skill tools such as `read_skill`
+- skills loaded from `/skills` with `read_file`
 - email tools for read-only access to the local Superhuman mailbox via shmail
-- memory tools for long-term agent recall
+- long-term memory files under `/memory`
 
 Files and calendar have deeper subsystem docs because they combine tools with additional indexing or agent structure. The rest of the tool layer is intentionally lightweight.
 
@@ -43,12 +45,14 @@ Exported tools are registered with smolagents using `@macllm_tool`, a thin wrapp
 ## Families (structural)
 
 - General — e.g. web search and web page fetch.
-- Files — general local file reads via `read_file`, plus mount-point-scoped note tools: semantic search, read/write, move/delete, folder management, and path resolution (see [file_plugin.md](file_plugin.md)).
+- Files — one virtual filesystem shared by all file operations; indexed mounts additionally support
+  autocomplete and semantic note search (see [filesystem.md](filesystem.md) and
+  [file_plugin.md](file_plugin.md)).
 - Local device — clipboard via `read_clipboard` (text or image).
 - Calendar — EventKit-backed read/write helpers (see [calendar.md](calendar.md)).
 - Email — Read-only access to the local Superhuman mailbox via `shmail`: inbox, sent, starred, search, thread reading, split inboxes, contacts, and profiles.
-- Skills — `read_skill` loads markdown skill bodies for the model (see [skills.md](skills.md)).
-- Memory — `remember` appends to a daily markdown file for long-term recall.
+- Skills — agents receive a catalog and load skill files from `/skills` (see [skills.md](skills.md)).
+- Memory — agents read and write long-term memory files under `/memory`.
 
 ## Threading and owning conversation
 

@@ -81,18 +81,13 @@ The agent has access to the following tools:
 | **web_search**            | Searches the web via Brave Search and returns URLs, titles, and snippets.            |
 | **web_fetch**             | Fetches readable page text for a URL in 10k-character chunks.                        |
 | **search_notes**          | Semantic search across your indexed notes.                                           |
-| **read_note**             | Reads the full content of an indexed note.                                           |
-| **note_append**           | Appends text to an existing note.                                                    |
-| **note_create**           | Creates a new note with the given content.                                           |
-| **note_modify**           | Replaces the content of an existing note (with automatic backup).                    |
-| **note_move**             | Moves or renames a note within indexed folders.                                      |
-| **note_delete**           | Deletes a note (with automatic backup).                                              |
-| **note_resolve_path**     | Resolves a mount-relative note path to its absolute filesystem path.                 |
-| **list_folder**           | Lists notes and subfolders in a specific folder.                                     |
-| **find_folder**           | Searches for folders by name (case-insensitive substring) across all mounts.         |
-| **view_folder_structure** | Shows the full folder tree of all indexed mounts.                                    |
-| **folder_create**         | Creates a new subfolder inside an indexed directory.                                 |
-| **folder_delete**         | Deletes a subfolder and its contents (with automatic backup).                        |
+| **read_file**             | Reads text or images from an absolute virtual filesystem path.                       |
+| **write_file**            | Creates or replaces a text file.                                                     |
+| **append_file**           | Appends text to a file.                                                              |
+| **list_directory**        | Lists a virtual directory.                                                           |
+| **copy_file**             | Copies a file or directory.                                                          |
+| **delete_file**           | Deletes a file or an explicitly recursive directory.                                |
+| **create_directory**      | Creates one directory beneath an existing parent.                                   |
 
 
 Tools are called automatically by the agent. While the agent is working, the UI shows its current plan and tool calls in the status bar.
@@ -101,17 +96,27 @@ The assistant’s system prompt always includes **User's current time & location
 
 ## Searching Your Notes
 
-macLLM can index folders of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_notes` to find relevant notes and `read_note` to read them.
+macLLM can index folders of notes (e.g. Obsidian vaults) and search them semantically. When you ask something like "check my notes for..." the agent uses `search_notes` to find relevant virtual paths and `read_file` to read them.
 
-To set up indexing, add named mount points under `[index_dirs]` in `~/.config/macllm/config.toml`:
+To set up indexing, add filesystem mounts in `~/.config/macllm/config.toml`:
 
 ```toml
-[index_dirs]
-Notes = "~/Notes"
-Work = "~/Work/Docs"
+[filesystem.mounts.notes]
+virtual = "/notes/personal"
+path = "~/Notes"
+supervisor_access = "read-write"
+subagent_access = "read-only"
+index = true
+
+[filesystem.mounts.work]
+virtual = "/notes/work"
+path = "~/Work/Docs"
+supervisor_access = "read-write"
+subagent_access = "read-only"
+index = true
 ```
 
-Each entry maps a logical mount name to a directory. The agent sees short mount-relative paths like `Notes/todo.md` instead of full absolute paths.
+Each entry maps a virtual path to a directory. Setting `index = true` includes it in note search.
 
 This recursively indexes all `.txt` and `.md` files. The index rebuilds automatically every 5 minutes, or you can type `/reindex` to trigger it manually.
 
@@ -187,7 +192,7 @@ The current speed level and model are shown in the top-right corner of the windo
 
 Commands that start with `/` come from two places:
 
-1. **Skills** — If your input begins with `/name` and `name` matches a loaded skill, the skill body replaces that prefix. Any text after the first space is appended as an `ARGUMENTS:` block. Skills are markdown files under directories listed in `skills_dirs` in `config/config.toml` (defaults: `config/skills` in the repo and `~/.config/macllm/skills`). The same `name` in a later directory overrides an earlier one.
+1. **Skills** — If your input begins with `/name` and `name` matches a loaded skill, the skill body replaces that prefix. Any text after the first space is appended as an `ARGUMENTS:` block. Skills are markdown files in configured filesystem mounts under `/skills` (defaults include `config/skills` in the repo and `~/.config/macllm/skills`). The same `name` in a later mount overrides an earlier one.
 2. **Tag plugins** — After skill expansion, the text is scanned for `@…` and `/…` tokens. Plugins own specific prefixes (e.g. speed and reindex). They rewrite the prompt and may change speed, attach context, or run side effects.
 
 Example skill expansion:
@@ -221,7 +226,7 @@ These ship in `config/skills/shortcuts.md`:
 
 ### Adding skills
 
-Add or edit `*.md` skill files under `~/.config/macllm/skills/` (or another path you add to `skills_dirs`), then use `/reload` or restart. 
+Add or edit `*.md` skill files under `~/.config/macllm/skills/` (or another filesystem mount under `/skills`), then use `/reload` or restart.
 
 ## Autocomplete
 

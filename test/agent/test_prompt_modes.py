@@ -4,7 +4,6 @@ from macllm.agents import base
 from macllm.agents.calendar_agent import CalendarAgent
 from macllm.agents.default import MacLLMDefaultAgent
 from macllm.agents.lazy_managed import LazyManagedMacLLMAgent
-from macllm.agents.note_agent import NoteAgent
 from macllm.core.config import AgentConfig, MacLLMConfig
 from macllm.core.chat_history import Conversation
 
@@ -78,6 +77,10 @@ def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     from macllm.core import config
     from macllm.core.skills import SkillsRegistry
 
+    debug_messages = []
+    monkeypatch.setattr(
+        base.MacLLMAgent, "_debug", staticmethod(debug_messages.append)
+    )
     config._RUNTIME_CONFIG.agents["default"] = AgentConfig(
         instructions="Use the configured workflow."
     )
@@ -97,7 +100,9 @@ def test_instructions_and_skills_are_explicit_in_all_prompts(monkeypatch):
     assert "Follow the workflow." in initial
     assert "Use the configured workflow." in update
     assert "Follow the workflow." in update
-    assert agent.instructions == "Use the configured workflow."
+    assert agent.instructions.startswith("Use the configured workflow.")
+    assert "Filesystem: use absolute virtual paths" in agent.instructions
+    assert "[agent:default] skills catalog included in system prompt" in debug_messages
 
 
 def test_task_runner_prompt_has_no_ask_user(monkeypatch):
@@ -114,7 +119,7 @@ def test_task_runner_prompt_has_no_ask_user(monkeypatch):
 def test_subagent_prompt_is_specialist_prompt(monkeypatch):
     _patch_agent_environment(monkeypatch)
 
-    agent = NoteAgent(speed="normal", managed_mode=True)
+    agent = CalendarAgent(speed="normal", managed_mode=True)
 
     assert "You are a specialist agent working for a supervising agent" in agent.system_prompt
     assert "Use final_answer to report back to the supervising agent" in agent.system_prompt

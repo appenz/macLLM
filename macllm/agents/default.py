@@ -1,5 +1,6 @@
 from macllm.agents.base import MacLLMAgent
 from macllm.agents.macllm_prompt_templates import MACLLM_AGENT_PROMPT_TEMPLATES
+from macllm.tools.filesystem import FILESYSTEM_TOOLS
 
 # Backwards-compatible name for callers/tests.
 PROMPT_TEMPLATES = MACLLM_AGENT_PROMPT_TEMPLATES
@@ -18,13 +19,12 @@ class MacLLMDefaultAgent(MacLLMAgent):
         "web_search",
         "web_fetch",
         "read_clipboard",
-        "read_file",
+        *FILESYSTEM_TOOLS,
+        "search_notes",
         "run_command",
-        "read_skill",
-        "remember",
         "ask_user",
     ]
-    macllm_managed_agents = ["notes", "calendar", "things", "email"]
+    macllm_managed_agents = ["calendar", "things", "email"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

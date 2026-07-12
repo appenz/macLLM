@@ -2,6 +2,8 @@
 
 import pytest
 
+from macllm.core import config as config_mod
+from macllm.core.config import FilesystemConfig, FilesystemMountConfig, MacLLMConfig
 from macllm.core.skills import Skill, SkillsRegistry, _parse_skills_from_markdown
 
 
@@ -17,9 +19,40 @@ def _make_skill(name, description="desc", disable_model=False,
     )
 
 
+def test_reload_discovers_skills_from_filesystem_mount(tmp_path, monkeypatch):
+    skill_file = tmp_path / "mounted.md"
+    skill_file.write_text(
+        "---\nname: mounted\ndescription: Mounted skill\n---\nInstructions."
+    )
+    monkeypatch.setattr(
+        config_mod,
+        "_RUNTIME_CONFIG",
+        MacLLMConfig(
+            filesystem=FilesystemConfig({
+                "test_skills": FilesystemMountConfig(
+                    "/skills/test",
+                    str(tmp_path),
+                    "read-only",
+                    "read-only",
+                    False,
+                )
+            })
+        ),
+    )
+
+    SkillsRegistry.reload()
+
+    assert SkillsRegistry.get("mounted") is not None
+    assert "/skills/test/mounted.md" in SkillsRegistry.model_catalog_text()
+
+
 class TestFilteredCatalog:
     @pytest.fixture(autouse=True)
-    def setup_registry(self):
+    def setup_registry(self, monkeypatch):
+        monkeypatch.setattr(
+            "macllm.core.skills.skill_virtual_path",
+            lambda source: "/skills/test/skills.md",
+        )
         SkillsRegistry._skills = {
             "alpha": _make_skill("alpha", "Alpha skill"),
             "beta": _make_skill("beta", "Beta skill"),

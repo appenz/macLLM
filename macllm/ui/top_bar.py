@@ -32,7 +32,7 @@ def _source_label(source: dict) -> str:
     ref = source.get("ref", "") or ""
     if kind == "clipboard":
         return "clipboard"
-    if kind in ("file", "note"):
+    if kind == "file":
         return Path(ref).name or ref
     if kind == "web":
         parsed = urlparse(ref)
@@ -52,7 +52,7 @@ def _source_open_target(source: dict) -> tuple[str | None, str | None]:
     ref = source.get("ref", "") or ""
     if kind == "web":
         return ref, None
-    if kind in ("file", "note"):
+    if kind == "file":
         return None, ref
     return None, None
 

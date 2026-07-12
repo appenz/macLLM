@@ -124,7 +124,7 @@ This allows the last conversation to be restored between runs.
 ## Configuration
 
 Runtime configuration is loaded from project and user `config.toml` files. It provides API keys,
-skill directories, and named mount points for indexed note directories (see `specs/file_plugin.md`).
+agents, and virtual filesystem mounts for notes, memory, and skills (see `specs/filesystem.md`).
 The current model IDs are configured in code, not in TOML.
 
 ## Code Map

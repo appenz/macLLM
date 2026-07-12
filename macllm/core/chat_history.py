@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from macllm.core.user_interaction import PendingApproval, PendingUserInput
 from macllm.core.context import get_current_conversation
+from macllm.core.virtual_filesystem import create_conversation_root
 from macllm.core.conversation_log import (
     ConversationLog,
     append_plan,
@@ -39,6 +40,7 @@ class Conversation:
     def __init__(self):
         self.conv_id: str = str(uuid.uuid4())
         self.agent = None
+        self.current_agent = None
         self.agent_cls = None
         self.ui_update_callback = None
         self.title = "New Agent"
@@ -213,6 +215,7 @@ class Conversation:
                 })
 
                 conversation.agent._tools_disabled = bool(request.no_tools)
+                conversation.current_agent = conversation.agent
                 result = conversation.agent.run(request.expanded_prompt, **run_kwargs)
 
                 if isinstance(result, str):
@@ -234,6 +237,7 @@ class Conversation:
                     app.debug_exception(e)
                     conversation.add_assistant_message(f"Error: {str(e)}")
             finally:
+                conversation.current_agent = None
                 conversation.agent._tools_disabled = False
                 started = conversation._active_run_started_monotonic
                 append_run_end(conversation.conversation_log, {
@@ -426,7 +430,7 @@ class Conversation:
         """Check if a file path appears in Sources or granted directories."""
         abs_path = os.path.abspath(os.path.expanduser(path))
         for src in self.sources:
-            if src.get("kind") in ("file", "note") and src.get("ref") == abs_path:
+            if src.get("kind") == "file" and src.get("ref") == abs_path:
                 return True
         for granted in self.get_granted_dirs():
             root = os.path.abspath(granted)
@@ -506,6 +510,7 @@ class ConversationHistory:
 
         if conversation is None:
             conversation = Conversation()
+        create_conversation_root(conversation)
         register_conversation(conversation)
         self.conversations.append(conversation)
         self.active_index = len(self.conversations) - 1

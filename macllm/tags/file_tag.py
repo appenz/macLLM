@@ -15,17 +15,19 @@ from typing import List, Optional
 import txtai
 
 from macllm.core.model_paths import get_embedding_model_dir
+from macllm.core.virtual_filesystem import (
+    indexed_mounts,
+    indexed_virtual_path,
+    is_configured_virtual_path,
+)
 
 from .base import TagPlugin
 
 
 class FileTag(TagPlugin):
-    """Handle directory indexing via *config tag* `@IndexFiles` and expose
-    `@file` tag that lets the user embed the contents of an indexed file.
-    """
+    """Index configured files and expand path tags into filesystem references."""
 
     # Public constants
-    PREFIX_CONFIG = "@IndexFiles"
     PREFIX_REINDEX = "/reindex"
 
     # Prefixes that represent plain path tags (previously handled by PathTag)
@@ -54,7 +56,6 @@ class FileTag(TagPlugin):
 
     # Class-level state for file index and embeddings
     _macllm = None
-    _mount_points: dict[str, str] = {}
     _index: list[tuple[str, str]] = []
     _indexed_directories: list[str] = []
     _embeddings: Optional[txtai.Embeddings] = None
@@ -71,7 +72,6 @@ class FileTag(TagPlugin):
     def __init__(self, macllm):
         super().__init__(macllm)
         FileTag._macllm = macllm
-        FileTag._mount_points = {}
         FileTag._index = []
         FileTag._indexed_directories = []
         FileTag._embeddings = None
@@ -81,32 +81,20 @@ class FileTag(TagPlugin):
         FileTag._filepath_to_idx = {}
         FileTag._first_build_done = False
 
-    # ------------------------------------------------------------------
-    # TagPlugin interface – configuration tags
-    # ------------------------------------------------------------------
-    def get_config_prefixes(self) -> List[str]:
-        return [self.PREFIX_CONFIG]
-
-    def on_config_tag(self, tag: str, value: str):  # noqa: D401
-        """Called during shortcut loading for each `@IndexFiles` entry.
-
-        *value* is expected to be a path string. We collect the directory
-        for later indexing via build_index()."""
-        dir_path = value.strip().strip('"')
-        dir_path = os.path.expandvars(os.path.expanduser(dir_path))
-
-        if os.path.isdir(dir_path) is False:
-            FileTag._macllm.debug_log(f"@IndexFiles: Not a directory – {dir_path}", 2)
-            return
-
-        # Collect directory for later indexing
-        if dir_path not in FileTag._indexed_directories:
-            FileTag._indexed_directories.append(dir_path)
+    @classmethod
+    def _debug_log(cls, message: str, level: int = 0) -> None:
+        if cls._macllm is not None:
+            cls._macllm.debug_log(message, level)
 
     @classmethod
     def build_index(cls):
         """Walk all indexed directories and build the file index."""
         cls._index = []
+        cls._indexed_directories = [
+            str(mount.host)
+            for mount in indexed_mounts()
+            if mount.host is not None and mount.host.is_dir()
+        ]
         for dir_path in cls._indexed_directories:
             for fp in Path(dir_path).rglob("*"):
                 if fp.is_file() and fp.suffix.lower() in cls.EXTENSIONS:
@@ -115,31 +103,6 @@ class FileTag(TagPlugin):
         # Sort alphabetically by basename for deterministic ordering
         cls._index.sort(key=lambda t: t[0])
         cls._filepath_to_idx = {fp: idx for idx, (_, fp) in enumerate(cls._index)}
-
-    # ------------------------------------------------------------------
-    # Mount-point resolution
-    # ------------------------------------------------------------------
-    @classmethod
-    def resolve_mount_path(cls, mount_path: str) -> str | None:
-        """Resolve a mount-relative path like ``Notes/todo.md`` to an absolute path."""
-        parts = mount_path.split("/", 1)
-        mount_name = parts[0]
-        rest = parts[1] if len(parts) > 1 else ""
-
-        abs_root = cls._mount_points.get(mount_name)
-        if abs_root is None:
-            return None
-        return os.path.join(abs_root, rest) if rest else abs_root
-
-    @classmethod
-    def to_mount_path(cls, abs_path: str) -> str | None:
-        """Convert an absolute path to its mount-relative form, or ``None``."""
-        for name, root in cls._mount_points.items():
-            if abs_path == root:
-                return name
-            if abs_path.startswith(root + os.sep):
-                return name + "/" + abs_path[len(root) + 1:]
-        return None
 
     # ------------------------------------------------------------------
     # TagPlugin interface – normal expansion
@@ -178,7 +141,7 @@ class FileTag(TagPlugin):
             if tag_lower == shortcut:
                 expanded_path = os.path.expanduser(shortcut_path)
                 conversation.grant_directory(expanded_path)
-                return f"Directory {expanded_path} (access granted)"
+                return f"Directory /host{expanded_path} (access granted)"
 
         # Only handle tags that use one of our path prefixes.
         if any(tag.startswith(p) for p in self.PATH_PREFIXES):
@@ -191,16 +154,20 @@ class FileTag(TagPlugin):
 
         path_spec = os.path.expanduser(path_spec)
 
+        if is_configured_virtual_path(path_spec):
+            return f'{path_spec} (use read_file("{path_spec}") to read)'
+
         if os.path.isdir(path_spec):
             conversation.grant_directory(path_spec)
-            return f"Directory {path_spec} (access granted)"
+            return f"Directory /host{path_spec} (access granted)"
 
         # Grant the parent directory so read_file / shell can access the file.
         parent = os.path.dirname(os.path.abspath(path_spec))
         if parent:
             conversation.grant_directory(parent)
 
-        return f'{path_spec} (use read_file("{path_spec}") to read)'
+        virtual = f"/host{os.path.abspath(path_spec)}"
+        return f'{virtual} (use read_file("{virtual}") to read)'
 
     # ------------------------------------------------------------------
     # Dynamic autocomplete hooks
@@ -237,7 +204,9 @@ class FileTag(TagPlugin):
         matches.sort()
         raw_tags: list[str] = []
         for p in matches[:max_results]:
-            raw_tags.append(f'@"{p}"')
+            virtual = indexed_virtual_path(p)
+            if virtual is not None:
+                raw_tags.append(f'@"{virtual}"')
         return raw_tags
 
     def display_string(self, suggestion: str) -> str:
@@ -343,7 +312,7 @@ class FileTag(TagPlugin):
 
     @classmethod
     def _start_reindex(cls):
-        cls._macllm.debug_log("Reindexing...", 0)
+        cls._debug_log("Reindexing...", 0)
         cls._reindex_event.set()
 
     @classmethod
@@ -368,7 +337,7 @@ class FileTag(TagPlugin):
                 json.dump(cls._file_mtimes, f)
         except Exception as e:
             if cls._macllm:
-                cls._macllm.debug_log(f"Failed to save embedding cache: {e}", 1)
+                cls._debug_log(f"Failed to save embedding cache: {e}", 1)
 
     @classmethod
     def _load_cache(cls) -> bool:
@@ -389,12 +358,12 @@ class FileTag(TagPlugin):
             embeddings.load(str(cache_dir))
             cls._embeddings = embeddings
             cls._first_build_done = True
-            cls._macllm.debug_log(
+            cls._debug_log(
                 f"Loaded embedding cache ({len(cls._file_mtimes)} files)", 0
             )
             return True
         except Exception as e:
-            cls._macllm.debug_log(f"Cache load failed, rebuilding: {e}", 1)
+            cls._debug_log(f"Cache load failed, rebuilding: {e}", 1)
             cls._file_mtimes = {}
             cls._embeddings = None
             cls._first_build_done = False
@@ -416,7 +385,7 @@ class FileTag(TagPlugin):
                 indexed_content = f"{filename}\n{content}"
                 docs.append((filepath, indexed_content, None))
             except Exception as e:
-                cls._macllm.debug_log(f"Skipping unreadable file: {filepath} ({e})", 1)
+                cls._debug_log(f"Skipping unreadable file: {filepath} ({e})", 1)
         return docs
 
     @classmethod
@@ -444,7 +413,7 @@ class FileTag(TagPlugin):
 
         n_new, n_changed, n_deleted = len(new_files), len(changed_files), len(deleted_files)
         n_unchanged = len(current_mtimes) - n_new - n_changed
-        cls._macllm.debug_log(
+        cls._debug_log(
             f"Embedding update: {n_new} new, {n_changed} changed, "
             f"{n_deleted} deleted, {n_unchanged} unchanged",
             0,

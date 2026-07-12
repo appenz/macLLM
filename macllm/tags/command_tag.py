@@ -6,7 +6,12 @@ but executed during the normal tag-expansion phase so it happens before the
 agent is invoked.
 """
 
+from macllm.core.config import load_runtime_config
+from macllm.core.llm_service import refresh_models
+from macllm.core.persistence import save_all_conversations
+from macllm.core.skills import SkillsRegistry
 from macllm.tags.base import TagPlugin
+from macllm.tags.file_tag import FileTag
 
 
 class CommandTag(TagPlugin):
@@ -19,21 +24,15 @@ class CommandTag(TagPlugin):
 
     def expand(self, tag, conversation, request):
         if tag == self.PREFIX_RELOAD:
-            return self._do_reload(conversation)
+            return self._do_reload(conversation, request)
         return ""
 
-    def _do_reload(self, conversation):
-        from macllm.core.config import load_runtime_config
-        from macllm.core.llm_service import refresh_models
-        from macllm.core.skills import SkillsRegistry
-
+    def _do_reload(self, conversation, request):
         app = self.macllm
         app.config = load_runtime_config()
         refresh_models()
         summary = SkillsRegistry.reload()
-        app._apply_index_dirs_from_config()
         try:
-            from macllm.tags.file_tag import FileTag
             FileTag._start_reindex()
         except Exception:
             pass
@@ -42,7 +41,6 @@ class CommandTag(TagPlugin):
         conversation.add_assistant_message(summary)
         conversation._notify_ui()
 
-        from macllm.core.persistence import save_all_conversations
         if not app.ephemeral:
             save_all_conversations(app.conversation_history)
 

@@ -3,9 +3,11 @@
 import pytest
 from unittest.mock import MagicMock
 
+from macllm.core import config as config_mod
+from macllm.core.config import FilesystemConfig, FilesystemMountConfig, MacLLMConfig
 from macllm.tags.file_tag import FileTag
 
-MOUNT_NAME = "Notes"
+MOUNT_VIRTUAL = "/notes/Notes"
 
 
 class DummyApp:
@@ -39,9 +41,20 @@ def file_env(tmp_path):
     (sub / "gamma.md").write_text("Gamma nested content")
 
     dummy = DummyApp()
+    previous_config = config_mod._RUNTIME_CONFIG
+    config_mod._RUNTIME_CONFIG = MacLLMConfig(
+        filesystem=FilesystemConfig({
+            "Notes": FilesystemMountConfig(
+                MOUNT_VIRTUAL,
+                str(tmp_path),
+                "read-write",
+                "read-only",
+                True,
+            )
+        })
+    )
     FileTag._macllm = dummy
     MacLLM._instance = dummy
-    FileTag._mount_points = {MOUNT_NAME: str(tmp_path)}
     FileTag._indexed_directories = [str(tmp_path)]
     FileTag._index = [
         ("alpha.md", str(tmp_path / "alpha.md")),
@@ -56,8 +69,8 @@ def file_env(tmp_path):
 
     yield tmp_path
 
+    config_mod._RUNTIME_CONFIG = previous_config
     FileTag._index = []
-    FileTag._mount_points = {}
     FileTag._indexed_directories = []
     FileTag._filepath_to_idx = {}
     FileTag._macllm = None

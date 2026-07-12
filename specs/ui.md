@@ -79,7 +79,7 @@ It shows:
 
 The menu bar shows a static "LLM" label. Per-tab running state is conveyed by indicators on the tab bar, not the menu bar.
 
-Sources are records of external items that tools actually read. Core stores only `{"kind", "ref"}` identity dicts. The top bar derives icons and labels from that identity and renders the first six Sources as regular 11-point text in two three-line columns without backgrounds. Sources retain insertion order: the first column fills top-to-bottom, then the second column fills top-to-bottom. Web Sources open in the browser, file and note Sources open with the macOS default app when possible, and clipboard Sources are not clickable.
+Sources are records of external items that tools actually read. Core stores only `{"kind", "ref"}` identity dicts. The top bar derives icons and labels from that identity and renders the first six Sources as regular 11-point text in two three-line columns without backgrounds. Sources retain insertion order: the first column fills top-to-bottom, then the second column fills top-to-bottom. Web Sources open in the browser, file Sources open with the macOS default app when possible, and clipboard Sources are not clickable.
 
 ## Tab Bar
 

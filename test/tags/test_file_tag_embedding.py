@@ -5,6 +5,8 @@ import threading
 import pytest
 from unittest.mock import patch, MagicMock, call
 
+from macllm.core import config as config_mod
+from macllm.core.config import FilesystemConfig, FilesystemMountConfig, MacLLMConfig
 from macllm.tags.file_tag import FileTag
 
 
@@ -23,7 +25,7 @@ class DummyApp:
 
 
 @pytest.fixture
-def file_tag_with_files(tmp_path):
+def file_tag_with_files(tmp_path, monkeypatch):
     doc1 = tmp_path / "doc1.md"
     doc1.write_text("Document about machine learning and neural networks.")
     doc2 = tmp_path / "doc2.md"
@@ -31,16 +33,28 @@ def file_tag_with_files(tmp_path):
     doc3 = tmp_path / "doc3.txt"
     doc3.write_text("Plain text document about databases and SQL.")
 
+    monkeypatch.setattr(
+        config_mod,
+        "_RUNTIME_CONFIG",
+        MacLLMConfig(
+            filesystem=FilesystemConfig({
+                "test": FilesystemMountConfig(
+                    "/notes/test",
+                    str(tmp_path),
+                    "read-write",
+                    "read-only",
+                    True,
+                )
+            })
+        ),
+    )
     tag = FileTag(DummyApp())
-    FileTag._mount_points = {"TestNotes": str(tmp_path)}
-    FileTag._indexed_directories = [str(tmp_path)]
     FileTag.build_index()
 
     with patch.object(FileTag, "_cache_dir", return_value=tmp_path / "no_cache"):
         yield tag, tmp_path
 
     FileTag._index = []
-    FileTag._mount_points = {}
     FileTag._indexed_directories = []
     FileTag._embeddings = None
     FileTag._embedding_ready = threading.Event()
@@ -50,7 +64,7 @@ def file_tag_with_files(tmp_path):
     FileTag._first_build_done = False
 
 
-def test_index_populated_after_config_tag(file_tag_with_files):
+def test_index_populated_from_filesystem_mount(file_tag_with_files):
     tag, _ = file_tag_with_files
     assert len(FileTag._index) == 3
     filenames = [name for name, _ in FileTag._index]

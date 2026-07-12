@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from macllm.core.skills import _FRONTMATTER_RE, _parse_frontmatter
+from macllm.core.virtual_filesystem import create_conversation_root
 
 
 DEFAULT_TOKEN_BUDGET = 100_000
@@ -157,6 +158,7 @@ def run_task(task: TaskDefinition, args) -> int:
         SkillsRegistry.reload()
 
         conversation = Conversation()
+        create_conversation_root(conversation)
         register_conversation(conversation)
         set_current_conversation(conversation)
 

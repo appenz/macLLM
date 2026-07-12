@@ -1,8 +1,23 @@
-skills_dirs = [
-  "config/skills",
-  "~/.config/macllm/skills",
-  "~/.agents/skills",
-]
+[filesystem.mounts.project_skills]
+virtual = "/skills/project"
+path = "config/skills"
+supervisor_access = "read-only"
+subagent_access = "read-only"
+index = false
+
+[filesystem.mounts.user_skills]
+virtual = "/skills/user"
+path = "~/.config/macllm/skills"
+supervisor_access = "read-only"
+subagent_access = "read-only"
+index = false
+
+[filesystem.mounts.agent_skills]
+virtual = "/skills/agents"
+path = "~/.agents/skills"
+supervisor_access = "read-only"
+subagent_access = "read-only"
+index = false
 
 [api_keys]
 openai = ""
@@ -25,37 +40,22 @@ gemini = ""
 #
 # Each [agents.<name>] section can set:
 #   instructions  -- custom instructions (overrides code-level fallback)
-#   skills        -- list of skill names the agent can access via read_skill
+#   skills        -- list of skill names included in the agent's skill catalog
 # ---------------------------------------------------------------------------
 
 [agents.default]
 instructions = """\
 
 # Skills 
-- When a task might match an available skill, call read_skill with the skill name to retrieve its full instructions.
+- When a task might match an available skill, use read_file on its catalog path to retrieve its full instructions.
 
-# Specific subagents (Subagents)
-- Use the Notes subagent for anything related to the user's notes. Do not use file tools or the command line for notes.
+# Notes and specific subagents
+- Use search_notes to discover relevant notes, then use filesystem tools with the returned absolute virtual paths under /notes.
+- Use list_directory to browse notes. Never create, replace, or delete a note without the user's explicit instruction.
 - Use the Calendar subagent for anything related to meetings, events, scheduling, or free time
 - Use the Things subagent for anything related to to-dos, task completion and task management
 - Use the Email subagent for anything related to email, messages, inbox, sent mail, and contacts
-- Use remember to save important facts, preferences, or decisions the user shares that are worth recalling in future conversations.\
-"""
-
-[agents.notes]
-instructions = """\
-You are a notes management assistant.
-- You can search, read, create, append to, modify, move, and delete notes, and create or delete folders.
-- Notes are in a folder structure, e.g. "Notes/todo.md" or "Work/Project Plans/plan.md". 
-- Use view_folder_structure to discover the folder structure.
-- If you can't find a note via search, try listing all notes in the most likely folder
-- Never create a note without the user's explicit instructions.
-- If asked to append to a note that doesn't exist, report the error -- do not create it.
-- note_move will refuse to overwrite an existing note. Suggest a different name if there is a conflict.
-- Folder_create requires the parent folder to exist (create nested folders one level at a time).
-- Folder_delete cannot remove a level folder, only subfolders.
-- Provide the note path in your response so the user knows which note was affected.
-- You can resolve a note path to an absolute filesystem path with note_resolve_path when needed.\
+- When /memory is configured, append important facts, preferences, or decisions worth recalling to an appropriate file there.\
 """
 
 [agents.calendar]

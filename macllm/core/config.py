@@ -4,7 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import os
+import posixpath
 import tomllib
+
+import tomli_w
+
+ACCESS_LEVELS = {"read-write", "read-only", "none"}
 
 
 def _project_root() -> Path:
@@ -35,46 +40,51 @@ class AgentConfig:
 
 
 @dataclass
+class FilesystemMountConfig:
+    virtual: str
+    path: str
+    supervisor_access: str
+    subagent_access: str
+    index: bool
+
+
+@dataclass
+class FilesystemConfig:
+    mounts: dict[str, FilesystemMountConfig] = field(default_factory=dict)
+
+
+@dataclass
 class MacLLMConfig:
     api_keys: ApiKeys = field(default_factory=ApiKeys)
-    skills_dirs: list[str] = field(default_factory=list)
-    index_dirs: dict[str, str] = field(default_factory=dict)
-    memory_dir: str = ""
+    filesystem: FilesystemConfig = field(default_factory=FilesystemConfig)
     shell: ShellConfig = field(default_factory=ShellConfig)
     agents: dict[str, AgentConfig] = field(default_factory=dict)
 
-    def resolved_skills_dirs(self, project_root: Path | None = None) -> list[str]:
-        return _resolve_paths(self.skills_dirs, project_root)
-
-    def resolved_index_dirs(self, project_root: Path | None = None) -> dict[str, str]:
-        resolved = _resolve_paths(list(self.index_dirs.values()), project_root)
-        return dict(zip(self.index_dirs.keys(), resolved))
-
-    def resolved_memory_dir(self, project_root: Path | None = None) -> str:
-        """Return the absolute memory directory path, or ``""`` if unset."""
-        if not self.memory_dir:
-            return ""
-        resolved = _resolve_paths([self.memory_dir], project_root)
-        return resolved[0] if resolved else ""
+    def resolved_filesystem_mounts(
+        self, project_root: Path | None = None
+    ) -> dict[str, FilesystemMountConfig]:
+        return {
+            name: FilesystemMountConfig(
+                virtual=mount.virtual,
+                path=_resolve_path(mount.path, project_root),
+                supervisor_access=mount.supervisor_access,
+                subagent_access=mount.subagent_access,
+                index=mount.index,
+            )
+            for name, mount in self.filesystem.mounts.items()
+        }
 
 
 _RUNTIME_CONFIG: MacLLMConfig | None = None
 
 
-def _resolve_paths(values: list[str], project_root: Path | None = None) -> list[str]:
+def _resolve_path(value: str, project_root: Path | None = None) -> str:
     root = project_root or _project_root()
-    out: list[str] = []
-    seen: set[str] = set()
-    for raw in values:
-        expanded = os.path.expandvars(os.path.expanduser(raw))
-        p = Path(expanded)
-        if not p.is_absolute():
-            p = (root / p).resolve()
-        s = str(p)
-        if s not in seen:
-            seen.add(s)
-            out.append(s)
-    return out
+    expanded = os.path.expandvars(os.path.expanduser(value))
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = (root / path).resolve()
+    return str(path)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -118,27 +128,39 @@ _DEFAULT_READ_ONLY_PATHS = [
 ]
 
 
-def _parse_index_dirs(raw) -> dict[str, str]:
-    """Parse ``index_dirs`` from TOML config.
-
-    Accepts either the new dict format ``{Name = "~/path"}`` or the legacy
-    list format ``["~/path"]``.  For the list form, mount names are derived
-    from directory basenames.
-    """
-    if isinstance(raw, dict):
-        return {str(k): str(v) for k, v in raw.items()}
-    if isinstance(raw, list):
-        result: dict[str, str] = {}
-        for entry in raw:
-            path_str = str(entry)
-            name = Path(path_str).name or path_str
-            base_name, counter = name, 1
-            while name in result:
-                counter += 1
-                name = f"{base_name}_{counter}"
-            result[name] = path_str
-        return result
-    return {}
+def _parse_filesystem(raw: dict[str, Any]) -> FilesystemConfig:
+    mounts = {}
+    virtual_paths = set()
+    for name, data in raw.get("mounts", {}).items():
+        virtual = str(data["virtual"])
+        normalised = "/" + posixpath.normpath(virtual).lstrip("/")
+        if (
+            not virtual.startswith("/")
+            or virtual != normalised
+            or virtual == "/"
+            or virtual == "/home"
+            or virtual.startswith("/home/")
+            or virtual == "/host"
+            or virtual.startswith("/host/")
+        ):
+            raise ValueError(f"Invalid virtual path for mount '{name}': {virtual}")
+        if virtual in virtual_paths:
+            raise ValueError(f"Duplicate filesystem mount path: {virtual}")
+        virtual_paths.add(virtual)
+        supervisor_access = str(data["supervisor_access"])
+        subagent_access = str(data["subagent_access"])
+        if supervisor_access not in ACCESS_LEVELS or subagent_access not in ACCESS_LEVELS:
+            raise ValueError(f"Invalid filesystem access level for mount '{name}'.")
+        if not isinstance(data["index"], bool):
+            raise TypeError(f"Filesystem index flag for mount '{name}' must be boolean.")
+        mounts[str(name)] = FilesystemMountConfig(
+            virtual=virtual,
+            path=str(data["path"]),
+            supervisor_access=supervisor_access,
+            subagent_access=subagent_access,
+            index=bool(data["index"]),
+        )
+    return FilesystemConfig(mounts)
 
 
 def _parse_agents(raw: dict[str, Any] | None) -> dict[str, AgentConfig]:
@@ -166,9 +188,7 @@ def _from_dict(data: dict[str, Any]) -> MacLLMConfig:
             brave=str(api.get("brave", "") or ""),
             gemini=str(api.get("gemini", "") or ""),
         ),
-        skills_dirs=[str(x) for x in (data.get("skills_dirs", []) or [])],
-        index_dirs=_parse_index_dirs(data.get("index_dirs", {}) or {}),
-        memory_dir=str(data.get("memory_dir", "") or ""),
+        filesystem=_parse_filesystem(data.get("filesystem", {}) or {}),
         shell=ShellConfig(
             allowed_commands=shell_data.get("allowed_commands")
             or list(_DEFAULT_ALLOWED_COMMANDS),
@@ -220,7 +240,6 @@ def add_to_shell_allowlist(command: str) -> None:
         existing.append(command)
     shell_section["allowed_commands"] = existing
 
-    import tomli_w
     with user_path.open("wb") as f:
         tomli_w.dump(data, f)
 
